@@ -1,6 +1,6 @@
 // Effects, transitions, colour grades, speed ramps and the project's sound settings.
 // All of them become normal clips (or settings) the engine renders; nothing is baked in.
-import { EditError, allIds, clipEnd, clone, isMain, mainTrack, mustFind, newId, placeClip, projectDuration, r4, setSpeed, splitClip, speedOf } from "./edit";
+import { EditError, allIds, clipEnd, clone, isMain, mainTrack, mustFind, newId, placeClip, projectDuration, r4, setSpeed, splitClip, speedOf, TOUCH } from "./edit";
 import type { Clip, FxEffect, Project } from "./types";
 
 export const FX_INFO: Record<FxEffect, { label: string; tl: string; seconds: number }> = {
@@ -34,7 +34,7 @@ export function nearestCut(p: Project, t: number): number | null {
   let best: number | null = null;
   for (let i = 1; i < clips.length; i++) {
     const cut = clips[i].start;
-    if (Math.abs(clipEnd(clips[i - 1]) - cut) > 1e-3) continue; // a gap, not a cut
+    if (Math.abs(clipEnd(clips[i - 1]) - cut) > TOUCH) continue; // a gap, not a cut
     if (best === null || Math.abs(cut - t) < Math.abs(best - t)) best = cut;
   }
   return best;
