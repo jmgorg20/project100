@@ -218,3 +218,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Auto video editor ---
+# Your videos, edits and temporary files stay on your PC only.
+inbox/*
+!inbox/.gitkeep
+output/*
+!output/.gitkeep
+work/*
+!work/.gitkeep
+# Your own overlay images/clips and sound effects
+assets/overlays/*
+!assets/overlays/.gitkeep
+assets/sfx/*
+!assets/sfx/.gitkeep

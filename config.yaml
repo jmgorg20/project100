@@ -1,0 +1,107 @@
+# ---------------------------------------------------------------
+#  Auto video editor settings.  Lines starting with # are notes.
+#  Command-line flags (like --style 4) override these values.
+# ---------------------------------------------------------------
+
+# Caption style: number (1-13) or name. See them all: python editor.py styles
+style: yellow_pop
+
+# Colour grade: natural_clean, none, warm, black_and_white, orange_teal, high_contrast
+grade: natural_clean
+
+# Pacing preset (defined further down under "presets")
+preset: fast
+
+# Speech language for transcription ("tl" = Tagalog/Filipino, works for Taglish)
+language: tl
+
+transcription:
+  provider: groq              # "groq" (online, needs GROQ_API_KEY in .env) or "local" (on your PC)
+  groq_model: whisper-large-v3
+  local_model: medium         # local model size: small, medium, large-v3 (bigger = slower, better)
+  local_device: auto          # auto, cpu or cuda (NVIDIA graphics card)
+
+presets:
+  fast:
+    silence_threshold: 0.25   # cut pauses longer than this many seconds
+    remove_fillers: true      # cut "ah", "uh", "um"... (list below)
+    zoom: true                # jump-cut punch-in zoom
+    zoom_amount: 1.15         # 1.15 = 115% zoom on zoomed parts
+    zoom_min_interval: 1.5    # never change zoom more often than this (seconds)
+    zoom_max_interval: 4.0    # change zoom at least this often, even without a cut
+  relaxed:
+    silence_threshold: 0.6
+    remove_fillers: true
+    zoom: true
+    zoom_amount: 1.10
+    zoom_min_interval: 3.0
+    zoom_max_interval: 7.0
+
+silence:
+  padding: 0.08               # seconds of air kept around every cut so words are not clipped
+  use_audio_detection: true   # also listen for quiet parts (helps when word timings are loose)
+  noise_db: -35               # what counts as "quiet". Noisy room? try -30
+
+fillers: [ah, uh, um, uhm, eh]
+
+zoom:
+  anchor_y: 0.4               # where to zoom: 0 = top of frame, 0.5 = middle (0.4 suits faces)
+
+audio:
+  loudness: -14               # target loudness in LUFS (TikTok/Reels like about -14)
+  true_peak: -1.5
+
+captions:
+  enabled: true
+  fonts_folder: assets/fonts  # fonts in this folder are always available to the captions
+  font_regular: Inter         # on Windows you can use e.g. Arial
+  font_bold: Inter            # e.g. Arial
+  font_heavy: Inter Black     # e.g. Arial Black
+
+highlight:                    # KEY WORDS in colour (only styles that support it)
+  enabled: true
+  color:                      # leave empty to use each style's colour (yellow), or e.g. "#00E5FF"
+  manual_markers: true        # words written as *word* in the transcript JSON
+  numbers: true
+  prices: true                # 500 pesos, P1,299, $5
+  english_terms: true         # app, online, GitHub, AI, loan words...
+  long_words: true            # words longer than long_word_min_letters
+  long_word_min_letters: 7
+  max_per_4_words: 1          # at most this many keywords in every 4 words (manual ones always kept)
+  extra_keywords: []          # always highlight these, e.g. [gcash, promo]
+  ignore_words: []            # never highlight these
+
+overlays:                     # pop-in images/clips when a keyword is spoken (see triggers.yaml)
+  enabled: true
+  triggers_file: triggers.yaml
+  folder: assets/overlays
+
+sfx:                          # your own sound effects (none are included)
+  enabled: false
+  volume: 0.4
+  pop: assets/sfx/pop.wav     # plays when an overlay pops in
+  whoosh: assets/sfx/whoosh.wav   # plays on zoom cuts
+
+branding:                     # leave empty to skip
+  intro: ""                   # image (.png/.jpg) or short clip (.mp4) shown first
+  intro_duration: 2.0         # seconds (for images)
+  outro: ""
+  outro_duration: 2.0
+  watermark: ""               # logo .png (transparent background works best)
+  watermark_position: top_left   # top_left, top_right, bottom_left, bottom_right
+  watermark_width: 180
+  watermark_opacity: 0.85
+
+output:
+  folder: output
+  fps: 30
+  crf: 20                     # video quality: lower = better quality, bigger file (18-23 is good)
+  encoder_speed: medium       # faster = quicker export, slightly bigger file: veryfast, fast, medium
+  audio_bitrate: 192k
+  save_transcript: true       # save <name>.transcript.json next to the video (edit it and re-run with --transcript)
+
+work_folder: work
+keep_work_files: false        # true = keep temporary files in work/ for troubleshooting
+
+watch:
+  interval_seconds: 5         # how often "watch" checks the inbox folder
