@@ -15,12 +15,14 @@ import shutil
 import time
 from pathlib import Path
 
+from .ai_gen import availability, generate_for_plan
 from .ai_plan import apply_plan, load_plan_schema, preset_plan, validate_plan
 from .cache import Cache, key_for
 from .config import project_path
 from .costs import estimate_tokens, format_usd, plan_cost, total, transcription_cost
 from .errors import Cancelled, EditorError
 from .ffmpeg_tools import check_ffmpeg, probe_video_with_audio
+from .generation import Paths as GenPaths
 from .llm import PROVIDERS, LLMError, ask_json
 from .pipeline import build_edit_project, unique_output_path
 from .project import save_project, timeline_duration
@@ -28,7 +30,7 @@ from .project_render import render_project
 from .transcribe import transcribe
 from .words import save_transcript, words_from_data
 
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 MAX_ATTEMPTS = 2
 
 SYSTEM_PROMPT = """You plan edits for short vertical videos (TikTok / Facebook Reels) of a \
@@ -56,6 +58,10 @@ names, key terms), only if asked or clearly useful.
 - zooms: extra emphasis zoom-ins on key moments, only if asked (amount 1.2 to 1.4).
 - If the instruction asks for something the program cannot do (music, transitions, face \
 filters, changing what someone said), do not fake it: add a short note to notes.
+- ai_clips and voiceovers: follow AI GENERATION below. Only plan a kind marked available,
+only when the creator asks for it or it clearly helps, and never more than the stated
+number. Clip prompts are concrete and visual, in English; never show real, identifiable
+people or brands. A full-screen clip covers the speaker, so keep it short.
 - Never plan face swaps, deepfakes, voice cloning or lip-sync.
 - summary: one to three short sentences to the creator, in the language of the \
 instruction, describing the edit.
@@ -75,9 +81,12 @@ def transcript_lines(words, per_line=12):
     return "\n".join(lines)
 
 
-def build_prompt(instruction, words, duration, photo_names, baseline, previous_plan=None):
+def build_prompt(instruction, words, duration, photo_names, baseline, previous_plan=None,
+                 generation_text=None):
     parts = [f"VIDEO LENGTH: {duration:.2f} seconds",
              "PHOTOS (file names you may use): " + (", ".join(photo_names) or "none"),
+             generation_text or "AI GENERATION: NOT available. Leave ai_clips and voiceovers "
+                                "empty.",
              "DEFAULT EDIT (keep these values unless the instruction asks otherwise):\n"
              + json.dumps(baseline, ensure_ascii=False)]
     if previous_plan:
@@ -116,7 +125,7 @@ class PlanResult:
 
 
 def request_plan(cfg, provider, model, instruction, words, duration, photo_names, cache,
-                 previous_plan=None, check=None, cancel=None):
+                 previous_plan=None, check=None, cancel=None, generation_text=None):
     """Ask the model for a plan; check it; retry once; else return the preset plan.
 
     `check(plan)` returns extra problems (e.g. from building the project with it).
@@ -129,7 +138,7 @@ def request_plan(cfg, provider, model, instruction, words, duration, photo_names
                    "instruction": instruction.strip(), "duration": round(duration, 3),
                    "words": [(w.text, w.start, w.end) for w in words],
                    "photos": sorted(photo_names), "previous": previous_plan,
-                   "baseline": baseline})
+                   "baseline": baseline, "generation": generation_text})
     cached = cache.get("plans", key) if cache else None
     if cached and not validate_plan(cached["plan"], duration, photo_names):
         extra = check(cached["plan"]) if check else []
@@ -141,7 +150,7 @@ def request_plan(cfg, provider, model, instruction, words, duration, photo_names
         schema["properties"]["photos"]["items"]["properties"]["file"]["enum"] = \
             sorted(photo_names)
     prompt = build_prompt(instruction, words, duration, sorted(photo_names), baseline,
-                          previous_plan)
+                          previous_plan, generation_text)
     attempts, usage, used_model = [], {"input_tokens": 0, "output_tokens": 0}, model
     request = prompt
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -201,7 +210,7 @@ def staged_projects(project):
         yield name, view
 
 
-def describe(project, plan, result, raw_duration, photo_names):
+def describe(project, plan, result, raw_duration, photo_names, generation=None):
     """Plain-language summary of what was actually done (from the finished project)."""
     tracks = project["tracks"]
     main = next(t for t in tracks if t["kind"] == "video")["clips"]
@@ -253,6 +262,16 @@ def describe(project, plan, result, raw_duration, photo_names):
     unused = sorted(set(photo_names) - {p["file"] for p in plan["photos"]})
     if unused:
         details.append("Photos not used: " + ", ".join(unused) + ".")
+    if generation:
+        for item in generation["done"]:
+            details.append(f"{item['item']}: {item['tier']} tier, {item['seconds']:.0f}s"
+                           + (f" ({item['reason_text']})" if item.get("reason_text") else "."))
+        if generation["passes"] == ["draft"]:
+            made = sum(1 for files in generation["draft"].values() for f in files if f)
+            if made:
+                details.append(f"{made} AI item(s) made with the quick preview tier; the final "
+                               f"tier is used when you apply the edit.")
+        details += generation["notes"]
     for note in plan.get("notes") or []:
         details.append(f"Not done: {note}")
     if result.fallback:
@@ -284,12 +303,15 @@ def load_words(video, cfg, cache, job_dir, duration):
 
 def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=None,
                   render=True, output=None, previous_plan=None, plan=None, reporter=None,
-                  cancel=None):
+                  cancel=None, gen_paths=None, max_gen_minutes=None, max_ai_clips=None):
     """Make an AI edit of one video. Returns a dict describing the result.
 
     `plan`: use this plan as is (e.g. the creator accepted only some AI changes); no AI call.
     `previous_plan`: change this plan according to `instruction` (a follow-up).
     `render`: False = stop after the project (auto mode off: review first).
+    AI pictures, clips and voice-over in the plan are made with WanGP (see ai_gen.py):
+    a Draft pass for the preview, then the final tier when rendering; `max_gen_minutes`
+    and `max_ai_clips` limit generation for this video.
     """
     from .progress import TextReporter
 
@@ -328,8 +350,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         reporter.stage("plan", "Planning the edit")
         built = {}
 
-        def build(candidate):
-            new_cfg, pipeline_plan = apply_plan(cfg, candidate, photos)
+        def build(candidate, generated=None):
+            new_cfg, pipeline_plan = apply_plan(cfg, candidate, photos, generated)
             return build_edit_project(video, new_cfg, plan=pipeline_plan, job_dir=job_dir,
                                       words=words)
 
@@ -347,14 +369,36 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                 raise EditorError("The plan has problems:\n  - " + "\n  - ".join(problems))
             result = PlanResult(plan, given=True, model=None, cost=0.0)
         else:
+            try:
+                _, generation_text = availability(gen_paths or GenPaths())
+            except Exception as exc:          # generation must never block the edit
+                print(f"  ! could not check AI generation: {exc}")
+                generation_text = None
             result = request_plan(cfg, provider, model, instruction, words, duration,
-                                  list(photos), cache, previous_plan, check, cancel)
+                                  list(photos), cache, previous_plan, check, cancel,
+                                  generation_text)
         reporter.event("plan", **result.as_event(), baseline=preset_plan(cfg))
         check_cancel()
 
         if built.get("plan") is not result.plan:
             built["project"] = build(result.plan)
         project = built["project"]
+        generation = None
+        if result.plan.get("ai_clips") or result.plan.get("voiceovers"):
+            if plan is not None and render:
+                passes = ["final"]               # reviewed plan: its draft was already seen
+            elif render:
+                passes = ["draft", "final"]      # Auto mode: quick preview, then final
+            else:
+                passes = ["draft"]               # review first: final when applied
+            generation = generate_for_plan(result.plan, passes, gen_paths, max_gen_minutes,
+                                           max_ai_clips, reporter, cancel)
+            if passes == ["draft", "final"]:
+                reporter.event("project", stage="ai_draft",
+                               project=build(result.plan, generation["draft"]))
+            project = build(result.plan, generation["final" if "final" in passes else "draft"])
+            generation["passes"] = passes
+            check_cancel()
         project["meta"].update({"made_by": "AI edit", "instruction": instruction,
                                 "provider": provider if not result.given else None,
                                 "model": result.model, "fallback": result.fallback})
@@ -364,7 +408,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                                    "photos": "Placing photos"}[stage])
             reporter.event("project", stage=stage, project=view)
 
-        summary = describe(project, result.plan, result, duration, list(photos))
+        summary = describe(project, result.plan, result, duration, list(photos), generation)
         # Token counts are the provider's own; the prices are from config.yaml (ai.prices).
         cost = {"transcription": transcript_cost, "plan": result.cost,
                 "total": total(transcript_cost, result.cost), "currency": "USD",

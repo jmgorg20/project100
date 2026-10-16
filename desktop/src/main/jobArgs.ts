@@ -19,6 +19,8 @@ export function jobArgs(job: Job, settings: Settings, files: { instructionFile: 
   if (!job.auto && job.mode !== "apply") args.push("--no-render");
   if (job.mode === "followup" && job.planFile) args.push("--previous-plan", job.planFile);
   if (job.mode === "apply" && job.planFile) args.push("--plan-file", job.planFile);
+  if (job.maxGenMinutes !== undefined) args.push("--max-generation-minutes", String(job.maxGenMinutes));
+  if (job.maxAiClips !== undefined) args.push("--max-ai-clips", String(job.maxAiClips));
   if (job.photos.length) args.push("--photos", ...job.photos);
   return args;
 }

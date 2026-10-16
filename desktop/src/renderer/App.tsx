@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EstimateResult } from "../shared/api";
 import { canRedo, canUndo, currentVersion } from "../shared/history";
 import { formatCost } from "../shared/planItems";
-import type { Job, JobMode, Plan, Provider, Settings, VideoHistory } from "../shared/types";
+import type { GenStatus, Job, JobMode, Plan, Provider, Settings, VideoHistory } from "../shared/types";
 import { ConsentDialog, FrameDialog, SettingsDialog } from "./components/Dialogs";
+import { GenerationDialog } from "./components/GenerationDialog";
 import { PlanReview } from "./components/PlanReview";
 import { Player } from "./components/Player";
 import { Stages } from "./components/Stages";
@@ -25,6 +26,14 @@ function statusText(job: Job | undefined, history: VideoHistory | undefined): [s
   return ["Not edited yet", ""];
 }
 
+function genSummary(gen: GenStatus | null): string {
+  if (!gen) return "";
+  if (gen.setup_problems.length) return "· WanGP not set up";
+  const names: [keyof GenStatus["choices"], string][] = [["image", "pictures"], ["video", "clips"], ["voice", "voice-over"]];
+  const ready = names.filter(([c]) => gen.choices[c].order.length).map(([c, label]) => `${label} ${gen.choices[c].order[0]}`);
+  return ready.length ? `· ${ready.join(", ")}` : "· no tier installed";
+}
+
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [videos, setVideos] = useState<string[]>([]);
@@ -39,6 +48,12 @@ export function App() {
   const [view, setView] = useState<"edited" | "original">("edited");
   const [frame, setFrame] = useState<{ url?: string; error?: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [gen, setGen] = useState<GenStatus | null>(null);
+  const [showGen, setShowGen] = useState(false);
+  const [genMounted, setGenMounted] = useState(false);
+  const [genRunning, setGenRunning] = useState(false);
+  // Per video (sent with each edit); start from the limits in the generation settings file.
+  const [limits, setLimits] = useState<{ minutes: number; clips: number } | null>(null);
   const instructionRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -46,11 +61,26 @@ export function App() {
     api.listJobs().then((list) => setJobs(Object.fromEntries(list.map((j) => [j.id, j]))));
     const offJob = api.onJobChanged((job) => setJobs((prev) => ({ ...prev, [job.id]: job })));
     const offHistory = api.onHistoryChanged((h) => setHistories((prev) => ({ ...prev, [h.video]: h })));
+    // Hardware is detected on start; if that or anything else fails, the app works without it.
+    api.genStatus(false).then((s) => {
+      if (!("error" in s)) onGenStatus(s);
+    }).catch(() => {});
     return () => {
       offJob();
       offHistory();
     };
   }, []);
+
+  const onGenStatus = useCallback((s: GenStatus) => {
+    setGen(s);
+    setLimits((l) => l ?? { minutes: s.limits.max_generation_minutes, clips: s.limits.max_ai_clips });
+  }, []);
+
+  const openGen = () => {
+    setGenMounted(true);
+    setShowGen(true);
+  };
+  const closeGen = useCallback(() => setShowGen(false), []);
 
   const addVideos = useCallback(async (paths: string[]) => {
     const fresh = paths.filter((p) => p);
@@ -92,7 +122,12 @@ export function App() {
   }, [targets.join("|"), provider]);
 
   const startJobs = (list: string[], mode: JobMode, text: string, planFile?: string) =>
-    api.addJobs(list.map((video) => ({ video, photos, instruction: text, provider, auto, mode, planFile })));
+    api.addJobs(
+      list.map((video) => ({
+        video, photos, instruction: text, provider, auto, mode, planFile,
+        maxGenMinutes: limits?.minutes, maxAiClips: limits?.clips,
+      })),
+    );
 
   const saveSettings = async (patch: Partial<Settings>) => setSettings(await api.setSettings(patch));
 
@@ -132,6 +167,7 @@ export function App() {
         <h1>Auto Video Editor</h1>
         <span className="muted small">AI first edit · you stay in control</span>
         <span className="spacer" />
+        <button className="btn small" onClick={() => openGen()}>{genRunning ? "AI models · testing…" : "AI models"}</button>
         <button className="btn small" onClick={() => setShowSettings(true)}>Settings</button>
       </header>
 
@@ -231,6 +267,11 @@ export function App() {
           <h2>{redoing ? "Redo with new instructions" : "Describe your video"}</h2>
         </div>
         <div className="panel-body stack">
+          {gen?.hardware_changed && (
+            <p className="warn small" role="status" style={{ margin: 0 }}>
+              This PC's hardware changed (was: {gen.previous_hardware}). Test the AI models again in “AI models”.
+            </p>
+          )}
           <textarea
             ref={instructionRef}
             aria-label="Instructions for the AI"
@@ -252,6 +293,28 @@ export function App() {
               <option value="anthropic">Anthropic Claude (paid, your key)</option>
             </select>
           </div>
+          <details className="card" data-testid="gen-limits">
+            <summary className="small">
+              <strong>AI pictures &amp; clips</strong>{" "}
+              <span className="muted">{genSummary(gen)}</span>
+            </summary>
+            {limits && (
+              <div className="limits" style={{ marginTop: 8 }}>
+                <label className="field small">
+                  Max generation time (min)
+                  <input type="number" min={1} max={600} aria-label="Max generation minutes" value={limits.minutes} onChange={(e) => setLimits({ ...limits, minutes: Math.max(1, Number(e.target.value) || 1) })} />
+                </label>
+                <label className="field small">
+                  Max AI clips
+                  <input type="number" min={0} max={50} aria-label="Max AI clips" value={limits.clips} onChange={(e) => setLimits({ ...limits, clips: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+                </label>
+              </div>
+            )}
+            <p className="muted small" style={{ margin: "8px 0 0" }}>
+              Only when your instructions ask for them (e.g. “add a short clip of coffee here”). Made on this PC with WanGP; Auto mode shows a quick draft first, then the final version.
+            </p>
+            <button className="btn small" style={{ marginTop: 8 }} onClick={() => openGen()}>AI models…</button>
+          </details>
           {estimate && !estimate.error && (
             <p className="muted small" style={{ margin: 0 }} data-testid="estimate">
               {estimate.paid_provider
@@ -310,6 +373,7 @@ export function App() {
         </div>
       </aside>
 
+      {genMounted && <GenerationDialog open={showGen} onClose={closeGen} onStatus={onGenStatus} onRunning={setGenRunning} />}
       {showSettings && <SettingsDialog settings={settings} onClose={() => setShowSettings(false)} onSave={async (patch) => { await saveSettings(patch); setShowSettings(false); }} />}
       {!settings.consentAccepted && <ConsentDialog onAccept={() => saveSettings({ consentAccepted: true })} />}
       {frame && (

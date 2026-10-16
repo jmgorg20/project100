@@ -91,27 +91,37 @@ function CaptionView({ frame }: { frame: CaptionFrame }) {
   );
 }
 
-function OverlayView({ clip, t, url }: { clip: Clip; t: number; url: string }) {
+function overlayStyle(clip: Clip, t: number): CSSProperties {
   const local = t - clip.start;
   const pop = clip.animation === "pop";
   const scale = pop ? popScale(local, clip.duration) : 1;
   const opacity = (pop ? popOpacity(local, clip.duration) : 1) * (clip.opacity ?? 1);
-  return (
-    <img
-      className="overlay-photo"
-      src={url}
-      alt=""
-      data-testid="overlay"
-      style={{
-        left: (clip.x ?? 540) - (clip.width ?? 0) / 2,
-        top: (clip.y ?? 960) - (clip.height ?? 0) / 2,
-        width: clip.width,
-        height: clip.height,
-        transform: `scale(${scale})`,
-        opacity,
-      }}
-    />
-  );
+  return {
+    left: (clip.x ?? 540) - (clip.width ?? 0) / 2,
+    top: (clip.y ?? 960) - (clip.height ?? 0) / 2,
+    width: clip.width,
+    height: clip.height,
+    transform: `scale(${scale})`,
+    opacity,
+  };
+}
+
+function OverlayView({ clip, t, url }: { clip: Clip; t: number; url: string }) {
+  return <img className="overlay-photo" src={url} alt="" data-testid="overlay" style={overlayStyle(clip, t)} />;
+}
+
+/** A video clip on an overlay track (e.g. an AI video clip), muted and kept in step with the playhead. */
+function OverlayVideoView({ clip, t, url, playing }: { clip: Clip; t: number; url: string; playing: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const want = (clip.in ?? 0) + Math.max(0, t - clip.start);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (Math.abs(v.currentTime - want) > (playing ? 0.25 : 0.02)) v.currentTime = want;
+    if (playing && v.paused) v.play().catch(() => {});
+    if (!playing && !v.paused) v.pause();
+  }, [want, playing]);
+  return <video ref={ref} className="overlay-photo" src={url} muted playsInline preload="auto" data-testid="overlay" style={overlayStyle(clip, t)} />;
 }
 
 interface PlayerProps {
@@ -276,7 +286,9 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
               {still && <img className={`still${seg?.clip?.fit === "blur" ? " contain" : ""}`} src={mediaUrl(still.path)} alt="" style={{ filter: grade }} />}
               {overlays.map((clip) => {
                 const m = media.get(clip.media ?? "");
-                return m && m.kind === "image" ? <OverlayView key={clip.id} clip={clip} t={time} url={mediaUrl(m.path)} /> : null;
+                if (m?.kind === "image") return <OverlayView key={clip.id} clip={clip} t={time} url={mediaUrl(m.path)} />;
+                if (m?.kind === "video" && clip.type === "video") return <OverlayVideoView key={clip.id} clip={clip} t={time} url={mediaUrl(m.path)} playing={playing} />;
+                return null;
               })}
               {caption && <CaptionView frame={caption} />}
             </div>

@@ -37,6 +37,7 @@ def preset_plan(cfg):
         "captions": {"enabled": bool(cfg["captions"].get("enabled", True)), "size_scale": 1.0,
                      "position": None, "highlight_words": []},
         "cuts": [], "zooms": [], "grades": [], "photos": [], "notes": [],
+        "ai_clips": [], "voiceovers": [],
     }
 
 
@@ -67,6 +68,11 @@ def validate_plan(plan, duration, photo_names=()):
         [(c["start"], min(c["end"], duration)) for c in plan["cuts"]]))
     if kept < MIN_KEPT_SECONDS:
         problems.append(f"plan.cuts: they remove almost the whole video (only {kept:.1f}s left)")
+    for kind in ("ai_clips", "voiceovers"):
+        for i, item in enumerate(plan[kind]):
+            if item["at"] >= duration:
+                problems.append(f"plan.{kind}[{i}]: at {item['at']}s is after the end of the "
+                                f"video ({duration:.2f}s)")
     names = set(photo_names)
     for i, photo in enumerate(plan["photos"]):
         if photo["file"] not in names:
@@ -79,11 +85,14 @@ def validate_plan(plan, duration, photo_names=()):
     return problems
 
 
-def apply_plan(cfg, plan, photos):
+def apply_plan(cfg, plan, photos, generated=None):
     """Settings and pipeline plan for a checked plan. `photos` maps file name -> path.
 
+    `generated` holds the files made for the plan's AI clips and voice-overs:
+    {"ai_clips": [path or None, ...], "voiceovers": [path or None, ...]} (None = not made).
     Returns (cfg, pipeline_plan); `cfg` is a copy, the caller's settings are not changed.
     """
+    generated = generated or {}
     cfg = copy.deepcopy(cfg)
     cfg["style"] = plan["style"]
     cfg["grade"] = plan["grade"]
@@ -113,5 +122,14 @@ def apply_plan(cfg, plan, photos):
                       "duration": float(p["duration"]), "position": p["position"]}
                      for p in plan["photos"]],
         "caption_overrides": overrides,
+        "voiceovers": [],
     }
+    for clip, path in zip(plan.get("ai_clips", []), generated.get("ai_clips", [])):
+        if path:
+            pipeline_plan["overlays"].append({"file": Path(path), "at": float(clip["at"]),
+                                              "duration": float(clip["duration"]),
+                                              "position": clip["position"]})
+    for line, path in zip(plan.get("voiceovers", []), generated.get("voiceovers", [])):
+        if path:
+            pipeline_plan["voiceovers"].append({"file": Path(path), "at": float(line["at"])})
     return cfg, pipeline_plan

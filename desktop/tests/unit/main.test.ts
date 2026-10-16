@@ -77,6 +77,10 @@ describe("job arguments", () => {
     const apply = jobArgs(job({ auto: false, mode: "apply", planFile: "/p.json", photos: ["/x.png", "/y.png"] }), settings, files);
     expect(apply).not.toContain("--no-render");
     expect(apply.slice(-5)).toEqual(["--plan-file", "/p.json", "--photos", "/x.png", "/y.png"]);
+    // Per-video AI generation limits, before --photos (which takes the rest of the list).
+    const limited = jobArgs(job({ maxGenMinutes: 12, maxAiClips: 0, photos: ["/x.png"] }), settings, files);
+    expect(limited.slice(-6)).toEqual(["--max-generation-minutes", "12", "--max-ai-clips", "0", "--photos", "/x.png"]);
+    expect(jobArgs(job({}), settings, files)).not.toContain("--max-ai-clips");
   });
 
   it("never reuses an output name", () => {

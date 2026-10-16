@@ -9,10 +9,16 @@ Writes tests/ui/fixtures/:
   demo.project.json / demo.plan.json   that edit's project, plan, preset plan and summary
   demo_frame.png                   an exact frame
   parity.project.json, parity.json captions/photo on black + where the engine drew them
+  gen.status.json, gen.compare.json, gen_*.png
+                                   the "AI pictures, clips & voice" screen: the engine's status,
+                                   test results and a Compare run, made with the fake WanGP in
+                                   tests/fake_wangp and a fake nvidia-smi (no GPU, no real models)
 """
 
 import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -44,6 +50,96 @@ def ink_box(png):
             ys.append(i // width)
             xs.append(i % width)
     return [min(xs), min(ys), max(xs) + 1, max(ys) + 1]
+
+
+FAKE_SMI = """#!{python}
+import sys
+from pathlib import Path
+if "--query-gpu=memory.used" in sys.argv:   # rises while a job runs, like real VRAM use
+    count = Path(__file__).with_name("calls")
+    n = int(count.read_text()) + 1 if count.exists() else 0
+    count.write_text(str(n))
+    print(1200 + 350 * (n % 20))
+else:
+    print("NVIDIA GeForce RTX 3060, 12288, 555.85")
+"""
+
+
+def generation_fixtures(work):
+    """Real engine status/benchmark/compare output, run against the fake WanGP."""
+    from autoedit import generation
+
+    root = work / "WanGP"
+    shutil.copytree(REPO / "tests" / "fake_wangp", root)
+    hf = "https://huggingface.co/SomeOrg/{}/resolve/main/model.safetensors"
+
+    def model(model_type, name, kind, status="available", **extra):
+        return {"model_type": model_type, "name": name, "family": "Example family",
+                "main_output": [kind], "status": status, "urls": [hf.format(model_type)], **extra}
+
+    (root / "fake_models.json").write_text(json.dumps([
+        model("example_image_small", "Example Image Small", "image", seconds=0.3),
+        model("example_image_large", "Example Image Large", "image", seconds=0.6,
+              oom_above_pixels=1_500_000),
+        model("example_video_fast", "Example Video Fast", "video", seconds=0.4),
+        model("example_video_large", "Example Video Large", "video", status="missing"),
+        model("example_tts", "Example Voice", "audio", seconds=0.2),
+        model("example_music", "Example Music", "audio", status="missing"),
+    ]))
+    bin_dir = work / "bin"
+    bin_dir.mkdir()
+    smi = bin_dir / "nvidia-smi"
+    smi.write_text(FAKE_SMI.format(python=sys.executable))
+    smi.chmod(smi.stat().st_mode | stat.S_IEXEC)
+    os.environ["PATH"] = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+    generation.PROJECT_DIR = work / "project"
+
+    paths = generation.Paths(work / "generation.json", work / "gen-data")
+    generation.load_settings(paths)                       # created from the example
+    data = json.loads(paths.settings.read_text())
+    data["wangp"] = {"folder": str(root), "python": sys.executable, "cli_args": []}
+    data["templates_folder"] = str(work / "templates")
+    (work / "templates").mkdir()
+
+    def template(tier, name, model_type, overrides=None, **values):
+        (work / "templates" / name).write_text(json.dumps({"model_type": model_type, **values}))
+        tier.update(template=name, overrides=overrides or {})
+
+    image, video, voice = (data["tiers"][c] for c in ("image", "video", "voice"))
+    template(image[0], "image_draft.json", "example_image_small", resolution="360x640",
+             num_inference_steps=4)
+    template(image[1], "image_low.json", "example_image_small", resolution="540x960",
+             num_inference_steps=8)
+    template(image[2], "image_mid.json", "example_image_large", resolution="720x1280",
+             num_inference_steps=20)
+    image[2]["vram_gb"] = 10
+    template(image[3], "image_high.json", "example_image_large", {"resolution": "1080x1920"},
+             resolution="720x1280", num_inference_steps=30)
+    template(video[0], "video_draft.json", "example_video_fast", resolution="320x576",
+             video_length=17)
+    template(video[3], "video_high.json", "example_video_large")
+    template(voice[1], "voice_low.json", "example_tts", duration_seconds=2)
+    paths.settings.write_text(json.dumps(data))
+
+    quiet = lambda *_: None                               # noqa: E731
+    info = generation.status(paths, check_wangp=True, log=quiet)
+    settings, _ = generation.load_settings(paths)
+    generation.benchmark(paths, settings, info["hardware"]["key"], info["tiers"], log=quiet)
+    compare = generation.compare(paths, settings, info["hardware"]["key"], info["tiers"],
+                                 "image", settings["benchmark"]["prompts"]["image"], 1234,
+                                 log=quiet)
+    for r in compare["results"]:
+        if r["output"]:
+            name = f"gen_{r['tier'].lower()}.png"
+            shutil.copy(r["output"], OUT / name)
+            r["output"] = f"C:/AutoEditor/work/generation/compare/{name}"
+    info = generation.status(paths, log=quiet)
+    # Paths as they would look on the creator's Windows PC.
+    text = json.dumps(info).replace(str(work), "C:/AutoEditor").replace(
+        json.dumps(sys.executable)[1:-1], "C:/Users/you/miniconda3/envs/wan2gp/python.exe")
+    (OUT / "gen.status.json").write_text(text, encoding="utf-8")
+    (OUT / "gen.compare.json").write_text(json.dumps(compare).replace(str(work), "C:/AutoEditor"),
+                                          encoding="utf-8")
 
 
 def main():
@@ -104,6 +200,7 @@ def main():
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(mp4), "-c:v", "libvpx-vp9",
                         "-b:v", "1M", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus",
                         str(mp4.with_suffix(".webm"))], check=True)
+    generation_fixtures(work)
     shutil.rmtree(work, ignore_errors=True)
     print(f"fixtures written to {OUT}")
 

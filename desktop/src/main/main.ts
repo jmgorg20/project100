@@ -3,8 +3,8 @@ import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electro
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { versionFromJob } from "../shared/jobs";
-import type { EngineEvent, Job, JobRequest, Plan, Provider, Settings } from "../shared/types";
-import { runEngine, type EngineConfig } from "./engine";
+import type { ContentType, EngineEvent, Job, JobRequest, Plan, Provider, Settings } from "../shared/types";
+import { runEngine, type EngineConfig, type RunHandle } from "./engine";
 import { HistoryStore } from "./historyStore";
 import { freeOutputPath, jobArgs, modelFor } from "./jobArgs";
 import { KeyStore } from "./keys";
@@ -25,9 +25,16 @@ let keys: KeyStore;
 let history: HistoryStore;
 let queue: JobQueue;
 const takenOutputs = new Set<string>();
+const genTasks = new Map<string, RunHandle>();
+let genCounter = 0;
+
+// After "cancel", the engine gets this long to stop by itself before it is killed. It must be
+// longer than the engine's own wait for WanGP to stop a job (Bridge.STOP_GRACE, 60 s), so the
+// engine always closes WanGP itself: a killed engine could leave WanGP running on the GPU.
+const ENGINE_STOP_GRACE_MS = 90_000;
 
 function engineConfig(): EngineConfig {
-  return { python: settings.pythonPath, engineDir: settings.engineDir, env: keys.env() };
+  return { python: settings.pythonPath, engineDir: settings.engineDir, env: keys.env(), graceMs: ENGINE_STOP_GRACE_MS };
 }
 
 function send(channel: string, payload: unknown): void {
@@ -58,6 +65,23 @@ function engineOnce(args: string[]): Promise<{ result?: Record<string, unknown>;
     });
     handle.done.then((r) => resolve(r.startError ? { error: r.startError } : { result, error }));
   });
+}
+
+/** A benchmark or compare run: engine events go to the window; one at a time per task id. */
+function startGenTask(args: string[]): string {
+  const taskId = `gen${++genCounter}`;
+  const handle = runEngine(engineConfig(), args, (event) => send("gen:task", { taskId, event }));
+  genTasks.set(taskId, handle);
+  handle.done.then((r) => {
+    genTasks.delete(taskId);
+    send("gen:task", { taskId, done: true, code: r.code, cancelled: r.cancelled, startError: r.startError });
+  });
+  return taskId;
+}
+
+async function genStatus(check: boolean) {
+  const r = await engineOnce(["gen-status", ...(check ? ["--check-wangp"] : [])]);
+  return r.error || !r.result ? { error: r.error ?? "No answer from the editor engine." } : r.result;
 }
 
 function registerIpc(): void {
@@ -110,6 +134,8 @@ function registerIpc(): void {
       auto: true,
       mode: "apply",
       planFile,
+      maxGenMinutes: job.maxGenMinutes,
+      maxAiClips: job.maxAiClips,
     };
     return queue.add([request]);
   });
@@ -128,6 +154,22 @@ function registerIpc(): void {
     const r = await engineOnce(["frame", projectFile, "--time", String(seconds), "--output", out]);
     return r.error ? { error: r.error } : { path: out };
   });
+  ipcMain.handle("gen:status", (_e, check: boolean) => genStatus(Boolean(check)));
+  ipcMain.handle("gen:setWangp", async (_e, folder: string, python: string) => {
+    const r = await engineOnce(["gen-config", "--wangp-folder", folder, "--wangp-python", python]);
+    return r.error ? { error: r.error } : { problems: (r.result?.problems as string[]) ?? [] };
+  });
+  ipcMain.handle("gen:setTier", async (_e, type: ContentType, kind: "default" | "pin", tier: string | null) => {
+    const flag = kind === "default" ? (tier ? ["--default", tier] : ["--clear-default"]) : tier ? ["--pin", tier] : ["--unpin"];
+    const r = await engineOnce(["set-tier", "--type", type, ...flag]);
+    return r.error ? { error: r.error } : genStatus(false);
+  });
+  ipcMain.handle("gen:benchmark", (_e, types: ContentType[]) => startGenTask(["benchmark", ...(types.length ? ["--type", ...types] : [])]));
+  ipcMain.handle("gen:compare", (_e, type: ContentType, prompt: string, seed: number) =>
+    startGenTask(["compare", "--type", type, "--prompt", prompt, "--seed", String(seed)]),
+  );
+  ipcMain.handle("gen:cancel", (_e, taskId: string) => genTasks.get(taskId)?.cancel());
+  ipcMain.handle("app:openPath", (_e, target: string) => shell.openPath(target));
   ipcMain.handle("engine:check", async () => {
     const r = await engineOnce(["validate", path.join(settings.engineDir, "examples", "project.json")]);
     return r.error ? { ok: false, message: r.error } : { ok: true, message: "The editor engine is ready." };
@@ -193,5 +235,6 @@ app.on("before-quit", (event) => {
   quitting = true;
   event.preventDefault();
   queue.cancelAll();
+  genTasks.forEach((handle) => handle.cancel());
   Promise.race([queue.whenIdle(), new Promise((r) => setTimeout(r, 15_000))]).then(() => app.quit());
 });

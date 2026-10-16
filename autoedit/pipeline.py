@@ -285,7 +285,8 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
         clip = {"id": ids.next("o"), "type": "image" if ev.is_image else "video",
                 "media": m["id"], "start": round(start + ev.start, 6),
                 "duration": round(duration, 6), "x": cx, "y": cy,
-                "width": max_w, "height": max_h, "animation": "pop"}
+                "width": max_w, "height": max_h,
+                "animation": "none" if ev.position == "full" else "pop"}
         if not ev.is_image:
             clip.update({"in": 0.0, "out": round(duration, 6)})
         photos.append(clip)
@@ -321,6 +322,24 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
             sfx_clips.append({"id": ids.next("s"), "type": "audio", "media": m["id"],
                               "start": round(at, 6), "duration": round(duration, 6),
                               "in": 0.0, "out": round(duration, 6), "volume": float(volume)})
+    # AI voice-overs (from the AI edit), placed where the plan says, on the voice-over track.
+    voice_clips = []
+    for line in plan.get("voiceovers", []):
+        at = remap_time(line["at"], segments, side="next")
+        if at is None:
+            continue
+        m = media.add(line["file"])
+        duration = min(m["duration"], main_end - (start + at))
+        if duration * fps < 1:
+            continue
+        voice_clips.append({"id": ids.next("a"), "type": "audio", "media": m["id"],
+                            "start": round(start + at, 6), "duration": round(duration, 6),
+                            "in": 0.0, "out": round(duration, 6), "volume": 1.0})
+    if voice_clips:
+        replace_track(project, "voiceover", "audio",
+                      [("Voice-over", lane) for lane in assign_lanes(voice_clips)],
+                      role="voiceover")
+
     sfx_lanes = assign_lanes(sfx_clips) or [[]]
     replace_track(project, "sfx", "audio", [("Sound effects", lane) for lane in sfx_lanes],
                   role="sfx")

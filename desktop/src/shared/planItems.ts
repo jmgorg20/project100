@@ -4,7 +4,7 @@ import type { Plan } from "./types";
 
 export interface PlanItem {
   id: string;
-  group: "Look" | "Pacing" | "Cuts" | "Zooms" | "Colour" | "Photos";
+  group: "Look" | "Pacing" | "Cuts" | "Zooms" | "Colour" | "Photos" | "AI clips";
   label: string;
   detail?: string;
 }
@@ -40,6 +40,12 @@ export function planItems(plan: Plan, base: Plan): PlanItem[] {
   plan.zooms.forEach((r, i) => items.push({ id: `zooms.${i}`, group: "Zooms", label: `Zoom ${Math.round((r.amount ?? 1) * 100)}% at ${mmss(r.start)}–${mmss(r.end)}` }));
   plan.grades.forEach((r, i) => items.push({ id: `grades.${i}`, group: "Colour", label: `${(r.grade ?? "").replace(/_/g, " ")} at ${mmss(r.start)}–${mmss(r.end)}` }));
   plan.photos.forEach((p, i) => items.push({ id: `photos.${i}`, group: "Photos", label: `${p.file} at ${mmss(p.at)}`, detail: p.reason }));
+  (plan.ai_clips ?? []).forEach((c, i) =>
+    items.push({ id: `ai_clips.${i}`, group: "AI clips", label: `AI ${c.kind === "image" ? "picture" : "video clip"} at ${mmss(c.at)}: “${c.prompt}”`, detail: c.reason }),
+  );
+  (plan.voiceovers ?? []).forEach((v, i) =>
+    items.push({ id: `voiceovers.${i}`, group: "AI clips", label: `AI voice-over at ${mmss(v.at)}: “${v.text}”`, detail: v.reason }),
+  );
   return items;
 }
 
@@ -65,6 +71,8 @@ export function acceptedPlan(plan: Plan, base: Plan, accepted: Set<string>): Pla
     zooms: plan.zooms.filter((_, i) => keep(`zooms.${i}`)),
     grades: plan.grades.filter((_, i) => keep(`grades.${i}`)),
     photos: plan.photos.filter((_, i) => keep(`photos.${i}`)),
+    ai_clips: (plan.ai_clips ?? []).filter((_, i) => keep(`ai_clips.${i}`)),
+    voiceovers: (plan.voiceovers ?? []).filter((_, i) => keep(`voiceovers.${i}`)),
   };
 }
 

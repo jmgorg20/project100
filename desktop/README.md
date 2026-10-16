@@ -27,6 +27,10 @@ tests/ui/      Playwright: the window in Chromium with a stand-in bridge (?mock=
 4. Open **Settings**, paste your Groq key, and click **Check the editor engine**.
    If Python is not found, set its path there (e.g. `C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe`).
 
+AI pictures, clips and voice-over use [WanGP](https://github.com/deepbeepmeep/Wan2GP)
+(installed separately, its own license). Set it up in **AI models**; see
+[docs/generation.md](../docs/generation.md). The app works without it.
+
 There is no installer yet (that is Phase 4).
 
 ## Tests

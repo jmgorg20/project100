@@ -2,7 +2,7 @@
 // Sandboxed preloads cannot load local modules: only type imports from ../shared.
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
 import type { AppApi } from "../shared/api";
-import type { Job, VideoHistory } from "../shared/types";
+import type { GenTaskUpdate, Job, VideoHistory } from "../shared/types";
 
 function listen<T>(channel: string, callback: (value: T) => void): () => void {
   const handler = (_event: IpcRendererEvent, value: T) => callback(value);
@@ -31,6 +31,14 @@ const api: AppApi = {
   estimate: (video, provider, instruction) => ipcRenderer.invoke("engine:estimate", video, provider, instruction),
   renderFrame: (projectFile, seconds) => ipcRenderer.invoke("engine:frame", projectFile, seconds),
   checkEngine: () => ipcRenderer.invoke("engine:check"),
+  genStatus: (checkWangp) => ipcRenderer.invoke("gen:status", checkWangp),
+  setWangp: (folder, python) => ipcRenderer.invoke("gen:setWangp", folder, python),
+  setTier: (type, kind, tier) => ipcRenderer.invoke("gen:setTier", type, kind, tier),
+  startBenchmark: (types) => ipcRenderer.invoke("gen:benchmark", types),
+  startCompare: (type, prompt, seed) => ipcRenderer.invoke("gen:compare", type, prompt, seed),
+  cancelGenTask: (taskId) => ipcRenderer.invoke("gen:cancel", taskId),
+  onGenTask: (callback) => listen<GenTaskUpdate>("gen:task", callback),
+  openPath: (path) => ipcRenderer.invoke("app:openPath", path),
   onJobChanged: (callback) => listen<Job>("job:changed", callback),
   onHistoryChanged: (callback) => listen<VideoHistory>("history:changed", callback),
 };

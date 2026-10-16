@@ -1,5 +1,7 @@
 // What the window can ask the main process (exposed as window.api by the preload script).
-import type { Cost, Job, JobRequest, KeysStatus, Plan, Provider, Settings, VideoHistory } from "./types";
+import type {
+  ContentType, Cost, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Plan, Provider, Settings, VideoHistory,
+} from "./types";
 
 export interface EstimateResult extends Partial<Cost> {
   text?: string;
@@ -35,6 +37,16 @@ export interface AppApi {
   estimate(video: string, provider: Provider, instruction: string): Promise<EstimateResult>;
   renderFrame(projectFile: string, seconds: number): Promise<{ path?: string; error?: string }>;
   checkEngine(): Promise<EngineCheck>;
+  /** Hardware, WanGP models and quality tiers. checkWangp starts WanGP to read its models. */
+  genStatus(checkWangp: boolean): Promise<GenStatus | { error: string }>;
+  setWangp(folder: string, python: string): Promise<{ problems?: string[]; error?: string }>;
+  /** kind "default": your choice after Compare; "pin": always use this tier. null clears it. */
+  setTier(type: ContentType, kind: "default" | "pin", tier: string | null): Promise<GenStatus | { error: string }>;
+  startBenchmark(types: ContentType[]): Promise<string>;
+  startCompare(type: ContentType, prompt: string, seed: number): Promise<string>;
+  cancelGenTask(taskId: string): Promise<void>;
+  onGenTask(callback: (update: GenTaskUpdate) => void): () => void;
+  openPath(path: string): Promise<void>;
   onJobChanged(callback: (job: Job) => void): () => void;
   onHistoryChanged(callback: (history: VideoHistory) => void): () => void;
 }
