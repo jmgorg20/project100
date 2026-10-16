@@ -10,9 +10,11 @@ export interface Word {
   highlight?: boolean;
 }
 
+export type FxEffect = "shake" | "flash" | "dip" | "glitch" | "whip";
+
 export interface Clip {
   id: string;
-  type: "video" | "image" | "zoom" | "grade" | "caption" | "audio";
+  type: "video" | "image" | "zoom" | "grade" | "caption" | "audio" | "fx";
   start: number;
   duration: number;
   media?: string;
@@ -38,7 +40,12 @@ export interface Clip {
   // effects
   amount?: number;
   anchor_y?: number;
+  /** Zoom: seconds to grow smoothly from 100% (0 = jump in). */
+  ease?: number;
   grade?: string;
+  /** Grade and fx: 0-1. */
+  intensity?: number;
+  effect?: FxEffect;
   // captions
   style?: string | number;
   highlight_keywords?: boolean;
@@ -77,7 +84,7 @@ export interface Project {
     height: number;
     fps: number;
     background?: string;
-    audio?: { normalize?: boolean; loudness?: number; true_peak?: number };
+    audio?: { normalize?: boolean; loudness?: number; true_peak?: number; ducking?: number; denoise?: number };
     fonts?: Record<string, string>;
   };
   media: Media[];

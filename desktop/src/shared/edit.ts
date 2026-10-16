@@ -45,7 +45,7 @@ export function findClip(p: Project, id: string): Found | null {
   return null;
 }
 
-function mustFind(p: Project, id: string): Found {
+export function mustFind(p: Project, id: string): Found {
   const f = findClip(p, id);
   if (!f) throw new EditError("That clip is no longer on the timeline.");
   if (f.track.locked) throw new EditError(`The ${f.track.name ?? f.track.id} track is locked. Unlock it first.`);
@@ -92,7 +92,7 @@ export function newId(p: Project, prefix: string, taken: Set<string> = allIds(p)
   return id;
 }
 
-function clone(p: Project): Project {
+export function clone(p: Project): Project {
   return { ...structuredClone(p), version: Math.max(p.version, PROJECT_VERSION) };
 }
 
@@ -195,9 +195,18 @@ function openSpace(track: Track, at: number, d: number): Track {
   return { ...track, clips: track.clips.map((c) => (c.start >= at - EPS ? { ...c, start: r4(c.start + d) } : c)) };
 }
 
-/** A caption clip needs at least one word; one cut down to nothing is removed. */
+/**
+ * Remove what cannot be shown: captions cut down to no words, and slivers shorter than a
+ * millisecond (left over when a cut lands a hair from a clip's edge; far less than a frame).
+ */
 function dropEmptyCaptions(p: Project): Project {
-  return { ...p, tracks: p.tracks.map((t) => (t.kind === "caption" ? { ...t, clips: t.clips.filter((c) => (c.words?.length ?? 0) > 0) } : t)) };
+  return {
+    ...p,
+    tracks: p.tracks.map((t) => ({
+      ...t,
+      clips: t.clips.filter((c) => c.duration >= 0.001 && (t.kind !== "caption" || (c.words?.length ?? 0) > 0)),
+    })),
+  };
 }
 
 /** Move clips that now overlap onto extra tracks of the same kind (first fit). */
@@ -495,7 +504,7 @@ export function setSpeed(p: Project, id: string, speed: number): Project {
 }
 
 export type ClipPatch = Partial<
-  Pick<Clip, "volume" | "fade_in" | "fade_out" | "opacity" | "crop" | "fit" | "x" | "y" | "width" | "height" | "animation" | "amount" | "anchor_y" | "grade" | "label">
+  Pick<Clip, "volume" | "fade_in" | "fade_out" | "opacity" | "crop" | "fit" | "x" | "y" | "width" | "height" | "animation" | "amount" | "anchor_y" | "grade" | "label" | "ease" | "intensity" | "effect">
 >;
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -509,8 +518,9 @@ export function allowedProps(track: Track, clip: Clip): Set<keyof ClipPatch> {
     if (clip.type === "video") add("volume", "fade_in", "fade_out");
   } else if (track.kind === "overlay") add("x", "y", "width", "height", "opacity", "animation");
   else if (track.kind === "audio") add("volume", "fade_in", "fade_out");
-  else if (clip.type === "zoom") add("amount", "anchor_y");
-  else if (clip.type === "grade") add("grade");
+  else if (clip.type === "zoom") add("amount", "anchor_y", "ease");
+  else if (clip.type === "grade") add("grade", "intensity");
+  else if (clip.type === "fx") add("effect", "intensity");
   return a;
 }
 
@@ -527,6 +537,12 @@ export function setClipProps(p: Project, id: string, patch: ClipPatch): Project 
     if (patch.opacity !== undefined) n.opacity = r4(clamp(patch.opacity, 0, 1));
     if (patch.amount !== undefined) n.amount = r4(clamp(patch.amount, 1, 5));
     if (patch.anchor_y !== undefined) n.anchor_y = r4(clamp(patch.anchor_y, 0, 1));
+    if (patch.intensity !== undefined) n.intensity = r4(clamp(patch.intensity, 0, 1));
+    if (patch.ease !== undefined) {
+      const e = r4(clamp(patch.ease, 0, 3));
+      if (e > 0) n.ease = e;
+      else delete n.ease;
+    }
     if (patch.width !== undefined) n.width = Math.max(1, r4(patch.width));
     if (patch.height !== undefined) n.height = Math.max(1, r4(patch.height));
     for (const k of ["fade_in", "fade_out"] as const) {
@@ -561,6 +577,24 @@ export function setTrackFlag(p: Project, trackId: string, flag: "muted" | "hidde
       return n;
     }),
   };
+}
+
+/**
+ * Put a new clip on the first unlocked track of `kind` (creating one if there is none). If it
+ * would overlap a clip there, it goes on another track of that kind (a new one if needed).
+ */
+export function placeClip(p: Project, clip: Clip, kind: Track["kind"], newTrack: () => Track): { project: Project; trackId: string } {
+  let q = clone(p);
+  let track = q.tracks.find((t) => t.kind === kind && !t.locked);
+  if (!track) {
+    if (q.tracks.some((t) => t.kind === kind)) throw new EditError(`Every ${kind} track is locked. Unlock one first.`);
+    track = newTrack();
+    const after = Math.max(-1, ...q.tracks.map((t, i) => (t.kind === kind ? i : -1)));
+    q.tracks = after >= 0 ? [...q.tracks.slice(0, after + 1), track, ...q.tracks.slice(after + 1)] : [...q.tracks, track];
+  }
+  const id = track.id;
+  q = { ...q, tracks: q.tracks.map((t) => (t.id === id ? { ...t, clips: [...t.clips, clip] } : t)) };
+  return moveClip(q, clip.id, clip.start, id);
 }
 
 // ---------------------------------------------------------------- adding media
