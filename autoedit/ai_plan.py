@@ -1,0 +1,117 @@
+"""The AI edit plan: what the language model decides for one video, checked and applied.
+
+The model never writes the Project itself. It fills in a small plan (ai_plan.schema.json):
+caption style and size, pacing, extra cuts, zooms, grades and pop-in photos, with times in
+the RAW video. `apply_plan()` turns it into the same settings and --plan entries the command
+line uses, so the timeline is built by the normal, tested editing steps.
+"""
+
+import copy
+import json
+from functools import lru_cache
+from pathlib import Path
+
+from .cuts import merge_intervals
+from .styles import get_style
+
+SCHEMA_FILE = Path(__file__).with_name("ai_plan.schema.json")
+MIN_KEPT_SECONDS = 1.0
+
+
+@lru_cache(maxsize=None)
+def load_plan_schema():
+    return json.loads(SCHEMA_FILE.read_text(encoding="utf-8"))
+
+
+def preset_plan(cfg):
+    """The plan that matches the normal preset edit (what you get without AI)."""
+    pacing = cfg["pacing"]
+    return {
+        "summary": "Preset edit: pauses and filler words cut, jump-cut zooms, captions.",
+        "style": get_style(cfg["style"]).name,
+        "grade": str(cfg["grade"]),
+        "pacing": {"silence_threshold": float(pacing["silence_threshold"]),
+                   "remove_fillers": bool(pacing["remove_fillers"])},
+        "zoom": {"enabled": bool(pacing.get("zoom", True)),
+                 "amount": float(pacing["zoom_amount"])},
+        "captions": {"enabled": bool(cfg["captions"].get("enabled", True)), "size_scale": 1.0,
+                     "position": None, "highlight_words": []},
+        "cuts": [], "zooms": [], "grades": [], "photos": [], "notes": [],
+    }
+
+
+def validate_plan(plan, duration, photo_names=()):
+    """Return a list of problems (empty = the plan can be used)."""
+    import jsonschema
+
+    if not isinstance(plan, dict):
+        return ["the answer is not a JSON object"]
+    validator = jsonschema.Draft202012Validator(load_plan_schema())
+    problems = [f"{e.json_path.replace('$', 'plan', 1)}: {e.message}"
+                for e in sorted(validator.iter_errors(plan), key=lambda e: list(e.absolute_path))]
+    if problems:
+        return problems
+
+    def check_range(kind, i, item):
+        where = f"plan.{kind}[{i}]"
+        if item["end"] <= item["start"]:
+            problems.append(f"{where}: end ({item['end']}) must be after start ({item['start']})")
+        if item["start"] >= duration:
+            problems.append(f"{where}: starts at {item['start']}s but the video is only "
+                            f"{duration:.2f}s long")
+
+    for kind in ("cuts", "zooms", "grades"):
+        for i, item in enumerate(plan[kind]):
+            check_range(kind, i, item)
+    kept = duration - sum(e - s for s, e in merge_intervals(
+        [(c["start"], min(c["end"], duration)) for c in plan["cuts"]]))
+    if kept < MIN_KEPT_SECONDS:
+        problems.append(f"plan.cuts: they remove almost the whole video (only {kept:.1f}s left)")
+    names = set(photo_names)
+    for i, photo in enumerate(plan["photos"]):
+        if photo["file"] not in names:
+            choices = ", ".join(sorted(names)) or "none were given"
+            problems.append(f"plan.photos[{i}]: unknown photo '{photo['file']}' "
+                            f"(available: {choices})")
+        if photo["at"] >= duration:
+            problems.append(f"plan.photos[{i}]: at {photo['at']}s is after the end of the "
+                            f"video ({duration:.2f}s)")
+    return problems
+
+
+def apply_plan(cfg, plan, photos):
+    """Settings and pipeline plan for a checked plan. `photos` maps file name -> path.
+
+    Returns (cfg, pipeline_plan); `cfg` is a copy, the caller's settings are not changed.
+    """
+    cfg = copy.deepcopy(cfg)
+    cfg["style"] = plan["style"]
+    cfg["grade"] = plan["grade"]
+    cfg["pacing"].update(silence_threshold=float(plan["pacing"]["silence_threshold"]),
+                         remove_fillers=bool(plan["pacing"]["remove_fillers"]),
+                         zoom=bool(plan["zoom"]["enabled"]),
+                         zoom_amount=float(plan["zoom"]["amount"]))
+    captions = plan["captions"]
+    cfg["captions"]["enabled"] = bool(captions["enabled"])
+    extra = list(cfg["highlight"].get("extra_keywords") or [])
+    cfg["highlight"]["extra_keywords"] = extra + [w for w in captions["highlight_words"]
+                                                  if w.strip()]
+    overrides = {}
+    scale = float(captions["size_scale"])
+    if abs(scale - 1.0) > 1e-6:
+        overrides["size"] = max(16, min(300, round(get_style(plan["style"]).size * scale)))
+    if captions["position"]:
+        overrides["zone"] = captions["position"]
+    pipeline_plan = {
+        "auto_zoom": True,
+        "cuts": [{"start": c["start"], "end": c["end"]} for c in plan["cuts"]],
+        "zooms": [{"start": z["start"], "end": z["end"], "amount": float(z["amount"])}
+                  for z in plan["zooms"]],
+        "grades": [{"start": g["start"], "end": g["end"], "grade": g["grade"]}
+                   for g in plan["grades"]],
+        "overlays": [{"file": Path(photos[p["file"]]), "at": float(p["at"]),
+                      "duration": float(p["duration"]), "position": p["position"]}
+                     for p in plan["photos"]],
+        "caption_overrides": overrides,
+    }
+    return cfg, pipeline_plan

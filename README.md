@@ -27,9 +27,12 @@ whole timeline (cuts, zooms, captions, overlays, sounds) as tracks and clips. Yo
 re-render it, and the desktop editor that is being built will open it so you can change
 anything by hand. See [Project files](#project-files).
 
-> **Desktop app status:** this is Phase 0 of turning the editor into a CapCut-style desktop
-> app (live preview, multi-track timeline, AI first edit). Phase 0 adds the project file and
-> its renderer. The app itself is not built yet; everything below is the command line.
+> **New: AI edit and desktop app.** Describe the finished video in plain Taglish or English
+> ("mabilis na edit, malaking captions, ipakita ang receipt.png pag sinabi kong resibo") and
+> the AI plans the edit, the editor builds and renders it, and tells you in plain words what
+> it did. One click undoes it. Works for a batch of videos too. See
+> [The AI edit and the desktop app](#the-ai-edit-and-the-desktop-app). The full multi-track
+> timeline editor comes later; the app has a preview player for now.
 
 ---
 
@@ -38,7 +41,7 @@ anything by hand. See [Project files](#project-files).
 Be aware of what has and has not been checked:
 
 **Tested (automatically, on Linux with FFmpeg 6.1, Python 3.13):**
-- 164 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
+- 202 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
   keyword rules, settings, edit plans, watch mode, and all 13 caption styles. Each style
   is turned into a subtitle file and drawn by FFmpeg/libass to check that text appears.
 - **Project files:** the schema and ~30 kinds of mistakes (each with a clear message);
@@ -52,6 +55,19 @@ Be aware of what has and has not been checked:
   subtitle file as before.
 - `render`, `frame`, `validate`, JSON progress, and **cancel** (FFmpeg is stopped, no
   half-written file is left).
+- **AI edit** (with the AI's answers faked, because no AI service could be reached from the
+  test machine): plan checks, the exact requests sent to Groq and Anthropic, clear errors,
+  one retry with the problems listed, falling back to the preset edit (and saying so) after
+  two bad plans or when the AI cannot be reached, saved transcripts and plans, cost
+  estimates, and the whole flow to a rendered video, including review mode, follow-up
+  changes and batches. See [docs/ai-edit.md](docs/ai-edit.md).
+- **Desktop app:** 42 unit tests (including the app's main process driving the real
+  engine from start to finished video, undo/redo, exact frame) and 9 browser tests of the
+  window (Playwright, at 1280x800 and 1920x1080, with screenshots checked by eye): Auto mode
+  on by default and rendering with no extra clicks, live progress, the summary and cost,
+  undo/redo, review with Auto mode off, the fallback warning, keys never shown, the
+  consent notice, and the live preview playing the planned edit. The preview's captions
+  and photos land where the engine draws them (checked against frames the engine rendered).
 - Full edits of a **synthetic test video** (colour bars + beeps standing in for speech, with a
   fake transcript): output is 1080x1920, 30 fps, H.264, with an AAC audio track, and sound
   and picture have the same length. Layouts tested: face, split screen, picture-in-picture,
@@ -72,9 +88,18 @@ Be aware of what has and has not been checked:
   Expect the export to take roughly as long as the video, or longer on older laptops.
 - FFmpeg 7/8 (Windows builds are usually newer than the 6.1 used for testing). The editor
   switches to the newer way of passing the filter file automatically.
-- The **desktop app** does not exist yet (later phases), so nothing about the app, its
-  preview, the installer, the AI timeline (Groq/Anthropic LLM calls) or preview-vs-render
-  matching has been tested.
+- **Real Groq and Anthropic calls**: no AI service could be reached from the test machine,
+  so how well the AI plans real Taglish videos is unknown. The Groq model name
+  (`openai/gpt-oss-120b`) and Groq prices could not be checked either; change them in
+  Settings / `config.yaml` if Groq says the model does not exist.
+- **The desktop app inside Electron.** Electron itself could not be downloaded on the test
+  machine, so the app window was tested in a browser (Chromium) with the Electron parts
+  stood in, and the app's main process was tested in Node. Never run: the real Electron
+  window, file dialogs, drag and drop, key encryption (safeStorage), playing MP4 files in
+  the app, and quitting during a render.
+- The live preview is close to the final video but not identical (fonts, outlines and
+  colour grades are drawn by the browser). Use **Exact frame** to see the real thing.
+- No installer yet (Phase 4).
 - Cancelling on **Windows** (the app stops FFmpeg through the editor) was only tested on
   Linux.
 
@@ -231,6 +256,51 @@ Pictures are saved in `output\style_previews\`. The red areas show where TikTok/
 their buttons and text; captions stay out of them.
 
 ---
+
+## The AI edit and the desktop app
+
+### In the app
+
+Setup: see [desktop/README.md](desktop/README.md) (Node.js, then `npm install` and
+`npm start` in the `desktop` folder). Then:
+
+1. **Settings**: paste your Groq key (free). Optionally an Anthropic key (paid). Keys are
+   encrypted on your PC and never shown again.
+2. **Add videos** (one or many) and, optionally, **Add photos** the AI may pop in. Name
+   photos well (`gcash_receipt.png`), because the AI matches names to what you say.
+3. Type what you want, e.g. *"Mabilis na edit, malaking yellow captions, tanggalin ang
+   retake sa simula, ipakita ang gcash_receipt.png pag sinabi kong resibo."*
+4. Click **Edit with AI**. With **Auto mode** on (the default) everything happens
+   by itself: transcript, plan, cuts, zooms, captions, photos, render. Each step lights up
+   as it finishes, and the preview fills in.
+5. Read **What the AI did**: a plain list of the changes, anything it could not do, and the
+   API cost.
+6. Not happy? **Undo AI edit** (instant, back to the previous version or the original),
+   **Redo with new instructions**, or type a change like *"mas malaki pa ang captions"* and
+   click **Change**.
+
+With **Auto mode off**, the AI's changes are listed with checkboxes; nothing is rendered
+until you click **Apply & render**. **Exact frame** shows the real rendered frame at the
+playhead.
+
+If the AI's plan fails the checks twice (or the AI cannot be reached), you get the normal
+preset edit and a "Heads up" at the top of the summary saying why.
+
+### From the command line
+
+```
+python editor.py ai-edit inbox\myvideo.mp4 -i "Fast edit, big captions" --photos assets\overlays\receipt.png
+python editor.py ai-edit inbox\a.mp4 inbox\b.mp4 -i "Same for both"          # batch
+python editor.py ai-edit inbox\myvideo.mp4 -i "..." --no-render               # plan only
+python editor.py ai-edit inbox\myvideo.mp4 --plan-file output\myvideo_edited.plan.json
+python editor.py estimate inbox\myvideo.mp4 --provider anthropic              # cost first
+```
+
+Use `--provider anthropic` for Claude (needs `ANTHROPIC_API_KEY` in `.env`). Details,
+including how plans are checked and how costs are estimated: [docs/ai-edit.md](docs/ai-edit.md).
+
+Transcripts and plans are saved in `work\cache`, so running the same video again (for
+example with only a different caption style picked in review) costs nothing extra.
 
 ## Caption styles
 
@@ -423,6 +493,11 @@ autoedit/
   project_render.py  renders a project with one FFmpeg command
   render.py          FFmpeg building blocks (and the original renderer, used by the tests)
   progress.py        progress messages (text, or JSON lines for the app)
+  ai_edit.py         the AI edit: transcript -> plan -> project -> summary -> render
+  ai_plan.py         the AI plan: checks and how it becomes editing settings
+  llm.py             asks Groq or Anthropic for the plan
+  cache.py, costs.py saved transcripts/plans, cost estimates
+desktop/             the desktop app (Electron + React), see desktop/README.md
   transcribe.py      Groq and faster-whisper
   overlays.py, plan.py, grades.py, watch.py, previews.py ...
 tests/               automated tests (run: python -m pytest)

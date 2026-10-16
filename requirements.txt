@@ -7,5 +7,8 @@ jsonschema>=4.18         # checks project files against autoedit/project.schema.
 # Local (offline) transcription. Large download; only needed if provider: local
 faster-whisper>=1.0
 
+# Optional AI planner: Anthropic Claude with your own (paid) API key
+anthropic>=1.15
+
 # For running the tests (python -m pytest)
 pytest>=7.0
