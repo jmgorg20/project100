@@ -21,6 +21,8 @@ ZONES = {
     "divider": (5, CENTER_X, 1152),  # on the line between screen recording and face
 }
 
+LEFT_X = SAFE_LEFT + 20       # x position of left-aligned captions
+
 HOLD_AFTER_LAST_WORD = 0.25   # keep a caption on screen a moment after the last word
 MERGE_GAP = 0.35              # gaps shorter than this keep the previous caption visible
 NEW_GROUP_PAUSE = 0.7         # a pause longer than this starts a new caption group
@@ -126,6 +128,14 @@ def render_group(lines, active, style, box_layer=False):
     return r"\N".join(parts)
 
 
+def placement(style, zone):
+    """(ASS alignment, x, y) for a style in a zone, honouring left alignment."""
+    align, x, y = ZONES[zone]
+    if style.align == "left":
+        return align - 1, LEFT_X, y      # 2->1, 5->4, 8->7: same row, left-anchored
+    return align, x, y
+
+
 def rounded_box(x0, y0, x1, y1, r):
     """ASS vector drawing commands for a rectangle with rounded corners."""
     r = max(0, min(r, (x1 - x0) / 2, (y1 - y0) / 2))
@@ -138,15 +148,16 @@ def rounded_box(x0, y0, x1, y1, r):
 
 def word_boxes(lines, style, zone, measurer):
     """Pixel rectangle (x0, y0, x1, y1) of every word in a caption group, in reading order."""
-    align, x, y = ZONES[zone]
+    align, x, y = placement(style, zone)
     size = style.size
     block = len(lines) * size            # libass line height == font size
-    top = {2: y - block, 5: y - block / 2, 8: y}[align]
+    top = {1: y - block, 2: y - block, 4: y - block / 2, 5: y - block / 2,
+           7: y, 8: y}[align]
     pad_x = style.box_padding
     boxes = []
     for row, line in enumerate(lines):
         texts = [display_text(w, style) for w in line]
-        left = x - measurer.width(" ".join(texts)) / 2
+        left = x if style.align == "left" else x - measurer.width(" ".join(texts)) / 2
         line_top = top + row * size
         for i, text in enumerate(texts):
             offset = measurer.width(" ".join(texts[:i]) + " ") if i else 0
@@ -159,7 +170,7 @@ def word_boxes(lines, style, zone, measurer):
 def build_events(words, style, zone=None, measurer=None):
     """Return a list of (layer, start_cs, end_cs, style_name, text)."""
     zone = zone or style.zone
-    align, x, y = ZONES[zone]
+    align, x, y = placement(style, zone)
     prefix = rf"{{\an{align}\pos({x},{y})}}"
     groups = chunk_words(words, style)
     events = []

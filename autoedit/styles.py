@@ -16,6 +16,7 @@ Settings you can use in a style (anything left out uses the default below):
   box           True = solid box behind the whole text, box_color its colour, box_padding its size
   uppercase / lowercase   change the case of all text
   zone          where the captions sit: "lower", "center" or "top"
+  align         "center" or "left" (lines start at the left safe margin)
   mode          "phrase"     = show a group of words, colour the spoken word
                 "word"       = one word at a time
                 "typewriter" = words appear as they are spoken, stay until the group ends
@@ -54,6 +55,7 @@ class CaptionStyle:
     uppercase: bool = False
     lowercase: bool = False
     zone: str = "lower"
+    align: str = "center"
     mode: str = "phrase"
     words_per_line: int = 4
     max_lines: int = 2
@@ -92,7 +94,8 @@ STYLES = [
                  font="heavy", size=108, outline=7, zone="center", keyword_color=YELLOW,
                  keyword_uppercase=True, words_per_line=3, max_chars=12),
     CaptionStyle(12, "typewriter", "Words appear one by one as you speak",
-                 font="bold", size=72, outline=5, mode="typewriter", keyword_color=YELLOW),
+                 font="bold", size=72, outline=5, mode="typewriter", keyword_color=YELLOW,
+                 align="left"),
     CaptionStyle(13, "pop_word", "Each word pops in as it is spoken",
                  font="heavy", size=82, outline=6, mode="pop", keyword_color=YELLOW,
                  words_per_line=3),
