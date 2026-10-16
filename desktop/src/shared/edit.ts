@@ -20,6 +20,8 @@ export const MIN_SPEED = 0.25;
 export const MAX_SPEED = 4;
 export const PROJECT_VERSION = 2;
 const EPS = 1e-6;
+/** Clips closer than this (seconds) are touching, not overlapping: the same slack as the engine's validator (TIME_TOLERANCE in autoedit/project.py). */
+export const TOUCH = 0.002;
 
 /** Times are kept to 0.1 ms, so repeated edits do not pile up rounding noise. */
 export const r4 = (x: number): number => Math.round(x * 1e4) / 1e4;
@@ -221,7 +223,7 @@ export function resolveOverlaps(p: Project): Project {
     }
     const lanes: Clip[][] = [];
     for (const c of [...track.clips].sort((x, y) => x.start - y.start)) {
-      const lane = lanes.find((l) => c.start >= clipEnd(l[l.length - 1]) - EPS);
+      const lane = lanes.find((l) => c.start >= clipEnd(l[l.length - 1]) - TOUCH);
       if (lane) lane.push(c);
       else lanes.push([c]);
     }
@@ -341,7 +343,7 @@ export function trimClip(p: Project, id: string, edge: "start" | "end", t: numbe
   if (!isMain(track)) {
     const siblings = track.clips.filter((c) => c.id !== id);
     if (edge === "start") {
-      const prevEnd = Math.max(0, ...siblings.filter((c) => clipEnd(c) <= s + EPS).map(clipEnd));
+      const prevEnd = Math.max(0, ...siblings.filter((c) => clipEnd(c) <= s + TOUCH).map(clipEnd));
       const t2 = r4(Math.min(Math.max(t, prevEnd, s - room.before), e - min));
       if (Math.abs(t2 - s) <= EPS) return p;
       const next: Clip = { ...clip, start: t2, duration: r4(e - t2) };
@@ -349,7 +351,7 @@ export function trimClip(p: Project, id: string, edge: "start" | "end", t: numbe
       if (clip.words) next.words = tidyWords(clip.words.map((w) => ({ ...w, start: w.start - (t2 - s), end: w.end - (t2 - s) })).filter((w) => mid(w) >= 0), next.duration);
       replace(next);
     } else {
-      const nextStart = Math.min(Infinity, ...siblings.filter((c) => c.start >= e - EPS).map((c) => c.start));
+      const nextStart = Math.min(Infinity, ...siblings.filter((c) => c.start >= e - TOUCH).map((c) => c.start));
       const t2 = r4(Math.max(Math.min(t, nextStart, e + room.after), s + min));
       if (Math.abs(t2 - e) <= EPS) return p;
       const next: Clip = { ...clip, duration: r4(t2 - s) };
@@ -398,7 +400,7 @@ export function moveClip(p: Project, id: string, newStart: number, targetTrackId
   const moved: Clip = { ...clip, start };
   let q = clone(p);
   q = { ...q, tracks: q.tracks.map((t) => ({ ...t, clips: t.clips.filter((c) => c.id !== id) })) };
-  const fits = (t: Track) => !t.locked && t.clips.every((c) => clipEnd(c) <= start + EPS || c.start >= clipEnd(moved) - EPS);
+  const fits = (t: Track) => !t.locked && t.clips.every((c) => clipEnd(c) <= start + TOUCH || c.start >= clipEnd(moved) - TOUCH);
   const sameKind = q.tracks.filter((t) => t.kind === track.kind && !isMain(t));
   let dest = q.tracks.find((t) => t.id === target.id)!;
   if (!fits(dest)) {
@@ -468,7 +470,7 @@ export function setSpeed(p: Project, id: string, speed: number): Project {
   const changed: Clip = fitFades({ ...clip, speed: sp, duration, out: r4((clip.in ?? 0) + duration * sp) });
   if (sp === 1) delete changed.speed;
   if (!isMain(track)) {
-    const blocked = track.clips.some((c) => c.id !== id && c.start >= e - EPS && c.start < s + duration - EPS);
+    const blocked = track.clips.some((c) => c.id !== id && c.start >= e - TOUCH && c.start < s + duration - TOUCH);
     if (blocked) throw new EditError("Not enough room on this track at that speed: move the next clip first.");
     const q = clone(p);
     return { ...q, tracks: q.tracks.map((t) => ({ ...t, clips: t.clips.map((c) => (c.id === id ? changed : c)) })) };

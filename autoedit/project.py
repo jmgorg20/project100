@@ -118,7 +118,7 @@ def _semantic_problems(data):
             if clip["id"] in seen_clips:
                 problems.append(f"{where}: the clip id is used twice")
             seen_clips.add(clip["id"])
-            if previous is not None and clip["start"] < clip_end(previous) - 1e-6:
+            if previous is not None and clip["start"] < clip_end(previous) - TIME_TOLERANCE:
                 problems.append(f"{where}: overlaps clip '{previous['id']}' on the same track "
                                 f"(starts at {clip['start']:.3f}s, the other ends at "
                                 f"{clip_end(previous):.3f}s)")
@@ -307,7 +307,7 @@ def assign_lanes(items, start=lambda x: x["start"], end=clip_end):
     lanes = []
     for item in sorted(items, key=start):
         for lane in lanes:
-            if start(item) >= end(lane[-1]) - 1e-9:
+            if start(item) >= end(lane[-1]) - TIME_TOLERANCE:
                 lane.append(item)
                 break
         else:

@@ -159,7 +159,10 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
     if not segments or total_length(segments) < 0.5:
         raise EditorError("Almost everything would be cut. Is the speech very quiet? "
                           "Try silence -> noise_db: -45 in config.yaml.")
-    new_length = total_length(segments)
+    # Every clip length is rounded once, here; the clips are laid end to end from these exact
+    # values, so neighbours touch exactly and everything else (captions, overlays, effects)
+    # uses the same total.
+    durations, new_length = segment_lengths(segments)
     cut_words = remap_words(words, segments, cfg["fillers"], pacing["remove_fillers"])
     mark_keywords(cut_words, cfg["highlight"])
     print(f"  > {info['duration']:.1f}s -> {new_length:.1f}s "
@@ -243,15 +246,15 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
     start = offset                               # where the cut video starts
     clip_layout = {"type": layout, "screen": media.add(screen)["id"]} \
         if layout in ("split", "pip") else None
-    for s, e in segments:
+    for (s, e), duration in zip(segments, durations):
         clip = {"id": ids.next("v"), "type": "video", "media": main_media["id"],
-                "start": round(offset, 6), "duration": round(e - s, 6),
+                "start": round(offset, 6), "duration": duration,
                 "in": round(s, 6), "out": round(e, 6),
                 "fit": "blur" if layout == "screen" else "fill"}
         if clip_layout:
             clip["layout"] = dict(clip_layout)
         main.append(clip)
-        offset += e - s
+        offset = round(offset + duration, 6)
     main_end = offset
     if outro:
         add_branding_clip(main, media, ids, outro, main_end, fps)
@@ -395,6 +398,17 @@ def replace_track(project, track_id, kind, lanes, role=None):
     if not new:
         new = [dict(project["tracks"][index])]
     project["tracks"][index:index + 1] = new
+
+
+def segment_lengths(segments):
+    """(each kept piece's length rounded to 1 microsecond, their total).
+
+    The lengths are rounded once and everything is laid end to end from these exact values,
+    so neighbouring clips touch exactly (rounding each start and each length separately can
+    leave them up to a microsecond apart).
+    """
+    durations = [round(e - s, 6) for s, e in segments]
+    return durations, round(sum(durations), 6)
 
 
 def caption_groups(words, style, video_length):
