@@ -1,0 +1,9 @@
+{
+  "style": "center_keyword",
+  "grade": "warm",
+  "auto_zoom": true,
+  "cuts":     [{"start": 41.0, "end": 47.5}],
+  "zooms":    [{"start": 12.0, "end": 15.5, "amount": 1.3}],
+  "grades":   [{"start": 30.0, "end": 36.0, "grade": "black_and_white"}],
+  "overlays": [{"file": "receipt.png", "at": 20.0, "duration": 3, "position": "center"}]
+}

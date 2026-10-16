@@ -1,0 +1,22 @@
+# Pop-in overlays: when you SAY a keyword, an image or short clip pops in.
+# Put the files in assets/overlays/  (screenshots, notifications, documents, short .mp4 clips)
+# Only one overlay shows at a time, and it is placed where it won't cover the captions.
+
+defaults:
+  duration: 2.5        # seconds on screen
+  position: top        # top or center
+  cooldown: 10         # seconds before the same trigger can pop in again
+
+triggers: []           # remove "[]" and un-comment the examples below
+
+#  - keyword: github                  # one word...
+#    file: github.png                 # ...shows assets/overlays/github.png
+#    duration: 2.5
+#    position: top
+#
+#  - keyword: [gcash, g-cash]         # several spellings of the same thing
+#    file: gcash_notification.png
+#
+#  - keyword: "visual studio code"    # or a whole phrase
+#    file: vscode_demo.mp4
+#    position: center
