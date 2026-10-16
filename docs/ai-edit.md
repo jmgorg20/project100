@@ -19,8 +19,12 @@ python editor.py estimate inbox\talk.mp4 --provider anthropic                   
    length, the photo file names, and the preset edit as a starting point. It answers with a
    small JSON plan ([`autoedit/ai_plan.schema.json`](../autoedit/ai_plan.schema.json)):
    caption style, size and position, words to highlight, pacing, zoom, colour, extra cuts
-   (retakes, unwanted parts), extra zooms, colour changes for parts, and pop-in photos.
+   (retakes, unwanted parts), extra zooms, colour changes for parts, pop-in photos,
+   effects and transitions (flash, whip, shake, glitch, dip), and B-roll items (what to
+   show, search words, a look, and a source: see [broll.md](broll.md)). It is also told
+   which B-roll sources you have (your folder's file-name words, stock keys, WanGP).
    Anything it cannot do goes in `notes` and is shown to you as "Not done: ...".
+   Plans saved by older versions (without effects or B-roll looks) still load.
 3. **Checks.** Every plan is checked against the schema, then for sense (times inside the
    video, photos that exist, not cutting everything), then by actually building the
    project (which is checked against the project schema). If anything fails, the model is
@@ -28,7 +32,8 @@ python editor.py estimate inbox\talk.mp4 --provider anthropic                   
    provider cannot be reached (no key, no internet, rate limit), the editor uses the
    **preset edit** and says so at the top of the summary ("Heads up: ...").
 4. **Project.** Built by the same tested steps as `python editor.py edit` (cuts, zooms,
-   captions, photos). The app shows each stage as it arrives.
+   captions, photos). B-roll is found or made first (your folder, then free stock, then AI).
+   The app shows each stage as it arrives.
 5. **Summary.** A plain-language list of what was actually done, read from the finished
    project (not from what the model claimed): new length and number of jump cuts, removed
    parts with reasons, zooms, caption style and size, colour, photos and when they appear,

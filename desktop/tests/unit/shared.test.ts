@@ -12,7 +12,7 @@ function basePlan(): Plan {
     summary: "", style: "yellow_pop", grade: "natural_clean",
     pacing: { silence_threshold: 0.25, remove_fillers: true }, zoom: { enabled: true, amount: 1.15 },
     captions: { enabled: true, size_scale: 1, position: null, highlight_words: [] },
-    cuts: [], zooms: [], grades: [], photos: [], notes: [], ai_clips: [], voiceovers: [],
+    cuts: [], zooms: [], grades: [], effects: [], photos: [], notes: [], ai_clips: [], voiceovers: [],
   };
 }
 
@@ -115,6 +115,23 @@ describe("plan review", () => {
     expect(kept.photos).toHaveLength(1);
     const all = acceptedPlan(plan, basePlan(), new Set(planItems(plan, basePlan()).map((i) => i.id)));
     expect(all).toEqual(plan);
+  });
+
+  it("lists planned effects (transitions on a cut) and drops the rejected ones", () => {
+    const withFx: Plan = {
+      ...basePlan(),
+      effects: [
+        { effect: "flash", at: 12, duration: 0.3, intensity: 1, on_cut: true, reason: "new topic" },
+        { effect: "shake", at: 31, duration: 0.4, intensity: 0.7, on_cut: false, reason: "punchline" },
+      ],
+    };
+    const items = planItems(withFx, basePlan());
+    expect(items.map((i) => [i.id, i.group, i.label])).toEqual([
+      ["effects.0", "Effects", "Flash transition at 0:12"],
+      ["effects.1", "Effects", "Shake at 0:31"],
+    ]);
+    expect(acceptedPlan(withFx, basePlan(), new Set(["effects.1"])).effects?.map((e) => e.effect)).toEqual(["shake"]);
+    expect(planItems({ ...basePlan(), effects: undefined }, basePlan())).toEqual([]);
   });
 
   it("lists AI clips and voice-overs, and drops the rejected ones", () => {

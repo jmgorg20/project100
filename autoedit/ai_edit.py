@@ -57,8 +57,12 @@ what it shows (match words in the file name, e.g. "gcash_receipt.png" when they 
 - captions.highlight_words: words from the transcript worth emphasizing (prices, product \
 names, key terms), only if asked or clearly useful.
 - zooms: extra emphasis zoom-ins on key moments, only if asked (amount 1.2 to 1.4).
-- If the instruction asks for something the program cannot do (music, transitions, face \
-filters, changing what someone said), do not fake it: add a short note to notes.
+- effects: short accents (flash, whip, shake, glitch, dip) only if the creator asks for \
+effects or transitions ("lagyan ng transitions", "may effects"), or for a clear punchline. \
+Transitions (flash, whip, dip) go between topics with on_cut true; shake or glitch on a \
+punchline word. At most one every 3 seconds; 0.2 to 0.5 seconds each.
+- If the instruction asks for something the program cannot do (music, face filters, \
+changing what someone said), do not fake it: add a short note to notes.
 - ai_clips are B-roll (pictures or short clips over the speaker), when the creator asks \
 for B-roll / visuals, or it clearly helps. Follow B-ROLL SOURCES below: plan none if no \
 source is available. Put each one where the speaker mentions what it shows. prompt: \
@@ -247,6 +251,11 @@ def describe(project, plan, result, raw_duration, photo_names, generation=None):
                        + (f" ({'; '.join(extra)})" if extra else "") + f": {len(captions)} lines.")
     else:
         details.append("No captions.")
+    fx = [c for t in tracks if t["kind"] == "effect" for c in t["clips"] if c["type"] == "fx"]
+    if fx:
+        names = ", ".join(f"{c['effect']} at {mmss(c['start'])}" for c in fx[:8])
+        details.append(f"Added {len(fx)} effect{'s' if len(fx) != 1 else ''}: {names}"
+                       + ("..." if len(fx) > 8 else "."))
     grade_line = f"Colour: {plan['grade'].replace('_', ' ')}."
     for g in plan["grades"]:
         grade_line += (f" {g['grade'].replace('_', ' ')} from {mmss(g['start'])} to "

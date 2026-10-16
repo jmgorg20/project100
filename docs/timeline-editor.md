@@ -19,6 +19,7 @@ instead.
 | Part | What it does |
 |---|---|
 | **Preview** (top middle) | Plays the timeline live. **Exact frame** asks the engine for the real frame, exactly as it will export. |
+| **B-roll** (left) | Describe a picture or clip and the app finds or makes it; your B-roll folder. See [B-roll](#b-roll--dagdag-na-kuha). |
 | **Media** (left) | The project's files. **Import** adds videos, pictures and sound files. Drag one onto a track, or use **＋ Video**, **＋ B-roll** or **＋ Sound** to add it at the playhead. You can also drop files from Windows Explorer onto the editor. |
 | **Clip settings** (right) | Settings of the clip you clicked (see below). |
 | **Timeline** (bottom) | From top to bottom: captions, effects (zoom, colour), B-roll and photos, the **main video**, then voice-over, music and sound effects. Each track can be muted 🔈, hidden 👁 or locked 🔓. |
@@ -134,6 +135,14 @@ the right. A zoom has **Zoom in over** (0 = punch-in).
 
 **Speed ramp:** select a main clip and choose a ramp under Speed (speed up, slow down, bullet
 time, montage). The clip becomes 3 parts with their own speeds, which you can change later.
+
+## B-roll · Dagdag na kuha
+
+The **B-roll** tab finds or makes a picture or clip for what you describe: from your own
+B-roll folder first, then free stock (Pexels/Pixabay, with your free key), then AI (WanGP).
+Click a B-roll clip to see where it came from (credit, licence, or **AI**), and to **Find
+another**, **Regenerate with AI** or **Replace with a file**. Each is one undo step.
+Full guide: [broll.md](broll.md).
 
 ### Keyboard shortcuts · Mga shortcut
 

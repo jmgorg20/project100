@@ -394,3 +394,49 @@ def test_cli_broll_find_add_and_find_another(media, library):  # noqa: F811
 
     code, last, err = run("--search", "spaceship", "--source", "library")
     assert code != 0 and last["type"] == "error" and "No B-roll found" in last["message"]
+
+
+# --- effects the AI plans (the "VFX director") ---------------------------------------------
+
+def test_planned_effects_land_on_the_cut_timeline(talk, monkeypatch):
+    video, cfg, paths = talk
+    plan = preset_plan(cfg)
+    plan["effects"] = [
+        {"effect": "shake", "at": 6.4, "duration": 0.4, "intensity": 0.8, "on_cut": False,
+         "reason": "500 pesos!"},
+        {"effect": "flash", "at": 5.0, "duration": 0.3, "intensity": 1.0, "on_cut": True,
+         "reason": "new topic"},
+        {"effect": "glitch", "at": 4.8, "duration": 0.3, "intensity": 0.5, "on_cut": False,
+         "reason": "inside a cut part: moves to the next kept part"},
+    ]
+    result = ai_edit.ai_edit_video(video, cfg, "", render=False, plan=plan, gen_paths=paths)
+    project = load_project(result["project"])
+    assert validate_project(project) == []
+    main = sorted(next(t for t in project["tracks"] if t["kind"] == "video")["clips"],
+                  key=lambda c: c["start"])
+    cuts = [c["start"] for c in main[1:]]
+    fx = {c["effect"]: c for t in project["tracks"] if t["kind"] == "effect"
+          for c in t["clips"] if c["type"] == "fx"}
+    assert set(fx) == {"shake", "flash", "glitch"}
+    # The shake is where "500" is said (raw 6.35 s; the shake is 0.05 s later), on the cut
+    # timeline: the same mapping as the caption words.
+    said = next(c["start"] + w["start"] for t in project["tracks"] if t["kind"] == "caption"
+                for c in t["clips"] for w in c["words"] if w["text"].startswith("500"))
+    assert fx["shake"]["start"] == pytest.approx(said + 0.05, abs=0.02)
+    # The flash is a transition: centred on a jump cut.
+    assert any(abs(fx["flash"]["start"] + 0.15 - cut) < 0.01 for cut in cuts)
+    assert fx["flash"]["intensity"] == 1.0 and fx["shake"]["duration"] == 0.4
+    details = " ".join(result["summary"]["details"])
+    assert "Added 3 effects:" in details and "shake at" in details
+
+
+def test_plans_without_effects_still_work():
+    cfg = load_config()
+    plan = preset_plan(cfg)
+    del plan["effects"]
+    assert any("effects" in p for p in validate_plan(plan, 8.0))
+    assert validate_plan(upgrade_plan(plan), 8.0) == []
+    late = upgrade_plan(plan)
+    late["effects"] = [{"effect": "flash", "at": 9.0, "duration": 0.3, "intensity": 1,
+                        "on_cut": False, "reason": ""}]
+    assert any("after the end" in p for p in validate_plan(late, 8.0))

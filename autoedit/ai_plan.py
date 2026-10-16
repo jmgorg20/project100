@@ -36,7 +36,7 @@ def preset_plan(cfg):
                  "amount": float(pacing["zoom_amount"])},
         "captions": {"enabled": bool(cfg["captions"].get("enabled", True)), "size_scale": 1.0,
                      "position": None, "highlight_words": []},
-        "cuts": [], "zooms": [], "grades": [], "photos": [], "notes": [],
+        "cuts": [], "zooms": [], "grades": [], "effects": [], "photos": [], "notes": [],
         "ai_clips": [], "voiceovers": [],
     }
 
@@ -46,6 +46,7 @@ def upgrade_plan(plan):
     if not isinstance(plan, dict):
         return plan
     plan = copy.deepcopy(plan)
+    plan.setdefault("effects", [])
     for clip in plan.get("ai_clips") or []:
         if isinstance(clip, dict):
             clip.setdefault("search", " ".join(str(clip.get("prompt", "")).split()[:4])[:80])
@@ -81,7 +82,7 @@ def validate_plan(plan, duration, photo_names=()):
         [(c["start"], min(c["end"], duration)) for c in plan["cuts"]]))
     if kept < MIN_KEPT_SECONDS:
         problems.append(f"plan.cuts: they remove almost the whole video (only {kept:.1f}s left)")
-    for kind in ("ai_clips", "voiceovers"):
+    for kind in ("ai_clips", "voiceovers", "effects"):
         for i, item in enumerate(plan[kind]):
             if item["at"] >= duration:
                 problems.append(f"plan.{kind}[{i}]: at {item['at']}s is after the end of the "
@@ -132,6 +133,9 @@ def apply_plan(cfg, plan, photos, generated=None):
                   for z in plan["zooms"]],
         "grades": [{"start": g["start"], "end": g["end"], "grade": g["grade"]}
                    for g in plan["grades"]],
+        "effects": [{"effect": e["effect"], "at": float(e["at"]), "duration": float(e["duration"]),
+                     "intensity": float(e["intensity"]), "on_cut": bool(e["on_cut"])}
+                    for e in plan.get("effects", [])],
         "overlays": [{"file": Path(photos[p["file"]]), "at": float(p["at"]),
                       "duration": float(p["duration"]), "position": p["position"]}
                      for p in plan["photos"]],

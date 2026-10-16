@@ -1,10 +1,10 @@
 // The AI plan as a list of changes the creator can accept or reject one by one
 // (used when Auto mode is off). Pure functions.
-import type { Plan, PlanAiClip } from "./types";
+import type { FxEffect, Plan, PlanAiClip } from "./types";
 
 export interface PlanItem {
   id: string;
-  group: "Look" | "Pacing" | "Cuts" | "Zooms" | "Colour" | "Photos" | "B-roll & AI clips";
+  group: "Look" | "Pacing" | "Cuts" | "Zooms" | "Effects" | "Colour" | "Photos" | "B-roll & AI clips";
   label: string;
   detail?: string;
 }
@@ -38,6 +38,9 @@ export function planItems(plan: Plan, base: Plan): PlanItem[] {
   if (plan.grade !== base.grade) items.push({ id: "grade", group: "Colour", label: `Colour: ${plan.grade.replace(/_/g, " ")}` });
   plan.cuts.forEach((r, i) => items.push({ id: `cuts.${i}`, group: "Cuts", label: `Remove ${mmss(r.start)}–${mmss(r.end)}`, detail: r.reason }));
   plan.zooms.forEach((r, i) => items.push({ id: `zooms.${i}`, group: "Zooms", label: `Zoom ${Math.round((r.amount ?? 1) * 100)}% at ${mmss(r.start)}–${mmss(r.end)}` }));
+  (plan.effects ?? []).forEach((e, i) =>
+    items.push({ id: `effects.${i}`, group: "Effects", label: `${FX_NAMES[e.effect] ?? e.effect}${e.on_cut ? " transition" : ""} at ${mmss(e.at)}`, detail: e.reason }),
+  );
   plan.grades.forEach((r, i) => items.push({ id: `grades.${i}`, group: "Colour", label: `${(r.grade ?? "").replace(/_/g, " ")} at ${mmss(r.start)}–${mmss(r.end)}` }));
   plan.photos.forEach((p, i) => items.push({ id: `photos.${i}`, group: "Photos", label: `${p.file} at ${mmss(p.at)}`, detail: p.reason }));
   (plan.ai_clips ?? []).forEach((c, i) =>
@@ -75,6 +78,7 @@ export function acceptedPlan(plan: Plan, base: Plan, accepted: Set<string>): Pla
     cuts: plan.cuts.filter((_, i) => keep(`cuts.${i}`)),
     zooms: plan.zooms.filter((_, i) => keep(`zooms.${i}`)),
     grades: plan.grades.filter((_, i) => keep(`grades.${i}`)),
+    effects: (plan.effects ?? []).filter((_, i) => keep(`effects.${i}`)),
     photos: plan.photos.filter((_, i) => keep(`photos.${i}`)),
     ai_clips: (plan.ai_clips ?? []).filter((_, i) => keep(`ai_clips.${i}`)),
     voiceovers: (plan.voiceovers ?? []).filter((_, i) => keep(`voiceovers.${i}`)),
@@ -87,6 +91,8 @@ export function formatCost(total: number | null | undefined): string {
   if (total < 0.01) return `$${total.toFixed(4)}`;
   return `$${total.toFixed(2)}`;
 }
+
+const FX_NAMES: Record<FxEffect, string> = { flash: "Flash", whip: "Whip blur", shake: "Shake", glitch: "Glitch", dip: "Dip to black" };
 
 /** "B-roll" when it may come from your folder or stock first; "AI" when only AI makes it. */
 function brollWhere(source: PlanAiClip["source"]): string {

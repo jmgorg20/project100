@@ -276,6 +276,24 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
                     "duration": round(b - a, 6), "grade": name}
                    for name, a, b in grade_ranges if b > a]
     effect_tracks += [("Color", lane) for lane in assign_lanes(grade_clips)]
+    fx_clips = []
+    cut_points = [sum(e - s for s, e in segments[:i]) for i in range(1, len(segments))]
+    for fx in plan.get("effects", []):
+        t = remap_time(fx["at"], segments, side="next")
+        if t is None:
+            continue
+        duration = float(fx["duration"])
+        if fx.get("on_cut") and cut_points:
+            cut = min(cut_points, key=lambda c: abs(c - t))
+            if abs(cut - t) <= 1.5:                  # a transition: centred on that jump cut
+                t = max(0.0, cut - duration / 2)
+        duration = min(duration, new_length - t)
+        if duration * fps < 1:
+            continue
+        fx_clips.append({"id": ids.next("f"), "type": "fx", "start": round(start + t, 6),
+                         "duration": round(duration, 6), "effect": fx["effect"],
+                         "intensity": round(min(1.0, max(0.0, float(fx["intensity"]))), 4)})
+    effect_tracks += [("Effects", lane) for lane in assign_lanes(fx_clips)]
     replace_track(project, "effects", "effect", effect_tracks)
 
     # Overlays: pop-in pictures, then the logo on its own track (drawn on top).

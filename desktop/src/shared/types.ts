@@ -149,6 +149,16 @@ export interface PlanAiClip {
   reason: string;
 }
 
+/** A short effect the AI plans (on_cut = a transition on the nearest jump cut). */
+export interface PlanEffect {
+  effect: FxEffect;
+  at: number;
+  duration: number;
+  intensity: number;
+  on_cut: boolean;
+  reason: string;
+}
+
 export interface PlanVoiceover {
   text: string;
   at: number;
@@ -170,6 +180,8 @@ export interface Plan {
   cuts: PlanRange[];
   zooms: PlanRange[];
   grades: PlanRange[];
+  /** Older plans have none. */
+  effects?: PlanEffect[];
   photos: PlanPhoto[];
   notes: string[];
   ai_clips?: PlanAiClip[];
