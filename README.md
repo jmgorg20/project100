@@ -41,7 +41,7 @@ anything by hand. See [Project files](#project-files).
 Be aware of what has and has not been checked:
 
 **Tested (automatically, on Linux with FFmpeg 6.1, Python 3.13):**
-- 226 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
+- 239 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
   keyword rules, settings, edit plans, watch mode, and all 13 caption styles. Each style
   is turned into a subtitle file and drawn by FFmpeg/libass to check that text appears.
 - **Project files:** the schema and ~30 kinds of mistakes (each with a clear message);
@@ -61,8 +61,16 @@ Be aware of what has and has not been checked:
   two bad plans or when the AI cannot be reached, saved transcripts and plans, cost
   estimates, and the whole flow to a rendered video, including review mode, follow-up
   changes and batches. See [docs/ai-edit.md](docs/ai-edit.md).
-- **Desktop app:** 49 unit tests (including the app's main process driving the real
-  engine from start to finished video, undo/redo, exact frame) and 15 browser tests of the
+- **Timeline editor:** every editing action (split, trim, delete, move, reorder, speed,
+  settings, adding media) is a pure function with unit tests. **3,600 random edits** (300
+  sequences of 12) were each checked by the engine's own validator: all gave valid project
+  files. Speed, reframe and sound fades are checked frame by frame and sample by sample in
+  real FFmpeg renders. The preview's reframe lands within about 1 pixel of the engine's frames.
+  10 browser tests drive the editor; the projects it saves are validated by the engine. The
+  main process opens, saves, reads media and exports with the real engine (size, frame rate,
+  progress, cancel). See [docs/timeline-editor.md](docs/timeline-editor.md).
+- **Desktop app:** 100 unit tests (including the app's main process driving the real
+  engine from start to finished video, undo/redo, exact frame) and 25 browser tests of the
   window (Playwright, at 1280x800 and 1920x1080, with screenshots checked by eye): Auto mode
   on by default and rendering with no extra clicks, live progress, the summary and cost,
   undo/redo, review with Auto mode off, the fallback warning, keys never shown, the
@@ -83,6 +91,12 @@ Be aware of what has and has not been checked:
   `tl`, word timestamps, key not printed).
 
 **Not tested:**
+- **The timeline editor inside the real Electron window on Windows:**
+  - mouse dragging, file drops from Windows Explorer, the save dialog;
+  - playing MP4 (H.264) in the preview: the tests use a browser that has no H.264, with WebM copies.
+
+  The tests ran in Chromium with the Electron parts stood in, and the main process ran in Node
+  on Linux. Long projects (an hour of clips) and their timeline speed were not measured.
 - **Real Filipino/Taglish speech.** How well Whisper hears Taglish, and how natural the cuts
   feel on a real voice, has not been checked. Try a short video first and adjust
   `silence_threshold` / `padding` in `config.yaml` to taste.
@@ -295,6 +309,15 @@ playhead.
 
 If the AI's plan fails the checks twice (or the AI cannot be reached), you get the normal
 preset edit and a "Heads up" at the top of the summary saying why.
+
+**Fix it by hand · Ayusin nang mano-mano.** Click **Edit on timeline** under the summary (or
+**Open project…** at the top) to open the edit in the timeline editor:
+- split, trim, delete, move and reorder clips;
+- change speed, volume and fades, and reframe for 9:16;
+- undo/redo, keyboard shortcuts; it saves by itself;
+- **Export** at the size, frame rate and quality you choose.
+
+Guide: [docs/timeline-editor.md](docs/timeline-editor.md).
 
 **AI pictures, clips and voice-over (optional).** The edit can add these if you ask for
 them (e.g. *"maglagay ng maikling clip ng kape sa simula"*). They are made on your own PC
