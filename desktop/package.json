@@ -1,0 +1,33 @@
+{
+  "name": "autoedit-desktop",
+  "productName": "Auto Video Editor",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Desktop app for the auto video editor: AI first edit, preview, batch queue.",
+  "main": "dist-electron/main/main.js",
+  "scripts": {
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build": "npm run build:electron && npm run build:renderer",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:ui": "vite build && playwright test",
+    "engine-data": "python ../editor.py ui-data > src/shared/engine-data.json"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.19.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "electron": "44.5.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
+  }
+}

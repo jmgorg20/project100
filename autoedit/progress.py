@@ -5,6 +5,7 @@ JSON mode writes one object per line on stdout, for example:
     {"type": "stage", "stage": "render", "label": "Rendering"}
     {"type": "progress", "stage": "render", "percent": 42.5}
     {"type": "log", "message": "..."}
+    {"type": "transcript" / "plan" / "project" / "summary", ...}   (AI edit steps)
     {"type": "result", "output": "C:/.../video.mp4"}
     {"type": "error", "message": "..."}
     {"type": "cancelled"}
@@ -36,6 +37,15 @@ class TextReporter:
 
     def log(self, message):
         print(message)
+
+    def event(self, kind, **data):
+        """A result of one step (transcript, plan, summary...). Shown by the app."""
+        if kind == "summary":
+            print("\n" + data.get("headline", ""))
+            for line in data.get("details", []):
+                print(f"  - {line}")
+        elif kind == "plan" and data.get("fallback"):
+            print(f"  ! {data.get('reason')}")
 
     def result(self, **data):
         pass
@@ -78,6 +88,9 @@ class JsonReporter:
 
     def log(self, message):
         self.emit(type="log", message=str(message))
+
+    def event(self, kind, **data):
+        self.emit(type=kind, **data)
 
     def result(self, **data):
         self.emit(type="result", **data)

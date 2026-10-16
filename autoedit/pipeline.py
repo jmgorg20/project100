@@ -89,10 +89,12 @@ class MediaList:
 
 
 def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layout=None,
-                       job_dir=None):
+                       job_dir=None, words=None):
     """Steps 1-5 of the edit: decide everything and return it as a Project (no rendering).
 
     Times in the project are on the finished timeline (after cutting, after the intro).
+    `words`: an already-loaded transcript (list of Words), e.g. from the cache.
+    Plan keys beyond the --plan file: "caption_overrides" (caption clip overrides).
     """
     video = Path(video).resolve()
     check_ffmpeg()
@@ -122,7 +124,9 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
 
     # 1. Transcribe (or load an existing transcript).
     print("[1/6] Transcript")
-    if transcript:
+    if words is not None:
+        print(f"  > using the saved transcript ({len(words)} words)")
+    elif transcript:
         words = load_transcript(transcript)
         print(f"  > using {Path(transcript).name} ({len(words)} words)")
     else:
@@ -299,6 +303,8 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
         clip["start"] = round(start + clip["start"], 6)
         if layout == "split":
             clip["overrides"] = {"zone": "divider"}
+        if plan.get("caption_overrides"):
+            clip.setdefault("overrides", {}).update(plan["caption_overrides"])
         if cfg["highlight"].get("color") and style.keyword_color:
             clip.setdefault("overrides", {})["keyword_color"] = style.keyword_color
     tracks["captions"]["clips"] = caption_clips

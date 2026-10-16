@@ -1,0 +1,113 @@
+// Runs the Python engine (`editor.py --json --stdin-control ...`) and turns its stdout
+// JSON lines into events. Cancel = write "cancel" to stdin (the engine stops FFmpeg and
+// deletes the unfinished file); if it has not exited after a grace period, the whole
+// process tree is killed (on Windows a plain kill would leave FFmpeg running).
+import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from "node:child_process";
+import * as path from "node:path";
+import * as readline from "node:readline";
+import type { EngineEvent } from "../shared/types";
+
+export interface EngineConfig {
+  python: string;
+  engineDir: string;
+  /** Extra environment (API keys). Never logged. */
+  env?: Record<string, string>;
+  /** The script to run; defaults to editor.py in engineDir (tests use a stand-in). */
+  script?: string;
+  graceMs?: number;
+  spawn?: (cmd: string, args: string[], opts: SpawnOptions) => ChildProcess;
+}
+
+export interface RunResult {
+  code: number | null;
+  cancelled: boolean;
+  /** Set when the process could not start at all (e.g. Python not found). */
+  startError?: string;
+}
+
+export interface RunHandle {
+  done: Promise<RunResult>;
+  cancel(): void;
+}
+
+export function parseLine(line: string): EngineEvent | null {
+  const text = line.trim();
+  if (!text) return null;
+  if (text.startsWith("{")) {
+    try {
+      const value = JSON.parse(text);
+      if (value && typeof value.type === "string") return value as EngineEvent;
+    } catch {
+      // not JSON: fall through and treat it as a log line
+    }
+  }
+  return { type: "log", message: text };
+}
+
+function killTree(child: ChildProcess, spawnFn: EngineConfig["spawn"]): void {
+  if (child.exitCode !== null || child.pid === undefined) return;
+  if (process.platform === "win32") {
+    (spawnFn ?? nodeSpawn)("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true });
+  } else {
+    child.kill("SIGKILL");
+  }
+}
+
+export function runEngine(config: EngineConfig, args: string[], onEvent: (e: EngineEvent) => void): RunHandle {
+  const spawnFn = config.spawn ?? nodeSpawn;
+  const script = config.script ?? path.join(config.engineDir, "editor.py");
+  let cancelled = false;
+  let child: ChildProcess;
+  try {
+    child = spawnFn(config.python, ["-u", script, "--json", "--stdin-control", ...args], {
+      cwd: config.engineDir,
+      env: { ...process.env, ...config.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" },
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    });
+  } catch (error) {
+    const message = `Could not start Python ("${config.python}"): ${(error as Error).message}`;
+    return { done: Promise.resolve({ code: null, cancelled: false, startError: message }), cancel() {} };
+  }
+
+  const done = new Promise<RunResult>((resolve) => {
+    let startError: string | undefined;
+    child.on("error", (error: NodeJS.ErrnoException) => {
+      startError =
+        error.code === "ENOENT"
+          ? `Python was not found ("${config.python}"). Install Python 3.11+ or set its path in Settings.`
+          : `Could not start Python: ${error.message}`;
+    });
+    if (child.stdout) {
+      readline.createInterface({ input: child.stdout }).on("line", (line) => {
+        const event = parseLine(line);
+        if (event) onEvent(event);
+      });
+    }
+    if (child.stderr) {
+      readline.createInterface({ input: child.stderr }).on("line", (line) => {
+        if (line.trim()) onEvent({ type: "log", message: line, stream: "stderr" });
+      });
+    }
+    child.stdin?.on("error", () => {
+      // The engine may exit before we write to it; nothing to do.
+    });
+    child.on("close", (code) => resolve({ code, cancelled, startError }));
+  });
+
+  return {
+    done,
+    cancel() {
+      if (cancelled || child.exitCode !== null) return;
+      cancelled = true;
+      try {
+        child.stdin?.write("cancel\n");
+        child.stdin?.end();
+      } catch {
+        // stdin already closed
+      }
+      const timer = setTimeout(() => killTree(child, config.spawn), config.graceMs ?? 10_000);
+      child.on("close", () => clearTimeout(timer));
+    },
+  };
+}

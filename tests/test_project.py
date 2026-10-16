@@ -285,3 +285,13 @@ def test_project_json_is_plain_json():
 def test_example_project_in_the_docs_is_valid():
     from autoedit import PROJECT_DIR
     assert load_project(PROJECT_DIR / "examples" / "project.json")["name"] == "Example"
+
+
+def test_desktop_app_copy_of_engine_data_is_up_to_date():
+    """The app's preview draws captions from this file; regenerate it with
+    `python editor.py ui-data > desktop/src/shared/engine-data.json`."""
+    from autoedit import PROJECT_DIR
+    from autoedit.ui_data import ui_data
+    copy_in_app = json.loads((PROJECT_DIR / "desktop" / "src" / "shared" / "engine-data.json")
+                             .read_text(encoding="utf-8"))
+    assert copy_in_app == json.loads(json.dumps(ui_data()))
