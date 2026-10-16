@@ -1,7 +1,7 @@
 // The only bridge between the window and the main process (contextIsolation + sandbox).
 // Sandboxed preloads cannot load local modules: only type imports from ../shared.
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
-import type { AppApi } from "../shared/api";
+import type { AppApi, ExportUpdate } from "../shared/api";
 import type { GenTaskUpdate, Job, VideoHistory } from "../shared/types";
 
 function listen<T>(channel: string, callback: (value: T) => void): () => void {
@@ -39,6 +39,18 @@ const api: AppApi = {
   cancelGenTask: (taskId) => ipcRenderer.invoke("gen:cancel", taskId),
   onGenTask: (callback) => listen<GenTaskUpdate>("gen:task", callback),
   openPath: (path) => ipcRenderer.invoke("app:openPath", path),
+  showInFolder: (path) => ipcRenderer.invoke("app:showInFolder", path),
+  openProject: (path) => ipcRenderer.invoke("project:open", path),
+  saveProject: (path, project) => ipcRenderer.invoke("project:save", path, project),
+  pickProject: () => ipcRenderer.invoke("dialog:project"),
+  pickMedia: () => ipcRenderer.invoke("dialog:media"),
+  pickExportPath: (defaultPath) => ipcRenderer.invoke("dialog:exportPath", defaultPath),
+  mediaInfo: (paths) => ipcRenderer.invoke("media:info", paths),
+  peaks: (path) => ipcRenderer.invoke("media:peaks", path),
+  thumbs: (path) => ipcRenderer.invoke("media:thumbs", path),
+  startExport: (projectPath, options) => ipcRenderer.invoke("export:start", projectPath, options),
+  cancelExport: (taskId) => ipcRenderer.invoke("export:cancel", taskId),
+  onExport: (callback) => listen<ExportUpdate>("export:task", callback),
   onJobChanged: (callback) => listen<Job>("job:changed", callback),
   onHistoryChanged: (callback) => listen<VideoHistory>("history:changed", callback),
 };

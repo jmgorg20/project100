@@ -1,10 +1,10 @@
-# Project file format (version 1)
+# Project file format (version 2)
 
 A **Project** (`*.project.json`) is one edit: the media files it uses plus a timeline of
 tracks and clips. It is the single source of truth:
 
 - the auto edit (`python editor.py edit`) writes one next to the finished video,
-- the desktop app (coming in the next phases) opens, edits and autosaves it,
+- the desktop app's timeline editor opens, edits and autosaves it,
 - the FFmpeg engine renders it: `python editor.py render my.project.json`.
 
 The exact rules are in [`autoedit/project.schema.json`](../autoedit/project.schema.json)
@@ -20,7 +20,7 @@ python editor.py validate my.project.json
 | Key | Meaning |
 |---|---|
 | `format` | always `"autoedit-project"` |
-| `version` | `1`. A newer version is refused with "made by a newer version of the editor". |
+| `version` | `2` (version `1` files still load unchanged). A newer version is refused with "made by a newer version of the editor". |
 | `name` | display name |
 | `settings` | `width` 1080, `height` 1920 (version 1 is vertical only; export can scale down), `fps` (24, 25, 30, 50 or 60), `background` colour for empty parts, `audio` loudness settings, `fonts` (family names for the regular/bold/heavy caption fonts) |
 | `media` | the files: `id`, `kind` (`video`, `image`, `audio`), `path` (absolute, or relative to the project file), `duration` (seconds, 0 for images), `width`, `height`, `has_audio` |
@@ -37,13 +37,23 @@ track may not overlap; use another track of the same kind instead.
 
 | Track `kind` | Clip `type` | Clip settings |
 |---|---|---|
-| `video` (only one: the main track) | `video` | `in`, `out`, `volume` (0-4, 1 = as recorded), `fit` (`fill` crops to fill the frame, `blur` shows the whole picture over a blurred copy), optional `layout` (`{"type": "split" or "pip", "screen": <media id>}` combines it with a screen recording that started at the same moment) |
-| | `image` | `fit` |
-| `overlay` (photos, B-roll, logo) | `image` or `video` | `x`, `y` (centre, pixels on the 1080x1920 frame), `width`, `height` (the picture is scaled to fit inside), `opacity` (0-1), `animation` (`none`, `pop`); `video` also needs `in`/`out` |
+| `video` (only one: the main track) | `video` | `in`, `out`, `volume` (0-4, 1 = as recorded), `fit` (`fill` crops to fill the frame, `blur` shows the whole picture over a blurred copy), optional `layout` (`{"type": "split" or "pip", "screen": <media id>}` combines it with a screen recording that started at the same moment). Version 2: `speed` (0.25-4), `fade_in`/`fade_out` (its sound, seconds), `crop` (see below) |
+| | `image` | `fit`; version 2: `crop` |
+| `overlay` (photos, B-roll, logo) | `image` or `video` | `x`, `y` (centre, pixels on the 1080x1920 frame), `width`, `height` (the picture is scaled to fit inside), `opacity` (0-1), `animation` (`none`, `pop`); `video` also needs `in`/`out`, and may have `speed` |
 | `effect` | `zoom` | `amount` (1-5), `anchor_y` (0 = zoom towards the top, 0.5 = the middle; default 0.4) |
 | | `grade` | `grade`: `natural_clean`, `none`, `warm`, `black_and_white`, `orange_teal`, `high_contrast` |
 | `caption` | `caption` | `style` (name or number 1-13), `highlight_keywords` (true/false), `overrides` (size, colours, outline, `zone` `lower`/`center`/`top`/`divider`, `align`, case, words per line...), `words` (each `text`, `start`, `end` in seconds **from the start of the clip**, `highlight`) |
-| `audio` (needs a `role`: `original`, `voiceover`, `music`, `sfx`) | `audio` | `in`, `out`, `volume`, `fade_in`, `fade_out` (seconds) |
+| `audio` (needs a `role`: `original`, `voiceover`, `music`, `sfx`) | `audio` | `in`, `out`, `volume`, `fade_in`, `fade_out` (seconds); version 2: `speed` |
+
+**Speed (version 2).** A clip with `speed` plays `out - in` seconds of its file in
+`(out - in) / speed` seconds, so `out - in = duration × speed`. The sound keeps its pitch
+(FFmpeg `atempo`). Allowed: 0.25 to 4.
+
+**Crop / reframe (version 2)**, for `fill` on the main track: `{"zoom": 1-4, "x": 0-1,
+"y": 0-1}`. The picture is scaled to cover 1080·zoom × 1920·zoom, then the 1080×1920 window
+is taken at `x`, `y` of the spare room (0 = left/top, 0.5 = centre, 1 = right/bottom).
+Without `crop` (or `{"zoom": 1, "x": 0.5, "y": 0.5}`) it is the usual centred fill. `blur`
+and split/picture-in-picture layouts ignore `crop`.
 
 Tracks can be `muted` (sound off), `hidden` (picture off) and `locked` (an editing hint for
 the app; the renderer ignores it).

@@ -20,6 +20,14 @@ export interface Clip {
   out?: number;
   volume?: number;
   fit?: "fill" | "blur";
+  label?: string;
+  /** Playback speed (0.25-4): the clip shows (out - in) / speed seconds of the source. */
+  speed?: number;
+  fade_in?: number;
+  fade_out?: number;
+  /** Reframe for "fill": zoom (1-4) and which part stays in view (0 = left/top, 1 = right/bottom). */
+  crop?: { zoom?: number; x?: number; y?: number };
+  layout?: { type: "split" | "pip"; screen: string };
   // overlay
   x?: number;
   y?: number;
@@ -45,6 +53,7 @@ export interface Track {
   role?: string;
   muted?: boolean;
   hidden?: boolean;
+  locked?: boolean;
   clips: Clip[];
 }
 
@@ -63,9 +72,17 @@ export interface Project {
   format: "autoedit-project";
   version: number;
   name?: string;
-  settings: { width: number; height: number; fps: number; background?: string };
+  settings: {
+    width: number;
+    height: number;
+    fps: number;
+    background?: string;
+    audio?: { normalize?: boolean; loudness?: number; true_peak?: number };
+    fonts?: Record<string, string>;
+  };
   media: Media[];
   tracks: Track[];
+  transcript?: unknown;
   meta?: Record<string, unknown>;
 }
 

@@ -1,12 +1,14 @@
 // The preview player. Two modes:
 //  - a finished video (or the original) plays as is;
-//  - a Project plays live: the source video jumps over the cuts, and captions, photos,
-//    zoom and colour are drawn on top (an approximation; "Exact frame" asks the engine).
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { Clip, Project, Word } from "../../shared/types";
+//  - a Project plays live: the source video jumps over the cuts (at each clip's speed), and
+//    captions, photos, B-roll, zoom, colour and the sound tracks are added on top. This is an
+//    approximation of the export; "Exact frame" asks the engine for the real thing.
+// The timeline editor drives it through a PlayerHandle (seek, play/pause) and onTime.
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from "react";
+import type { Clip, Media, Project, Word } from "../../shared/types";
 import {
-  CANVAS, GRADE_CSS, captionAt, captionPlacement, displayText, duration, gradeAt, overlaysAt, popOpacity, popScale,
-  segmentAt, segments, sourceTime, zoomAt, type CaptionFrame,
+  CANVAS, GRADE_CSS, audioClipsAt, captionAt, captionPlacement, clipGain, clipSourceTime, cropBox, displayText, duration, gradeAt,
+  overlaysAt, popOpacity, popScale, segmentAt, segments, sourceTime, zoomAt, type CaptionFrame,
 } from "../lib/timeline";
 
 // libass sizes text so that ascent + descent equals the style size; Inter's is 1.211 em.
@@ -110,18 +112,49 @@ function OverlayView({ clip, t, url }: { clip: Clip; t: number; url: string }) {
   return <img className="overlay-photo" src={url} alt="" data-testid="overlay" style={overlayStyle(clip, t)} />;
 }
 
-/** A video clip on an overlay track (e.g. an AI video clip), muted and kept in step with the playhead. */
+/** Keeps a media element at the clip's source time (and speed) while the playhead moves. */
+function useSynced(ref: React.RefObject<HTMLMediaElement | null>, clip: Clip, t: number, playing: boolean, volume?: number) {
+  const want = clipSourceTime(clip, t);
+  const speed = clip.speed ?? 1;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.playbackRate !== speed) el.playbackRate = speed;
+    if (Math.abs(el.currentTime - want) > (playing ? 0.25 : 0.02)) el.currentTime = want;
+    if (volume !== undefined) el.volume = Math.max(0, Math.min(1, volume));
+    if (playing && el.paused) el.play().catch(() => {});
+    if (!playing && !el.paused) el.pause();
+  }, [ref, want, playing, speed, volume]);
+}
+
+/** A video clip on an overlay track (e.g. an AI video clip): muted, kept in step with the playhead. */
 function OverlayVideoView({ clip, t, url, playing }: { clip: Clip; t: number; url: string; playing: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const want = (clip.in ?? 0) + Math.max(0, t - clip.start);
-  useEffect(() => {
-    const v = ref.current;
-    if (!v) return;
-    if (Math.abs(v.currentTime - want) > (playing ? 0.25 : 0.02)) v.currentTime = want;
-    if (playing && v.paused) v.play().catch(() => {});
-    if (!playing && !v.paused) v.pause();
-  }, [want, playing]);
+  useSynced(ref, clip, t, playing);
   return <video ref={ref} className="overlay-photo" src={url} muted playsInline preload="auto" data-testid="overlay" style={overlayStyle(clip, t)} />;
+}
+
+/** A clip on a sound track (music, voice-over, effects). */
+function AudioClipView({ clip, t, url, playing, volume }: { clip: Clip; t: number; url: string; playing: boolean; volume: number }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  useSynced(ref, clip, t, playing, volume * clipGain(clip, t));
+  return <audio ref={ref} src={url} preload="auto" data-testid="audio-clip" data-clip={clip.id} />;
+}
+
+/** CSS that places the main picture like the engine's fill/reframe (or "blur": fit inside). */
+function pictureStyle(clip: Clip | null | undefined, m: Media | undefined): { className?: string; style: CSSProperties } {
+  if (!clip || clip.fit === "blur") return { className: "contain", style: {} };
+  if (!m?.width || !m?.height) return { style: {} }; // unknown size: plain "cover"
+  const box = cropBox(m.width, m.height, clip.crop);
+  return { className: "framed", style: { left: box.left, top: box.top, width: box.width, height: box.height } };
+}
+
+export interface PlayerHandle {
+  seek(t: number): void;
+  toggle(): void;
+  pause(): void;
+  isPlaying(): boolean;
+  time(): number;
 }
 
 interface PlayerProps {
@@ -131,20 +164,42 @@ interface PlayerProps {
   mediaUrl: (path: string) => string;
   onExactFrame?: (seconds: number) => void;
   emptyText?: string;
+  /** Called as the playhead moves (every frame while playing). */
+  onTime?: (t: number) => void;
+  /** Keep the playhead when the project changes (the editor), instead of going back to 0. */
+  keepTime?: boolean;
+  /** Hide the player's own transport bar (the editor has its own). */
+  compact?: boolean;
+  onPlaying?: (playing: boolean) => void;
 }
 
-export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }: PlayerProps) {
+export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
+  { project, videoPath, mediaUrl, onExactFrame, emptyText, onTime, keepTime, compact, onPlaying },
+  handle,
+) {
   const [wrapRef, size] = useStageSize();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [time, setTime] = useState(0);
+  const [time, setTimeState] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [plainDuration, setPlainDuration] = useState(0);
   const timeRef = useRef(0);
   const segIndex = useRef(0);
+  const onTimeRef = useRef(onTime);
+  onTimeRef.current = onTime;
+  const onPlayingRef = useRef(onPlaying);
+  onPlayingRef.current = onPlaying;
+  useEffect(() => onPlayingRef.current?.(playing), [playing]);
+
+  const setTime = useCallback((t: number) => {
+    timeRef.current = t;
+    setTimeState(t);
+    onTimeRef.current?.(t);
+  }, []);
 
   const segs = useMemo(() => (project ? segments(project) : []), [project]);
   const media = useMemo(() => new Map((project?.media ?? []).map((m) => [m.id, m])), [project]);
+  const mainMuted = Boolean(project?.tracks.find((t) => t.kind === "video")?.muted);
   const total = project ? duration(project) : plainDuration;
   const fps = project?.settings.fps ?? 30;
 
@@ -153,7 +208,6 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
     (t: number) => {
       const video = videoRef.current;
       const clamped = Math.max(0, Math.min(t, Math.max(0, total - 1e-3)));
-      timeRef.current = clamped;
       setTime(clamped);
       if (!project) {
         if (video) video.currentTime = clamped;
@@ -169,14 +223,34 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
           video.src = url;
         }
         video.currentTime = sourceTime(seg, clamped);
-        video.volume = Math.min(1, volume * (seg.clip.volume ?? 1));
+        video.playbackRate = seg.clip.speed ?? 1;
+        video.volume = mainMuted ? 0 : Math.max(0, Math.min(1, volume * clipGain(seg.clip, clamped)));
       }
     },
-    [project, segs, media, mediaUrl, total, volume],
+    [project, segs, media, mediaUrl, total, volume, mainMuted, setTime],
   );
 
-  // New project or video: start from the beginning.
+  useImperativeHandle(
+    handle,
+    () => ({
+      seek: (t: number) => {
+        setPlaying(false);
+        seekTimeline(t);
+      },
+      toggle: () => setPlaying((p) => !p),
+      pause: () => setPlaying(false),
+      isPlaying: () => playing,
+      time: () => timeRef.current,
+    }),
+    [seekTimeline, playing],
+  );
+
+  // New project or video: start from the beginning (the editor keeps its place instead).
   useEffect(() => {
+    if (keepTime) {
+      seekTimeline(timeRef.current);
+      return;
+    }
     setPlaying(false);
     seekTimeline(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,7 +270,6 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
       last = now;
       if (!project) {
         if (video) {
-          timeRef.current = video.currentTime;
           setTime(video.currentTime);
           if (video.ended) setPlaying(false);
         }
@@ -205,7 +278,8 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
         let t = timeRef.current;
         if (seg?.clip?.type === "video" && video) {
           if (video.paused) video.play().catch(() => {});
-          t = seg.start + (video.currentTime - (seg.clip.in ?? 0));
+          t = seg.start + (video.currentTime - (seg.clip.in ?? 0)) / (seg.clip.speed ?? 1);
+          video.volume = mainMuted ? 0 : Math.max(0, Math.min(1, volume * clipGain(seg.clip, t)));
         } else {
           video?.pause();
           t += dt;
@@ -220,7 +294,6 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
             t = next.start;
           }
         }
-        timeRef.current = t;
         setTime(t);
       }
       raf = requestAnimationFrame(tick);
@@ -228,7 +301,7 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
     if (!project) video?.play().catch(() => setPlaying(false));
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, project, segs, seekTimeline, fps, total]);
+  }, [playing, project, segs, seekTimeline, fps, total, volume, mainMuted, setTime]);
 
   useEffect(() => {
     if (videoRef.current && !project) videoRef.current.volume = volume;
@@ -240,6 +313,7 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
   };
 
   const onKey = (e: React.KeyboardEvent) => {
+    if (compact) return; // the editor handles its own keys
     if (e.target instanceof HTMLInputElement && e.target.type !== "range") return;
     if (e.key === " ") {
       e.preventDefault();
@@ -261,7 +335,10 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
   const grade = project ? GRADE_CSS[gradeAt(project, time)] ?? "none" : "none";
   const caption = project ? captionAt(project, time) : null;
   const overlays = project ? overlaysAt(project, time) : [];
+  const sounds = project ? audioClipsAt(project, time) : [];
   const hasSomething = Boolean(project || videoPath);
+  const videoFrame = project ? pictureStyle(seg?.clip, media.get(seg?.clip?.media ?? "")) : { className: "contain", style: {} };
+  const stillFrame = still ? pictureStyle(seg?.clip, still) : null;
 
   return (
     <div className="center" onKeyDown={onKey}>
@@ -269,21 +346,26 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
         {hasSomething ? (
           <div className="stage" style={{ width: size.width, height: size.height }} data-testid="stage">
             <div className="canvas" style={{ transform: `scale(${scale})` }}>
-              <video
-                ref={videoRef}
-                src={!project && videoPath ? mediaUrl(videoPath) : undefined}
-                className={!project || seg?.clip?.fit === "blur" ? "contain" : undefined}
+              <div
+                className="picture"
                 style={{
-                  visibility: showVideo ? "visible" : "hidden",
                   transform: zoom.amount > 1 ? `scale(${zoom.amount})` : undefined,
                   transformOrigin: `50% ${zoom.anchorY * 100}%`,
                   filter: grade,
                 }}
-                onLoadedMetadata={(e) => !project && setPlainDuration(e.currentTarget.duration || 0)}
-                playsInline
-                preload="auto"
-              />
-              {still && <img className={`still${seg?.clip?.fit === "blur" ? " contain" : ""}`} src={mediaUrl(still.path)} alt="" style={{ filter: grade }} />}
+              >
+                <video
+                  ref={videoRef}
+                  src={!project && videoPath ? mediaUrl(videoPath) : undefined}
+                  className={videoFrame.className}
+                  style={{ ...videoFrame.style, visibility: showVideo ? "visible" : "hidden" }}
+                  data-testid="main-video"
+                  onLoadedMetadata={(e) => !project && setPlainDuration(e.currentTarget.duration || 0)}
+                  playsInline
+                  preload="auto"
+                />
+                {still && stillFrame && <img className={`still ${stillFrame.className ?? ""}`} src={mediaUrl(still.path)} alt="" style={stillFrame.style} />}
+              </div>
               {overlays.map((clip) => {
                 const m = media.get(clip.media ?? "");
                 if (m?.kind === "image") return <OverlayView key={clip.id} clip={clip} t={time} url={mediaUrl(m.path)} />;
@@ -292,38 +374,44 @@ export function Player({ project, videoPath, mediaUrl, onExactFrame, emptyText }
               })}
               {caption && <CaptionView frame={caption} />}
             </div>
+            {sounds.map(({ clip, muted }) => {
+              const m = media.get(clip.media ?? "");
+              return m ? <AudioClipView key={clip.id} clip={clip} t={time} url={mediaUrl(m.path)} playing={playing} volume={muted ? 0 : volume} /> : null;
+            })}
           </div>
         ) : (
           <div className="empty-stage">{emptyText ?? "Add a video to start."}</div>
         )}
       </div>
-      <div className="controls">
-        <button className="btn small" onClick={() => setPlaying((p) => !p)} disabled={!hasSomething} aria-label={playing ? "Pause" : "Play"}>
-          {playing ? "Pause" : "Play"}
-        </button>
-        <button className="btn small ghost" onClick={() => step(-1)} disabled={!hasSomething} aria-label="Previous frame">‹</button>
-        <button className="btn small ghost" onClick={() => step(1)} disabled={!hasSomething} aria-label="Next frame">›</button>
-        <input
-          type="range"
-          min={0}
-          max={Math.max(total, 0.01)}
-          step={1 / fps}
-          value={Math.min(time, total)}
-          onChange={(e) => {
-            setPlaying(false);
-            seekTimeline(Number(e.target.value));
-          }}
-          aria-label="Position"
-          disabled={!hasSomething}
-        />
-        <span className="time">{mmss(time)} / {mmss(total)}</span>
-        <input type="range" min={0} max={1} step={0.05} value={volume} onChange={(e) => setVolume(Number(e.target.value))} aria-label="Volume" className="volume" />
-        {onExactFrame && (
-          <button className="btn small" onClick={() => onExactFrame(timeRef.current)} title="Ask the editor engine for the real frame at this moment">
-            Exact frame
+      {!compact && (
+        <div className="controls">
+          <button className="btn small" onClick={() => setPlaying((p) => !p)} disabled={!hasSomething} aria-label={playing ? "Pause" : "Play"}>
+            {playing ? "Pause" : "Play"}
           </button>
-        )}
-      </div>
+          <button className="btn small ghost" onClick={() => step(-1)} disabled={!hasSomething} aria-label="Previous frame">‹</button>
+          <button className="btn small ghost" onClick={() => step(1)} disabled={!hasSomething} aria-label="Next frame">›</button>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(total, 0.01)}
+            step={1 / fps}
+            value={Math.min(time, total)}
+            onChange={(e) => {
+              setPlaying(false);
+              seekTimeline(Number(e.target.value));
+            }}
+            aria-label="Position"
+            disabled={!hasSomething}
+          />
+          <span className="time">{mmss(time)} / {mmss(total)}</span>
+          <input type="range" min={0} max={1} step={0.05} value={volume} onChange={(e) => setVolume(Number(e.target.value))} aria-label="Volume" className="volume" />
+          {onExactFrame && (
+            <button className="btn small" onClick={() => onExactFrame(timeRef.current)} title="Ask the editor engine for the real frame at this moment">
+              Exact frame
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
-}
+});

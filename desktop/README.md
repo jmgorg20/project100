@@ -8,6 +8,8 @@ typed bridge (`src/shared/api.ts`); the main process runs the Python engine
 src/main/      Electron main process: engine runner, job queue, settings, encrypted keys, history
 src/preload/   the bridge (self-contained: sandboxed preloads cannot load local modules)
 src/renderer/  the window: preview player, AI panel, review list, dialogs
+  editor/      the timeline editor (Timeline, Inspector, MediaBin, ExportDialog, shortcuts)
+src/shared/edit.ts   timeline edit operations (pure; every result is a valid project)
 src/shared/    types and pure logic used by both sides (job events, history, plan review)
 tests/unit/    Vitest: logic, the engine runner, and main.ts with the real engine
 tests/ui/      Playwright: the window in Chromium with a stand-in bridge (?mock=1)

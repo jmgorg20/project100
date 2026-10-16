@@ -5,6 +5,7 @@ import { formatCost } from "../shared/planItems";
 import type { GenStatus, Job, JobMode, Plan, Provider, Settings, VideoHistory } from "../shared/types";
 import { ConsentDialog, FrameDialog, SettingsDialog } from "./components/Dialogs";
 import { GenerationDialog } from "./components/GenerationDialog";
+import { Editor } from "./editor/Editor";
 import { PlanReview } from "./components/PlanReview";
 import { Player } from "./components/Player";
 import { Stages } from "./components/Stages";
@@ -50,6 +51,7 @@ export function App() {
   const [dragOver, setDragOver] = useState(false);
   const [gen, setGen] = useState<GenStatus | null>(null);
   const [showGen, setShowGen] = useState(false);
+  const [editorPath, setEditorPath] = useState<string | null>(null);
   const [genMounted, setGenMounted] = useState(false);
   const [genRunning, setGenRunning] = useState(false);
   // Per video (sent with each edit); start from the limits in the generation settings file.
@@ -161,12 +163,14 @@ export function App() {
   const [statusLabel, statusClass] = statusText(selectedJob, history);
 
   if (!settings) return null;
+  if (editorPath) return <Editor key={editorPath} path={editorPath} onClose={() => setEditorPath(null)} />;
   return (
     <div className="app" onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={onDrop}>
       <header className="topbar">
         <h1>Auto Video Editor</h1>
         <span className="muted small">AI first edit · you stay in control</span>
         <span className="spacer" />
+        <button className="btn small" onClick={async () => { const p = await api.pickProject(); if (p) setEditorPath(p); }} title="Open a .project.json in the timeline editor">Open project…</button>
         <button className="btn small" onClick={() => openGen()}>{genRunning ? "AI models · testing…" : "AI models"}</button>
         <button className="btn small" onClick={() => setShowSettings(true)}>Settings</button>
       </header>
@@ -357,6 +361,7 @@ export function App() {
                 <button className="btn small" disabled={!canUndo(history)} onClick={async () => { const h = await api.undo(history.video); setHistories((p) => ({ ...p, [h.video]: h })); }}>Undo AI edit</button>
                 <button className="btn small" disabled={!canRedo(history)} onClick={async () => { const h = await api.redo(history.video); setHistories((p) => ({ ...p, [h.video]: h })); }}>Redo</button>
                 <button className="btn small" onClick={() => { setInstruction(version.instruction); instructionRef.current?.focus(); }}>Redo with new instructions</button>
+                <button className="btn small primary" onClick={() => setEditorPath(version.projectFile)} data-testid="open-editor" title="Fix anything by hand: cut, move, speed, volume, framing">Edit on timeline · Buksan sa timeline</button>
               </div>
               <div className="row" style={{ marginTop: 12 }}>
                 <input type="text" aria-label="Change this edit" placeholder="Change this edit, e.g. “mas malaki pa ang captions”" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
