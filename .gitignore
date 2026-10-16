@@ -232,3 +232,8 @@ assets/overlays/*
 !assets/overlays/.gitkeep
 assets/sfx/*
 !assets/sfx/.gitkeep
+# AI generation (WanGP): your settings and exported WanGP settings files
+/generation.json
+generation_templates/*
+!generation_templates/.gitkeep
+!generation_templates/README.txt

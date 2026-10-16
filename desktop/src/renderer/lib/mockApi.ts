@@ -4,7 +4,10 @@
 import type { AppApi, EstimateResult } from "../../shared/api";
 import { addVersion, emptyHistory, redo, undo } from "../../shared/history";
 import { applyEvent, finishJob, newJob, versionFromJob } from "../../shared/jobs";
-import type { EngineEvent, Job, JobRequest, KeysStatus, Plan, Project, Settings, Summary, Track, VideoHistory } from "../../shared/types";
+import type {
+  CompareResult, EngineEvent, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Plan, Project, Settings, Summary, Track, VideoHistory,
+} from "../../shared/types";
+import { CONTENT_TYPES } from "../../shared/types";
 
 interface Fixture {
   project: Project;
@@ -29,6 +32,44 @@ export function createMockApi(): AppApi {
   const jobListeners = new Set<(job: Job) => void>();
   const historyListeners = new Set<(h: VideoHistory) => void>();
   let fixture: Promise<Fixture> | null = null;
+  // The AI generation screen: the real engine's status and a Compare run against the fake
+  // WanGP (tests/ui/make_fixtures.py). Benchmark/compare runs replay those results.
+  let gen: GenStatus | null = null;
+  const genListeners = new Set<(u: GenTaskUpdate) => void>();
+  const stoppedTasks = new Set<string>();
+  const opened: string[] = [];
+  (window as unknown as { openedPaths: string[] }).openedPaths = opened;
+  const loadGen = async (): Promise<GenStatus> => {
+    if (!gen) {
+      gen = (await fetch("/fixtures/gen.status.json").then((r) => r.json())) as GenStatus;
+      if (params.has("hwchanged")) {
+        gen = { ...gen, hardware_changed: true, previous_hardware: "NVIDIA GeForce GTX 1660 (6 GB VRAM), 16 GB RAM" };
+      }
+    }
+    return gen;
+  };
+  const recompute = (s: GenStatus): GenStatus => {
+    const choices = { ...s.choices };
+    for (const c of CONTENT_TYPES) {
+      const usable = s.tiers[c].filter((r) => r.installed).map((r) => r.name).reverse();
+      const top = s.pinned_tier[c] ?? s.default_tier[c];
+      choices[c] = { ...choices[c], order: top && usable.includes(top) ? usable.slice(usable.indexOf(top)) : choices[c].order };
+    }
+    return { ...s, choices };
+  };
+  const genTask = (steps: (GenTaskUpdate["event"] & {})[]) => {
+    const taskId = `mockgen${++counter}`;
+    (async () => {
+      for (const event of steps) {
+        await wait(150 / speed);
+        if (stoppedTasks.has(taskId)) break;
+        genListeners.forEach((l) => l({ taskId, event }));
+      }
+      const cancelled = stoppedTasks.has(taskId);
+      genListeners.forEach((l) => l({ taskId, done: true, code: cancelled ? null : 0, cancelled }));
+    })();
+    return taskId;
+  };
   let queue: Promise<void> = Promise.resolve();
   let counter = 0;
 
@@ -56,7 +97,10 @@ export function createMockApi(): AppApi {
       update(job);
     };
     const fail = job.instruction.includes("FAIL");
-    const plan = f.plan;
+    // "AI CLIP" in the instructions: the plan asks for one AI video clip (made with WanGP).
+    const wantsAi = job.instruction.includes("AI CLIP");
+    const clip = { kind: "video" as const, prompt: "Slow push towards a cup of coffee", at: 3, duration: 2, position: "full" as const, reason: "b-roll while you talk" };
+    const plan: Plan = wantsAi ? { ...f.plan, ai_clips: [clip], voiceovers: [] } : f.plan;
     await emit({ type: "stage", stage: "transcript", label: "Listening to your video" });
     await emit({ type: "transcript", words: 13, cached: job.mode !== "new", text: "Kumusta kayo mga kaibigan!" });
     await emit({ type: "stage", stage: "plan", label: "Planning the edit" });
@@ -65,6 +109,14 @@ export function createMockApi(): AppApi {
       reason: fail ? "The AI plan failed the checks twice (first problem: plan.style: 'comic' is not one of the styles), so this is the preset edit instead." : "",
       model: "openai/gpt-oss-120b", cost: 0.0016, attempts: [],
     }, 400);
+    if (wantsAi && !fail) {
+      const render = job.auto || job.mode === "apply";
+      const passes = job.mode === "apply" ? ["final"] : render ? ["draft", "final"] : ["draft"];
+      for (const pass of passes) {
+        await emit({ type: "stage", stage: `ai_${pass}`, label: pass === "draft" ? "Making AI clips (draft)" : "Making AI clips (final)" });
+        for (const p of [0, 50]) await emit({ type: "progress", stage: `ai_${pass}`, percent: p }, 200);
+      }
+    }
     for (const stage of ["cuts", "zooms", "captions", "photos"]) {
       const kinds: Record<string, string[]> = { cuts: ["video"], zooms: ["video", "effect"], captions: ["video", "effect", "caption"], photos: ["video", "effect", "caption", "overlay", "audio"] };
       const view: Project = { ...f.project, tracks: f.project.tracks.map((t: Track) => (kinds[stage].includes(t.kind) ? t : { ...t, clips: [] })) };
@@ -73,7 +125,16 @@ export function createMockApi(): AppApi {
     }
     const summary: Summary = fail
       ? { ...f.summary, fallback: true, headline: "Heads up: The AI plan failed the checks twice, so this is the preset edit instead." }
-      : f.summary;
+      : wantsAi
+        ? {
+            ...f.summary,
+            details: [
+              ...f.summary.details,
+              "AI video clip at 0:03: Mid tier, 41s (b-roll while you talk)",
+              "AI video clip at 0:03: the High tier out of GPU memory, so the Mid tier was used instead.",
+            ],
+          }
+        : f.summary;
     await emit({ type: "summary", ...summary });
     if (job.auto || job.mode === "apply") {
       await emit({ type: "stage", stage: "render", label: "rendering the video" });
@@ -118,7 +179,10 @@ export function createMockApi(): AppApi {
     pickVideos: async () =>
       params.get("scenario") === "parity" ? ["C:/Videos/parity.mp4"] : ["C:/Videos/demo_talk.mp4", "C:/Videos/demo_talk_2.mp4"],
     pickPhotos: async () => ["C:/Videos/github_logo.png"],
-    addJobs: async (requests) => enqueue(requests),
+    addJobs: async (requests) => {
+      (window as unknown as { lastJobRequests: JobRequest[] }).lastJobRequests = requests;
+      return enqueue(requests);
+    },
     listJobs: async () => {
       if (params.get("scenario") === "parity" && !jobs.size) {
         // A project shown in the live preview, to compare with frames the engine rendered.
@@ -151,6 +215,49 @@ export function createMockApi(): AppApi {
         : { total: 0.0021, text: "$0.0021", provider, model: "openai/gpt-oss-120b", paid_provider: false, transcript_cached: false },
     renderFrame: async () => ({ path: "C:/Videos/demo_frame.png" }),
     checkEngine: async () => ({ ok: true, message: "The editor engine is ready." }),
+    genStatus: async () => recompute(await loadGen()),
+    setWangp: async (folder, python) => {
+      const s = await loadGen();
+      gen = { ...s, wangp: { ...s.wangp, folder, python } };
+      return { problems: [] };
+    },
+    setTier: async (type, kind, tier) => {
+      const s = await loadGen();
+      const key = kind === "default" ? "default_tier" : "pinned_tier";
+      gen = recompute({ ...s, [key]: { ...s[key], [type]: tier } });
+      return gen;
+    },
+    startBenchmark: async (types) => {
+      const s = await loadGen();
+      const rows = (types.length ? types : CONTENT_TYPES).flatMap((c) => s.tiers[c].filter((r) => r.installed).map((r) => ({ c, r })));
+      return genTask(rows.flatMap(({ c, r }) => [
+        { type: "benchmark_start", content_type: c, tier: r.name },
+        { type: "benchmark_result", content_type: c, tier: r.name, ...r.benchmark },
+      ]));
+    },
+    startCompare: async (type) => {
+      const result = (await fetch("/fixtures/gen.compare.json").then((r) => r.json())) as { results: CompareResult[] };
+      const results = type === "image" ? result.results : [];
+      return genTask([
+        ...results.flatMap((r) => [
+          { type: "compare_start", content_type: type, tier: r.tier },
+          { type: "compare_result", content_type: type, ...r },
+        ]),
+        { type: "result", ...result, results },
+      ]);
+    },
+    cancelGenTask: async (taskId) => {
+      stoppedTasks.add(taskId);
+    },
+    onGenTask: (callback) => {
+      genListeners.add(callback);
+      return () => {
+        genListeners.delete(callback);
+      };
+    },
+    openPath: async (target) => {
+      opened.push(target);
+    },
     onJobChanged: (callback) => {
       jobListeners.add(callback);
       return () => jobListeners.delete(callback);

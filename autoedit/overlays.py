@@ -33,6 +33,7 @@ CLIP_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv", ".gif", ".m4v"}
 POSITIONS = {
     "top": (820, 560, 500, 520),
     "center": (820, 560, 500, 900),
+    "full": (1080, 1920, 540, 960),   # a full-screen cutaway (AI B-roll); captions stay on top
 }
 GAP_BETWEEN_OVERLAYS = 0.3
 
@@ -116,6 +117,8 @@ def schedule(events, video_length, caption_zone, top_blocked=False):
 def safe_position(position, caption_zone):
     """Move an overlay if it would sit on top of the captions."""
     position = position if position in POSITIONS else "top"
+    if position == "full":
+        return position
     if caption_zone in ("center", "divider"):
         return "top"
     if caption_zone == "top":

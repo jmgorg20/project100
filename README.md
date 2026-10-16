@@ -41,7 +41,7 @@ anything by hand. See [Project files](#project-files).
 Be aware of what has and has not been checked:
 
 **Tested (automatically, on Linux with FFmpeg 6.1, Python 3.13):**
-- 202 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
+- 224 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
   keyword rules, settings, edit plans, watch mode, and all 13 caption styles. Each style
   is turned into a subtitle file and drawn by FFmpeg/libass to check that text appears.
 - **Project files:** the schema and ~30 kinds of mistakes (each with a clear message);
@@ -61,13 +61,18 @@ Be aware of what has and has not been checked:
   two bad plans or when the AI cannot be reached, saved transcripts and plans, cost
   estimates, and the whole flow to a rendered video, including review mode, follow-up
   changes and batches. See [docs/ai-edit.md](docs/ai-edit.md).
-- **Desktop app:** 42 unit tests (including the app's main process driving the real
-  engine from start to finished video, undo/redo, exact frame) and 9 browser tests of the
+- **Desktop app:** 43 unit tests (including the app's main process driving the real
+  engine from start to finished video, undo/redo, exact frame) and 14 browser tests of the
   window (Playwright, at 1280x800 and 1920x1080, with screenshots checked by eye): Auto mode
   on by default and rendering with no extra clicks, live progress, the summary and cost,
   undo/redo, review with Auto mode off, the fallback warning, keys never shown, the
-  consent notice, and the live preview playing the planned edit. The preview's captions
+  consent notice, the live preview playing the planned edit, and the AI models window
+  (tiers, Compare, per-video limits). The preview's captions
   and photos land where the engine draws them (checked against frames the engine rendered).
+- **AI pictures, clips and voice-over with WanGP** (quality tiers, hardware detection,
+  tests, Compare, Auto mode's tier choice and fallback), tested **only against a stand-in
+  for WanGP and a fake `nvidia-smi`**: there is no GPU on the test machine. See
+  [docs/generation.md](docs/generation.md).
 - Full edits of a **synthetic test video** (colour bars + beeps standing in for speech, with a
   fake transcript): output is 1080x1920, 30 fps, H.264, with an AAC audio track, and sound
   and picture have the same length. Layouts tested: face, split screen, picture-in-picture,
@@ -99,6 +104,11 @@ Be aware of what has and has not been checked:
   the app, and quitting during a render.
 - The live preview is close to the final video but not identical (fonts, outlines and
   colour grades are drawn by the browser). Use **Exact frame** to see the real thing.
+- **Real WanGP, real benchmarking and output quality.** WanGP needs an NVIDIA GPU, so it was
+  never run here. Real generation times, out-of-memory behaviour, peak VRAM, GPU detection
+  on real hardware and how good any model's pictures, clips or voice sound are all
+  **unverified**. Test on your PC with **AI models > Test everything** and judge the
+  outputs with **Compare**.
 - No installer yet (Phase 4).
 - Cancelling on **Windows** (the app stops FFmpeg through the editor) was only tested on
   Linux.
@@ -285,6 +295,21 @@ playhead.
 
 If the AI's plan fails the checks twice (or the AI cannot be reached), you get the normal
 preset edit and a "Heads up" at the top of the summary saying why.
+
+**AI pictures, clips and voice-over (optional).** The edit can add these if you ask for
+them (e.g. *"maglagay ng maikling clip ng kape sa simula"*). They are made on your own PC
+with [WanGP](https://github.com/deepbeepmeep/Wan2GP) by DeepBeepMeep, which you install
+separately. WanGP has its own license, and this app never downloads models.
+
+- **AI models** (top right) shows your GPU and the quality tiers (Draft / Low / Mid / High)
+  with what is installed and the times measured on your PC.
+- **Compare** runs the same prompt and seed on every installed tier, so you can pick by
+  looking.
+- Auto mode shows a quick Draft first, then the final tier. It tries one tier down if a job
+  fails, and the summary says so.
+- Per video, you can cap the generation time and the number of AI clips.
+
+Setup and details: [docs/generation.md](docs/generation.md).
 
 ### From the command line
 
@@ -497,6 +522,12 @@ autoedit/
   ai_plan.py         the AI plan: checks and how it becomes editing settings
   llm.py             asks Groq or Anthropic for the plan
   cache.py, costs.py saved transcripts/plans, cost estimates
+  generation.py      quality tiers, tests, Compare, tier choice (AI pictures/clips/voice)
+  ai_gen.py          makes the AI edit's clips: draft, then final, with fallback and limits
+  wangp.py           talks to WanGP; wangp_bridge.py runs inside WanGP's own Python
+  hardware.py        GPU / VRAM / RAM / disk detection
+generation.example.json  tier settings (copied to generation.json on first use)
+generation_templates/    the WanGP settings files you export, one per tier
 desktop/             the desktop app (Electron + React), see desktop/README.md
   transcribe.py      Groq and faster-whisper
   overlays.py, plan.py, grades.py, watch.py, previews.py ...

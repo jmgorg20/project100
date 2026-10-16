@@ -240,3 +240,149 @@ test("live preview plays the planned edit: right source frame, photo, caption, a
   expect(source).toBeCloseTo(2.8 + (timeline - 1.7), 1);   // 2.1s-2.8s of the source was skipped
   await page.getByRole("button", { name: "Pause" }).click();
 });
+
+// ---------------------------------------------------------------- AI pictures, clips & voice (WanGP)
+// The data is the real engine's output against the fake WanGP (no GPU, no real models here).
+
+/** Controls that stick out of the dialog, or a dialog that scrolls sideways. */
+async function dialogProblems(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const d = dialog.getBoundingClientRect();
+    const problems: string[] = [];
+    if (dialog.scrollWidth > dialog.clientWidth + 1) problems.push("the dialog scrolls sideways");
+    if (d.right > window.innerWidth || d.left < 0) problems.push("the dialog is wider than the window");
+    dialog.querySelectorAll("button, input, select, a, img, video, .tier").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width && (r.left < d.left - 1 || r.right > d.right + 1)) problems.push(`${el.textContent || el.tagName} sticks out of the dialog`);
+      if (el.tagName === "BUTTON" && el.scrollWidth > el.clientWidth + 1) problems.push(`button text cut off: ${el.textContent}`);
+    });
+    return problems;
+  });
+}
+
+test("AI models: hardware, tiers with measured facts only, uninstalled tiers disabled with a reason and license note", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await page.getByRole("button", { name: "AI models", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI pictures, clips & voice" });
+  await expect(dialog).toContainText("WanGP");
+  await expect(dialog).toContainText("never downloads models");
+  await expect(dialog.getByTestId("hardware")).toHaveText("NVIDIA GeForce RTX 3060 (12 GB VRAM), 16 GB RAM");
+
+  // Pictures: all four tiers installed; High failed its test (out of GPU memory), so Auto skips it.
+  const tiers = dialog.getByTestId("tiers");
+  await expect(tiers.getByTestId("tier-Draft")).toContainText("installed");
+  await expect(tiers.getByTestId("tier-Draft")).toContainText("Test passed in");
+  await expect(tiers.getByTestId("tier-Mid")).toContainText("VRAM need: about 10 GB (your estimate)");
+  await expect(tiers.getByTestId("tier-Low")).toContainText("VRAM need: unknown");
+  await expect(tiers.getByTestId("tier-High")).toContainText("Test ran out of GPU memory");
+  await expect(dialog.getByLabel("Auto mode uses")).toContainText("Automatic (now: Mid)");
+  expect(await dialogProblems(page)).toEqual([]);
+  await page.waitForTimeout(300); // the dialog's fade-in
+  await page.screenshot({ path: path.join(SHOTS, "ai-models-pictures.png") });
+
+  // Video clips: a tier with a model WanGP has not downloaded, and tiers not set up yet.
+  await dialog.getByRole("tab", { name: "Video clips" }).click();
+  const high = tiers.getByTestId("tier-High");
+  await expect(high).toHaveAttribute("aria-disabled", "true");
+  await expect(high).toContainText("not installed");
+  await expect(high).toContainText("The editor never downloads models");
+  await expect(high).toContainText("Read the model's license there before downloading it in WanGP.");
+  await expect(high.getByRole("link").first()).toHaveAttribute("href", /^https:\/\/huggingface\.co\//);
+  await expect(tiers.getByTestId("tier-Low")).toHaveAttribute("aria-disabled", "true");
+  await expect(tiers.getByTestId("tier-Low")).toContainText("Export Settings");
+  await expect(tiers.getByTestId("tier-Draft")).toHaveAttribute("aria-disabled", "false");
+  expect(await dialogProblems(page)).toEqual([]);
+  await page.screenshot({ path: path.join(SHOTS, "ai-models-video.png") });
+
+  // Voice: other WanGP models of this kind are listed with their official links, not ranked.
+  await dialog.getByRole("tab", { name: "Voice-over" }).click();
+  const rec = dialog.getByTestId("recommendations");
+  await expect(rec).toContainText("Highest voice-over tier that passed its test here: Low");
+  await expect(rec).toContainText("Example Music");
+  await expect(rec).toContainText("Read the model's license");
+
+  // Facts only: the screen never calls a tier or model better or best.
+  for (const tab of ["Pictures", "Video clips", "Voice-over"]) {
+    await dialog.getByRole("tab", { name: tab }).click();
+    expect(await dialog.innerText()).not.toMatch(/\b(better|best|recommended)\b/i);
+  }
+
+  await dialog.getByRole("button", { name: "Edit settings file" }).click();
+  expect(await page.evaluate(() => (window as unknown as { openedPaths: string[] }).openedPaths)).toEqual(["C:/AutoEditor/generation.json"]);
+});
+
+test("AI models: Compare runs every installed tier with the same prompt and seed, side by side; the choice is saved as the default", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page);
+  await page.getByRole("button", { name: "AI models", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI pictures, clips & voice" });
+  await dialog.getByRole("button", { name: "Compare" }).click();
+  const grid = dialog.getByTestId("compare");
+  await expect(grid.locator("figure")).toHaveCount(4, { timeout: 10_000 });
+  await expect(dialog.getByTestId("task-log")).toContainText("Finished.");
+  await expect(dialog.getByTestId("task-log")).toContainText("Running image Mid");
+  for (const tier of ["Draft", "Low", "Mid"]) {
+    const item = grid.locator("figure", { hasText: tier });
+    await expect(item.locator("img")).toHaveJSProperty("complete", true);
+    expect(await item.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect(item.locator("figcaption")).toContainText(/\d+(\.\d)? s/); // the measured time
+  }
+  await expect(grid.locator("figure", { hasText: "High" })).toContainText("out of GPU memory");
+  await grid.locator("figure", { hasText: "Low" }).getByRole("button", { name: "Use as default" }).click();
+  await expect(dialog.getByTestId("tier-Low")).toContainText("your default");
+  await expect(grid.locator("figure", { hasText: "Low" }).getByRole("button")).toHaveText("Your default");
+  await expect(dialog.getByLabel("Auto mode uses")).toContainText("Automatic (now: Low)");
+  expect(await dialogProblems(page)).toEqual([]);
+  expect(await dialog.innerText()).not.toMatch(/\b(better|best)\b/i);
+  await page.screenshot({ path: path.join(SHOTS, "ai-models-compare.png") });
+
+  // Pin a tier for Auto mode, then go back to automatic.
+  await dialog.getByLabel("Auto mode uses").selectOption("Draft");
+  await expect(dialog.getByTestId("tier-Draft")).toContainText("pinned");
+  await dialog.getByLabel("Auto mode uses").selectOption("");
+  await expect(dialog.getByTestId("tier-Draft")).not.toContainText("pinned");
+});
+
+test("AI models: the test runs one tier at a time and can be stopped", async ({ page }) => {
+  await open(page, "mock=1&consent=1&speed=0.5");
+  await page.getByRole("button", { name: "AI models", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI pictures, clips & voice" });
+  await dialog.getByRole("button", { name: "Test everything" }).click();
+  const log = dialog.getByTestId("task-log");
+  await expect(log).toContainText("Running image Draft");
+  await expect(dialog.getByRole("button", { name: "Compare" })).toBeDisabled(); // one GPU job at a time
+  await log.getByRole("button", { name: "Stop" }).click();
+  await expect(log).toContainText("Stopped.");
+  await expect(dialog.getByRole("button", { name: "Test everything" })).toBeEnabled();
+});
+
+test("per-video AI limits are sent with each edit; the AI clip steps show draft then final", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page, "mock=1&consent=1&speed=2");
+  const limits = page.getByTestId("gen-limits");
+  await expect(limits).toContainText("pictures Mid, clips Draft, voice-over Low");
+  await limits.locator("summary").click();
+  await page.getByLabel("Max generation minutes").fill("12");
+  await page.getByLabel("Max AI clips").fill("2");
+  expect(await layoutProblems(page)).toEqual([]);
+  await page.getByRole("button", { name: "Add videos" }).click();
+  await page.getByLabel("Instructions for the AI").fill("AI CLIP of coffee at the start");
+  await page.getByTestId("run").click();
+  const sent = await page.evaluate(() => (window as unknown as { lastJobRequests: { maxGenMinutes: number; maxAiClips: number }[] }).lastJobRequests);
+  expect(sent.map((r) => [r.maxGenMinutes, r.maxAiClips])).toEqual([[12, 2], [12, 2]]);
+
+  await expect(page.locator('[data-step="ai_draft"]')).toHaveText(/AI clips \(draft\)/);
+  await expect(page.locator('[data-step="ai_final"][data-state="done"]')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('[data-step="ai_draft"][data-state="done"]')).toBeVisible();
+  await page.screenshot({ path: path.join(SHOTS, "ai-clip-stages.png") });
+  const summary = page.getByTestId("summary");
+  await expect(summary).toContainText("AI video clip at 0:03: Mid tier", { timeout: 30_000 });
+  await expect(summary).toContainText("the High tier out of GPU memory, so the Mid tier was used instead");
+});
+
+test("a hardware change is pointed out", async ({ page }) => {
+  await open(page, "mock=1&consent=1&hwchanged=1");
+  await expect(page.getByRole("status").filter({ hasText: "hardware changed" })).toContainText("GTX 1660");
+});

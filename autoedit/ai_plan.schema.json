@@ -15,7 +15,9 @@
     "zooms",
     "grades",
     "photos",
-    "notes"
+    "notes",
+    "ai_clips",
+    "voiceovers"
   ],
   "properties": {
     "summary": {
@@ -283,6 +285,89 @@
         "maxLength": 300
       },
       "description": "Things in the instruction the editor cannot do (say so plainly). Empty if none."
+    },
+    "ai_clips": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "AI-generated pictures or short video clips (B-roll), only if AI GENERATION says that kind is available and the creator asked for it or it clearly helps. Empty otherwise.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "prompt",
+          "at",
+          "duration",
+          "position",
+          "reason"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "image",
+              "video"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "What to generate, in English, concrete and visual. No real people's names or faces."
+          },
+          "at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "duration": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 10.0,
+            "description": "Seconds on screen."
+          },
+          "position": {
+            "enum": [
+              "full",
+              "top",
+              "center"
+            ],
+            "description": "full = covers the screen as a cutaway; top/center = a smaller pop-in."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "voiceovers": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "AI voice-over lines, only if AI GENERATION says voice is available and the creator asked for it. Empty otherwise.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "at",
+          "reason"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Exactly what the voice says, in the creator's language."
+          },
+          "at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
     }
   }
 }

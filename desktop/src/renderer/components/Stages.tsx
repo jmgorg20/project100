@@ -11,8 +11,21 @@ const STEPS: [string, string][] = [
   ["render", "Render"],
 ];
 
+// Shown only when the plan asks for AI pictures, clips or voice-over (made with WanGP).
+const AI_STEPS: [string, string][] = [
+  ["ai_draft", "AI clips (draft)"],
+  ["ai_final", "AI clips (final)"],
+];
+
 export function Stages({ job }: { job: Job }) {
-  const steps = job.auto || job.mode === "apply" ? STEPS : STEPS.slice(0, -1);
+  const render = job.auto || job.mode === "apply";
+  const seen = (key: string) => job.stage === key || job.stagesDone.includes(key);
+  const wantsAi = Boolean(job.plan?.ai_clips?.length || job.plan?.voiceovers?.length);
+  // Auto mode: draft then final. Review first: draft only. Applying a reviewed plan: final only.
+  const ai = AI_STEPS.filter(([key]) =>
+    seen(key) || (wantsAi && (key === "ai_draft" ? job.mode !== "apply" : render)),
+  );
+  const steps = [...STEPS.slice(0, 2), ...ai, ...STEPS.slice(2, render ? undefined : -1)];
   return (
     <div className="stages" aria-label="Progress" data-testid="stages">
       {steps.map(([key, label]) => {

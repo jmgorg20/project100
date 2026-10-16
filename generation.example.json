@@ -1,0 +1,48 @@
+{
+ "_help": [
+  "Settings for AI images, video clips and voice-over made with WanGP (https://github.com/deepbeepmeep/Wan2GP).",
+  "The editor copies this file to generation.json on first use; edit generation.json (the app also saves your choices there).",
+  "wangp.folder: the WanGP folder (where wgp.py is). wangp.python: WanGP's own Python, e.g. C:\\Users\\you\\miniconda3\\envs\\wan2gp\\python.exe (in a terminal: conda activate wan2gp, then: where python).",
+  "Each tier points to a settings file you export from WanGP: pick the model and settings in WanGP, click 'Export Settings', save the file in the templates folder, and put its name in 'template'.",
+  "overrides may only change: resolution (e.g. \"480x832\"), num_inference_steps, video_length (frames, or seconds like \"3s\"), duration_seconds.",
+  "vram_gb: your estimate of the VRAM a tier needs, if you know it (shown in the app; null = unknown).",
+  "default_tier: chosen in the app after Compare. pinned_tier: always use this tier instead of choosing automatically.",
+  "limits: per video. max_generation_minutes: all AI generation for one video; max_ai_clips: AI images/clips per video; job_timeout_minutes: one job.",
+  "The editor never downloads models: download them in WanGP, after reading each model's license."
+ ],
+ "wangp": {"folder": "", "python": "", "cli_args": []},
+ "templates_folder": "generation_templates",
+ "tiers": {
+  "image": [
+   {"name": "Draft", "label": "Quick look", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "Low", "label": "Light", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "Mid", "label": "Balanced", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "High", "label": "Detailed", "template": "", "overrides": {}, "vram_gb": null}
+  ],
+  "video": [
+   {"name": "Draft", "label": "Quick look", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "Low", "label": "Light", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "Mid", "label": "Balanced", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "High", "label": "Detailed", "template": "", "overrides": {}, "vram_gb": null}
+  ],
+  "voice": [
+   {"name": "Draft", "label": "Quick look", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "Low", "label": "Light", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "Mid", "label": "Balanced", "template": "", "overrides": {}, "vram_gb": null},
+   {"name": "High", "label": "Detailed", "template": "", "overrides": {}, "vram_gb": null}
+  ]
+ },
+ "default_tier": {"image": null, "video": null, "voice": null},
+ "pinned_tier": {"image": null, "video": null, "voice": null},
+ "limits": {"max_generation_minutes": 30, "max_ai_clips": 6, "job_timeout_minutes": 10},
+ "benchmark": {
+  "seed": 1234,
+  "video_seconds": 2,
+  "voice_seconds": 4,
+  "prompts": {
+   "image": "A cozy sari-sari store at golden hour, vertical photo",
+   "video": "Slow camera push towards a steaming cup of coffee on a wooden table",
+   "voice": "Kumusta kayo mga kaibigan! Ito ay isang maikling test."
+  }
+ }
+}

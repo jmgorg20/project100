@@ -514,6 +514,7 @@ textarea {
 
 input[type="text"],
 input[type="password"],
+input[type="number"],
 select {
   border: 1px solid var(--line);
   border-radius: var(--radius-small);
@@ -670,6 +671,104 @@ select {
   width: 100%;
   border-radius: var(--radius-small);
   background: #000;
+}
+
+/* ---------------------------------------------------------------- AI generation */
+
+.dialog.wide {
+  width: min(880px, calc(100vw - 48px));
+}
+
+.gen-dialog section[aria-label="Quality tiers"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.tier {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  padding: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tier.disabled {
+  opacity: 0.62;
+  background: var(--chip);
+}
+
+.chip-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.chip-status.ok {
+  color: var(--good);
+  background: rgba(31, 157, 85, 0.12);
+}
+
+.badge {
+  display: inline-block;
+  margin-left: var(--s2);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.compare-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  font-size: 13px;
+  min-width: 0;
+}
+
+.compare-media {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: contain;
+  background: #000;
+  border-radius: var(--radius-small);
+}
+
+.compare-media.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+  padding: var(--s2);
+  background: #333;
+}
+
+.limits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s2);
+}
+
+.limits input {
+  width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
