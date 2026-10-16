@@ -139,6 +139,9 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
             print(f"  > saved {saved.name} (edit it, add *stars* for keywords, re-run with "
                   f"--transcript)")
 
+    from .vocabulary import fix_words
+    words = fix_words(words, cfg)                     # your corrections (vocabulary.json)
+
     # 2. Decide what to cut.
     print("[2/6] Cutting silences and filler words")
     threshold = float(pacing["silence_threshold"])

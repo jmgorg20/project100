@@ -1,0 +1,9 @@
+{
+ "_help": "Copy to vocabulary.json (the app does this for you). 'words': names and brands Whisper should spell right. 'corrections': fixes applied to every transcript ('from' -> 'to', case does not matter).",
+ "words": ["GCash", "Maya", "Shopee", "Lazada", "TikTok", "Facebook", "YouTube", "Jollibee", "Meralco"],
+ "corrections": [
+  {"from": "g cash", "to": "GCash"},
+  {"from": "gee cash", "to": "GCash"},
+  {"from": "sho pee", "to": "Shopee"}
+ ]
+}
