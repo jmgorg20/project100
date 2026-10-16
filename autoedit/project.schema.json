@@ -121,6 +121,18 @@
               "type": "number",
               "minimum": -9,
               "maximum": 0
+            },
+            "ducking": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Lower the music while someone speaks: 0 = off, 1 = strongest."
+            },
+            "denoise": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Reduce steady background noise (fan, hiss) in the speech: 0 = off, 1 = strongest."
             }
           }
         },
@@ -356,7 +368,22 @@
                     "$ref": "#/$defs/gradeClip"
                   },
                   "else": {
-                    "$ref": "#/$defs/zoomClip"
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "fx"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "$ref": "#/$defs/fxClip"
+                    },
+                    "else": {
+                      "$ref": "#/$defs/zoomClip"
+                    }
                   }
                 }
               }
@@ -671,6 +698,12 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "ease": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Seconds to zoom in smoothly from 100% (0 = jump straight in, a punch-in)."
         }
       }
     },
@@ -712,6 +745,9 @@
             "orange_teal",
             "high_contrast"
           ]
+        },
+        "intensity": {
+          "$ref": "#/$defs/intensity"
         }
       }
     },
@@ -968,6 +1004,56 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        }
+      }
+    },
+    "intensity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "How strong: 0 = not at all, 1 = full."
+    },
+    "fxClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "effect"
+      ],
+      "description": "A picture effect for a moment (also used as a transition on a cut): shake, flash (to white), dip (to black), glitch (colour split and noise), whip (sideways motion blur).",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "fx"
+        },
+        "effect": {
+          "enum": [
+            "shake",
+            "flash",
+            "dip",
+            "glitch",
+            "whip"
+          ]
+        },
+        "intensity": {
+          "$ref": "#/$defs/intensity"
         }
       }
     }

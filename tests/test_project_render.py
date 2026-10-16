@@ -420,3 +420,152 @@ def test_video_clip_sound_fades_and_speed_on_overlay_and_audio(media):
     samples = synthetic.pcm(out)
     assert max(abs(x) for x in samples[2000:6000]) > 3000
     assert max(abs(x) for x in samples[10000:16000]) < 300
+
+
+# ---------------------------------------------------------------- effects (phase 2)
+
+def fx_render(tmp, p, name, effects, main=None):
+    t = tracks(p)
+    t["main"]["clips"] = main or [vclip("v1", 0.0, 0.0, duration=2.0)]   # red then green
+    t["effects"]["clips"] = effects
+    return render_project(p, tmp / f"{name}.mp4", base_dir=tmp, export=FAST)
+
+
+def test_flash_dip_and_whip_change_the_picture_only_in_their_moment(media):
+    tmp, p = media
+    p["media"].append(media_from_file(two_halves_video(tmp / "halves.mp4"), "halves"))
+    halves = [{"id": "h", "type": "video", "media": "halves", "start": 0.0, "duration": 2.0,
+               "in": 0.0, "out": 2.0}]
+    out = fx_render(tmp, p, "flash", [{"id": "f", "type": "fx", "effect": "flash", "start": 0.5,
+                                       "duration": 0.4, "intensity": 1}])
+    before, peak, after = synthetic.pixels(out, [10, 21, 40], 300, 960)
+    assert is_color(before, "red") and is_color(after, "green")
+    assert min(peak) > 180                                  # the red frame flashes to white
+
+    out = fx_render(tmp, p, "dip", [{"id": "d", "type": "fx", "effect": "dip", "start": 0.5,
+                                     "duration": 0.4, "intensity": 1}])
+    before, peak, after = synthetic.pixels(out, [10, 21, 40], 300, 960)
+    assert is_color(before, "red") and max(peak) < 40 and is_color(after, "green")
+
+    out = fx_render(tmp, p, "whip", [{"id": "w", "type": "fx", "effect": "whip", "start": 0.5,
+                                      "duration": 0.5, "intensity": 1}], main=halves)
+    sharp, blurred = synthetic.pixels(out, [5, 22], 520, 960)   # just left of the red|blue edge
+    assert is_color(sharp, "red")
+    assert blurred[2] > 60 and blurred[0] < 220              # mixed with the blue side
+
+
+def test_shake_and_glitch_move_the_picture(media):
+    tmp, p = media
+    p["media"].append(media_from_file(two_halves_video(tmp / "halves.mp4"), "halves"))
+    halves = [{"id": "h", "type": "video", "media": "halves", "start": 0.0, "duration": 2.0,
+               "in": 0.0, "out": 2.0}]
+    plain = fx_render(tmp, p, "plain", [], main=halves)
+    for effect in ("shake", "glitch"):
+        out = fx_render(tmp, p, effect, [{"id": "e", "type": "fx", "effect": effect,
+                                          "start": 0.5, "duration": 1.0, "intensity": 1}],
+                        main=halves)
+        frames = [16, 20, 25, 30]
+        moved = [a != b for a, b in zip(synthetic.pixels(out, frames, 540, 960),
+                                         synthetic.pixels(plain, frames, 540, 960))]
+        assert any(moved), effect                           # the edge pixel changes
+        before = zip(synthetic.pixels(out, [5], 540, 960)[0], synthetic.pixels(plain, [5], 540, 960)[0])
+        assert all(abs(a - b) < 16 for a, b in before), effect   # untouched before it starts
+
+
+def test_grade_intensity_and_smooth_zoom(media):
+    tmp, p = media
+    p["media"].append(media_from_file(two_halves_video(tmp / "halves.mp4"), "halves"))
+    halves = [{"id": "h", "type": "video", "media": "halves", "start": 0.0, "duration": 2.0,
+               "in": 0.0, "out": 2.0}]
+    full = fx_render(tmp, p, "bw", [{"id": "g", "type": "grade", "grade": "black_and_white",
+                                     "start": 0, "duration": 2}])
+    half = fx_render(tmp, p, "bw_half", [{"id": "g", "type": "grade", "grade": "black_and_white",
+                                          "start": 0, "duration": 2, "intensity": 0.5}])
+    r_full = synthetic.pixels(full, [10], 300, 960)[0]
+    r_half = synthetic.pixels(half, [10], 300, 960)[0]
+    assert max(r_full) - min(r_full) < 20                   # grey
+    assert 40 < r_half[0] - r_half[1] < 200                 # halfway: still reddish
+
+    # Zoom 2x, eased over 1 s from t=0, centred: at x=330 the frame shows the red band at
+    # 100% and the green band once zoomed past ~117% (frame 5). A plain zoom is green at once.
+    p["media"].append(media_from_file(three_bands_video(tmp / "bands.mp4"), "bands"))
+    bands = [{"id": "b", "type": "video", "media": "bands", "start": 0.0, "duration": 2.0,
+              "in": 0.0, "out": 2.0}]
+    zoom = {"id": "z", "type": "zoom", "amount": 2, "anchor_y": 0.5, "start": 0, "duration": 2}
+    eased = fx_render(tmp, p, "ease", [{**zoom, "ease": 1.0}], main=bands)
+    punch = fx_render(tmp, p, "punch", [zoom], main=bands)
+    e0, e15, e45 = synthetic.pixels(eased, [0, 15, 45], 330, 960)
+    assert is_color(e0, "red") and is_color(e15, "green") and is_color(e45, "green")
+    assert is_color(synthetic.pixels(punch, [0], 330, 960)[0], "green")
+    centre = synthetic.pixels(eased, [0, 15, 45], 540, 960)
+    assert all(is_color(c, "green") for c in centre)          # zooms towards the centre
+
+
+def three_bands_video(path, width=720, height=1280, seconds=2):
+    """Red, green and blue vertical bands, a third of the width each."""
+    third = width // 3
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-filter_complex",
+         f"color=c=red:s={width}x{height}:r=30:d={seconds}[a];"
+         f"color=c=0x00c000:s={third}x{height}:r=30:d={seconds}[g];"
+         f"color=c=blue:s={third}x{height}:r=30:d={seconds}[b];"
+         f"[a][g]overlay=x={third}[ag];[ag][b]overlay=x={2 * third}[v]",
+         "-map", "[v]", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+         str(path)], check=True)
+    return Path(path)
+
+
+# ---------------------------------------------------------------- audio (phase 2)
+
+def band_rms(media, af, start, end, rate=16000):
+    """Loudness (RMS) of the sound between start and end seconds, after the filter `af`."""
+    import array
+    out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(media), "-af", af, "-ac", "1",
+                          "-ar", str(rate), "-f", "s16le", "-"], capture_output=True,
+                         check=True).stdout
+    samples = array.array("h", out)[int(start * rate):int(end * rate)]
+    return math.sqrt(sum(x * x for x in samples) / max(1, len(samples)))
+
+
+def test_music_ducks_under_speech(media):
+    tmp, p = media
+    t = tracks(p)
+    # Speech (the video's 440 Hz tone) in the first second only; music (880 Hz) throughout.
+    t["main"]["clips"] = [vclip("v1", 0.0, 0.0), vclip("v2", 1.0, 1.0, volume=0)]
+    t["music"]["clips"] = [{"id": "m", "type": "audio", "media": "tone", "start": 0.0,
+                            "duration": 2.0, "in": 0.0, "out": 2.0, "volume": 0.5}]
+    music = "bandpass=f=880:width_type=h:w=120,bandpass=f=880:width_type=h:w=120"
+    levels = {}
+    for ducking in (0, 1):
+        p["settings"]["audio"]["ducking"] = ducking
+        out = render_project(p, tmp / f"duck{ducking}.mp4", base_dir=tmp, export=FAST)
+        levels[ducking] = (band_rms(out, music, 0.4, 0.9), band_rms(out, music, 1.4, 1.9))
+    plain_speech, plain_quiet = levels[0]
+    ducked_speech, ducked_quiet = levels[1]
+    assert plain_speech == pytest.approx(plain_quiet, rel=0.25)       # no ducking: steady
+    assert ducked_speech < ducked_quiet / 2.5                          # ducked while speaking
+    assert ducked_quiet == pytest.approx(plain_quiet, rel=0.3)         # back up afterwards
+
+
+def test_noise_reduction_lowers_hiss_and_keeps_the_voice(media):
+    tmp, p = media
+    noisy = tmp / "noisy.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-filter_complex",
+                    "color=c=gray:s=720x1280:r=30:d=3[v];"
+                    # "Speech" with pauses (on 0.5 s, off 0.25 s) over steady hiss.
+                    "sine=f=440:r=48000:d=3,volume='lt(mod(t,0.75),0.5)':eval=frame[s];"
+                    "anoisesrc=d=3:c=white:a=0.05:r=48000[n];"
+                    "[s][n]amix=inputs=2:normalize=0[a]",
+                    "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "ultrafast",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", str(noisy)], check=True)
+    p["media"].append(media_from_file(noisy, "noisy"))
+    tracks(p)["main"]["clips"] = [{"id": "n", "type": "video", "media": "noisy", "start": 0,
+                                   "duration": 3, "in": 0, "out": 3}]
+    hiss, voice = {}, {}
+    for denoise in (0, 1):
+        p["settings"]["audio"]["denoise"] = denoise
+        out = render_project(p, tmp / f"dn{denoise}.mp4", base_dir=tmp, export=FAST)
+        hiss[denoise] = band_rms(out, "highpass=f=3000,highpass=f=3000", 1.0, 2.8)
+        voice[denoise] = band_rms(out, "bandpass=f=440:width_type=h:w=60", 1.0, 2.8)
+    assert hiss[1] < hiss[0] / 5
+    assert voice[1] > voice[0] * 0.6
