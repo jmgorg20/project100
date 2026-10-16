@@ -6,7 +6,9 @@ import type { Peaks, Thumbs } from "../../shared/api";
 import {
   EditError, clipEnd, isMain, moveClip, moveMainClip, projectDuration, snap, snapMove, snapPoints, speedOf, trimClip,
 } from "../../shared/edit";
-import type { Clip, Project, Track } from "../../shared/types";
+import { FX_INFO } from "../../shared/effectsEdit";
+import { trackfxLabel } from "../../shared/trackEdit";
+import type { Clip, FxEffect, Project, Track } from "../../shared/types";
 import { mmss } from "../components/Player";
 import { Filmstrip, Waveform } from "./ClipVisuals";
 
@@ -28,6 +30,8 @@ function clipLabel(c: Clip, p: Project): string {
   if (c.type === "caption") return (c.words ?? []).map((w) => w.text).join(" ");
   if (c.type === "zoom") return `Zoom ${Math.round((c.amount ?? 1) * 100)}%`;
   if (c.type === "grade") return `Colour: ${(c.grade ?? "").replace(/_/g, " ")}`;
+  if (c.type === "trackfx") return trackfxLabel(c);
+  if (c.type === "fx") return FX_INFO[c.effect as FxEffect]?.label ?? c.id;
   const m = p.media.find((x) => x.id === c.media);
   return m?.name ?? m?.path.split(/[\\/]/).pop() ?? c.id;
 }

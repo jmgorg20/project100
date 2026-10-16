@@ -1,9 +1,10 @@
 // The editor's left side: the project's media, your music and sound-effect folders, and
 // effects/transitions/colour looks to add at the playhead.
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LibraryFile, Thumbs } from "../../shared/api";
+import type { LibraryFile, Thumbs, TrackStatus } from "../../shared/api";
 import { FX_INFO, GRADES } from "../../shared/effectsEdit";
-import type { FxEffect, Project } from "../../shared/types";
+import { TRACK_FX } from "../../shared/trackEdit";
+import type { FxEffect, Project, TrackEffect } from "../../shared/types";
 import { api, mediaUrl } from "../lib/api";
 import { BrollPanel, type BrollAsk, type BrollTask } from "./BrollPanel";
 import { MediaBin } from "./MediaBin";
@@ -20,11 +21,27 @@ export interface BrollActions {
   onChooseFolder: () => void;
 }
 
+/** Effects that follow your hands / face (tracking). */
+export interface TrackedActions {
+  status: TrackStatus | null;
+  /** Following is running: its label and progress. */
+  task: { label: string; percent?: number } | null;
+  /** The project already has tracked points. */
+  hasTracking: boolean;
+  /** Tracked effects in the project that have nothing to follow yet. */
+  untracked: number;
+  onAdd: (effect: TrackEffect) => void;
+  onFollow: () => void;
+  onCancel: () => void;
+  onSetup: () => void;
+}
+
 export interface EffectActions {
   onFx: (effect: FxEffect) => void;
   onTransition: (effect: FxEffect) => void;
   onZoom: (kind: "punch" | "smooth") => void;
   onGrade: (grade: string, wholeVideo: boolean) => void;
+  tracked: TrackedActions;
 }
 
 export function LeftPanel({ project, thumbs, url, busy, onImport, onAdd, onAddLibrary, effects, folders, onChooseFolder, broll }: {
@@ -153,7 +170,51 @@ function EffectsList({ actions }: { actions: EffectActions }) {
           <button key={g} className="btn small" onClick={() => actions.onGrade(g, whole)}>{g.replace(/_/g, " ")}</button>
         ))}
       </div>
+      <TrackedSection actions={actions.tracked} />
       <p className="muted small">Every effect is a clip on the Effects track: drag it, trim it, or change its strength on the right.</p>
+    </div>
+  );
+}
+
+function TrackedSection({ actions }: { actions: TrackedActions }) {
+  const { status, task } = actions;
+  const ready = Boolean(status?.available);
+  return (
+    <div data-testid="tracked-section">
+      <h3>Follow my hands · Sundan ang kamay</h3>
+      {status && !ready && (
+        <div className="notice small" data-testid="track-not-ready">
+          <p style={{ margin: 0 }}>{status.installed ? "The hand model is not downloaded yet." : "The free MediaPipe tracker is not installed yet."} Hindi pa ready.</p>
+          <button className="btn small" style={{ marginTop: 6 }} onClick={actions.onSetup} data-testid="track-setup-open">Set up…</button>
+        </div>
+      )}
+      <div className="fx-grid tracked">
+        {(Object.keys(TRACK_FX) as TrackEffect[]).map((k) => (
+          <button key={k} className="btn small" onClick={() => actions.onAdd(k)} title={TRACK_FX[k].tl} aria-label={`Tracked ${TRACK_FX[k].label}`}>
+            {TRACK_FX[k].label}
+          </button>
+        ))}
+      </div>
+      {task ? (
+        <div className="broll-task" role="status" data-testid="track-task">
+          <span className="spinner" aria-hidden="true" />
+          <span className="small">
+            {task.label}
+            {task.percent !== undefined ? ` · ${Math.round(task.percent)}%` : "…"}
+          </span>
+          <button className="btn small ghost" onClick={actions.onCancel}>Cancel</button>
+        </div>
+      ) : (
+        <button className={`btn small${actions.untracked ? " primary" : ""}`} disabled={!ready} onClick={actions.onFollow} data-testid="track-follow" title={ready ? "Find your hands and face in this video" : "Set up tracking first"}>
+          {actions.hasTracking ? "Follow again · Ulitin" : "Follow my hands · Sundan"}
+        </button>
+      )}
+      {actions.untracked > 0 && !task && (
+        <p className="warn small" data-testid="track-untracked">
+          {actions.untracked} tracked effect{actions.untracked === 1 ? " has" : "s have"} nothing to follow yet. Click “Follow my hands”.
+        </p>
+      )}
+      <p className="muted small">Adds an effect that follows a hand, the face or the body. It fades out by itself when the point is not visible.</p>
     </div>
   );
 }

@@ -2,14 +2,15 @@
 // the left and the selected clip's settings on the right. Opens a .project.json (the AI's
 // result is one), saves by itself, and exports with the FFmpeg engine.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BrollFound, BrollRequest, OpenedProject, Peaks, Thumbs } from "../../shared/api";
+import type { BrollFound, BrollRequest, OpenedProject, Peaks, Thumbs, TrackStatus } from "../../shared/api";
+import { addTrackFx, untrackedEffects } from "../../shared/trackEdit";
 import { addBroll, brollCredits, brollExclusions, replaceBroll, setBrollRequest } from "../../shared/brollEdit";
 import {
   EditError, addMedia, clipEnd, deleteClips, findClip, insertMedia, mainTrack, projectDuration, setClipProps, setSpeed, setTrackFlag,
   splitAt, splitClip, type ClipPatch,
 } from "../../shared/edit";
 import { baseName, exportPathFor, resolveMediaPath } from "../../shared/paths";
-import type { BrollMeta, Media, Project } from "../../shared/types";
+import type { BrollMeta, Media, Project, TrackEffect } from "../../shared/types";
 import { createHistory, pushHistory, redoHistory, undoHistory, type History } from "../../shared/undo";
 import { FrameDialog } from "../components/Dialogs";
 import { Player, mmss, type PlayerHandle } from "../components/Player";
@@ -21,6 +22,7 @@ import { Inspector } from "./Inspector";
 import { LeftPanel } from "./LeftPanel";
 import { ProjectPanel } from "./ProjectPanel";
 import { Recorder } from "./Recorder";
+import { TrackSetup } from "./TrackSetup";
 import type { BrollAsk } from "./BrollPanel";
 import { VocabularyDialog } from "./VocabularyDialog";
 import { SHORTCUTS, actionFor, typingInto, type Action } from "./shortcuts";
@@ -62,6 +64,16 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
   const [brollTask, setBrollTask] = useState<{ id: string; label: string; percent?: number; target: BrollTarget } | null>(null);
   const brollTaskRef = useRef<typeof brollTask>(null);
   brollTaskRef.current = brollTask;
+
+  // ---- tracking: follow the speaker's hands / face (the engine saves the points in the project file)
+  const [trackStatus, setTrackStatus] = useState<TrackStatus | null>(null);
+  const [trackTask, setTrackTask] = useState<{ id: string; label: string; percent?: number } | null>(null);
+  const [showTrackSetup, setShowTrackSetup] = useState(false);
+  const trackTaskRef = useRef<typeof trackTask>(null);
+  trackTaskRef.current = trackTask;
+  useEffect(() => {
+    api.trackStatus().then((r) => !("error" in r) && setTrackStatus(r));
+  }, []);
   const [frame, setFrame] = useState<{ url?: string; error?: string } | null>(null);
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef<PlayerHandle>(null);
@@ -430,6 +442,56 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
     setFolders((f) => ({ ...f, broll: folder }));
   };
 
+  useEffect(
+    () =>
+      api.onTrack(async (u) => {
+        const task = trackTaskRef.current;
+        if (!task || u.taskId !== task.id) return;
+        if (!u.done) {
+          setTrackTask({ ...task, label: u.label ?? task.label, percent: u.percent ?? task.percent });
+          return;
+        }
+        setTrackTask(null);
+        if (u.cancelled) return;
+        if (u.error) return setToast(u.error);
+        // The engine saved the points in the project file: read it back (one undo step).
+        const o = await api.openProject(path);
+        if (!o.project) return setToast(o.error ?? "Could not read the tracked project.");
+        savedProject.current = o.project;
+        if (histRef.current) commit(pushHistory(histRef.current, o.project));
+        savedProject.current = histRef.current?.present ?? o.project;
+        const found = Object.entries(u.found ?? {}).filter(([, v]) => v >= 0.25).map(([k, v]) => `${k.replace(/_/g, " ")} ${Math.round(v * 100)}%`);
+        setToast(found.length ? `Followed: ${found.join(", ")} of the tracked time.` : "Followed, but no hand or face was found. Is the speaker visible and well lit?");
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [path],
+  );
+
+  const followHands = async () => {
+    if (trackTaskRef.current) return;
+    const problem = await saveNow();
+    if (problem) return setToast(problem);
+    const id = await api.startTrack(path);
+    setTrackTask({ id, label: "Following your hands and face" });
+  };
+
+  const addTracked = async (effect: TrackEffect) => {
+    let media: string | undefined;
+    if (effect === "clip") {
+      // Your own effect clip: a video or picture (black background, or with its own alpha).
+      const files = await api.pickMedia();
+      if (!files.length) return;
+      const r = await api.mediaInfo(files.slice(0, 1));
+      const m = r.media.find((x) => x.kind !== "audio");
+      if (!m) return setToast(r.errors[0]?.message ?? "Choose a video or picture file for your effect.");
+      const added = addMedia(histRef.current!.present, [m]);
+      media = added.ids[0];
+      apply((p) => addMedia(p, [m]).project);
+    }
+    withNewClip((p) => addTrackFx(p, effect, playhead, { media }));
+    if (project && !project.tracking) setToast("Added. Now click “Follow my hands in this video” so the effect has something to follow.");
+  };
+
   const retranscribe = async (id: string) => {
     if (!project) return;
     const f = findClip(project, id);
@@ -528,6 +590,16 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
           onFx: (fx) => withNewClip((p) => addFx(p, fx, playhead)),
           onTransition: (fx) => withNewClip((p) => addTransition(p, fx, playhead)),
           onZoom: (kind) => withNewClip((p) => addZoom(p, kind, playhead)),
+          tracked: {
+            status: trackStatus,
+            task: trackTask,
+            hasTracking: Boolean(project && Object.keys(project.tracking ?? {}).length),
+            untracked: project ? untrackedEffects(project).length : 0,
+            onAdd: (effect) => void addTracked(effect),
+            onFollow: () => void followHands(),
+            onCancel: () => trackTask && void api.cancelTrack(trackTask.id),
+            onSetup: () => setShowTrackSetup(true),
+          },
           onGrade: (grade, whole) =>
             withNewClip((p) => addGrade(p, grade, whole ? undefined : mainTrack(p)?.clips.find((c) => playhead >= c.start && playhead < clipEnd(c))?.id)),
         }}
@@ -550,6 +622,7 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
           onSpeed={(id, sp) => apply((p) => setSpeed(p, id, sp), `speed:${id}`)}
           onRamp={(id, ramp) => apply((p) => speedRamp(p, id, ramp as never))}
           onDelete={remove}
+          tracked={{ ready: Boolean(trackStatus?.available), busy: Boolean(trackTask), onFollow: () => void followHands(), onSetup: () => setShowTrackSetup(true) }}
           broll={{
             task: brollTask?.target.kind === "clip" ? brollTask : null,
             onCancel: () => brollTask && void api.cancelBroll(brollTask.id),
@@ -621,9 +694,10 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
         </div>
       )}
       {showExport && (
-        <ExportDialog projectPath={path} defaultOutput={exportPathFor(path)} fps={fps} beforeExport={saveNow} onClose={() => setShowExport(false)} broll={brollCredits(project)} />
+        <ExportDialog projectPath={path} defaultOutput={exportPathFor(path)} fps={fps} beforeExport={saveNow} onClose={() => setShowExport(false)} broll={brollCredits(project)} untracked={untrackedEffects(project).length} />
       )}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
+      {showTrackSetup && trackStatus && <TrackSetup status={trackStatus} onStatus={setTrackStatus} onClose={() => setShowTrackSetup(false)} />}
       {showRecorder && (
         <Recorder
           startAt={mmss(playhead)}

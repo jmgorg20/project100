@@ -18,7 +18,7 @@ export const SIZES: { height: ExportOptions["height"]; label: string }[] = [
   { height: 960, label: "540 × 960" },
 ];
 
-export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, onClose, broll }: {
+export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, onClose, broll, untracked }: {
   projectPath: string;
   defaultOutput: string;
   fps: number;
@@ -27,6 +27,8 @@ export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, on
   onClose: () => void;
   /** Stock credits to post with the video, and how many clips were made with AI. */
   broll?: { credits: string[]; aiClips: number };
+  /** Tracked effects with nothing to follow (they will not show). */
+  untracked?: number;
 }) {
   const [copied, setCopied] = useState(false);
   const creditText = broll?.credits.length ? `Credits: ${broll.credits.join("; ")}` : "";
@@ -106,6 +108,11 @@ export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, on
           </div>
         </div>
 
+        {Boolean(untracked) && (
+          <p className="warn small" role="alert" data-testid="export-untracked">
+            {untracked} tracked effect{untracked === 1 ? " has" : "s have"} nothing to follow (the video was not followed yet), so {untracked === 1 ? "it" : "they"} will not show. Close this, click “Follow my hands”, then export. · Hindi lalabas.
+          </p>
+        )}
         {broll && broll.aiClips > 0 && (
           <p className="notice small" data-testid="export-ai-label">
             <strong>AI-made content:</strong> {broll.aiClips} B-roll clip{broll.aiClips === 1 ? " was" : "s were"} made with AI. When you post, turn on the

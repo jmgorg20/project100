@@ -88,7 +88,8 @@ describe("main process with the real engine", () => {
       "engine:estimate", "engine:frame", "engine:check", "gen:status", "gen:setWangp", "gen:setTier", "gen:benchmark",
       "gen:compare", "gen:cancel", "app:openPath", "app:showInFolder", "project:open", "project:save", "dialog:project",
       "dialog:media", "dialog:exportPath", "media:info", "media:peaks", "media:thumbs", "export:start", "export:cancel",
-      "vocab:get", "vocab:set", "library:list", "dialog:folder", "media:saveRecording", "project:retranscribe", "broll:start", "broll:cancel"]) {
+      "vocab:get", "vocab:set", "library:list", "dialog:folder", "media:saveRecording", "project:retranscribe", "broll:start", "broll:cancel",
+      "track:status", "track:start", "track:cancel", "track:models"]) {
       expect(handlers.has(channel), channel).toBe(true);
     }
   });
@@ -458,4 +459,56 @@ synthetic.make_image(d / "coffee" / "cup.png"); synthetic.make_image(d / "coffee
       await call("settings:set", { brollFolder: "" });
     }
   }, 300_000);
+
+  // ---------------------------------------------------------------- tracking (follow hands / face)
+
+  it("follows the hands: status, then the engine saves the points in the project (a stand-in MediaPipe)", async () => {
+    // Without MediaPipe: a plain explanation, no crash.
+    const none = (await call("track:status")) as { available: boolean; installed: boolean; problems: string[] };
+    expect(none.available).toBe(false);
+    expect(none.problems.join(" ")).toMatch(/pip install mediapipe|No hand model/);
+    expect(((await call("track:models", ["elbow"])) as { error: string }).error).toMatch(/Choose a model/);
+
+    const models = path.join(tmp, "tracking models");
+    fs.mkdirSync(models, { recursive: true });
+    for (const f of ["hand_landmarker.task", "blaze_face_short_range.tflite"]) fs.writeFileSync(path.join(models, f), "x");
+    const saved = { PYTHONPATH: process.env.PYTHONPATH, AUTOEDIT_TRACKING_MODELS: process.env.AUTOEDIT_TRACKING_MODELS };
+    process.env.PYTHONPATH = [path.join(repo, "tests", "fake_mediapipe"), saved.PYTHONPATH].filter(Boolean).join(path.delimiter);
+    process.env.AUTOEDIT_TRACKING_MODELS = models;
+    try {
+      const status = (await call("track:status")) as { available: boolean; hands: boolean; face: boolean; models: { kind: string; present: boolean }[] };
+      expect(status).toMatchObject({ available: true, hands: true, face: true });
+      expect(status.models.find((m) => m.kind === "pose")!.present).toBe(false);
+
+      const file = path.join(tmp, "track me.project.json");
+      execFileSync(python, ["-c", `
+import sys; sys.path.insert(0, ".")
+from autoedit.project import media_from_file, new_project, save_project
+p = new_project("track me", normalize_audio=False)
+p["media"] = [media_from_file(sys.argv[1], "m1")]
+t = {x["id"]: x for x in p["tracks"]}
+t["main"]["clips"] = [{"id": "v1", "type": "video", "media": "m1", "start": 0.0, "duration": 4.0, "in": 0.0, "out": 4.0}]
+t["effects"]["clips"] = [{"id": "k1", "type": "trackfx", "start": 0.5, "duration": 1.5, "effect": "glow", "point": "index_tip", "hand": "right"}]
+save_project(p, sys.argv[2])
+`, path.join(tmp, "talk.mp4"), file], { cwd: repo });
+      const taskId = (await call("track:start", file)) as string;
+      const updates = () => sent.filter(([c, u]) => c === "track:task" && (u as { taskId: string }).taskId === taskId).map(([, u]) => u as { done?: boolean; error?: string; label?: string; percent?: number; found?: Record<string, number> });
+      await vi.waitFor(() => expect(updates().some((u) => u.done)).toBe(true), { timeout: 120_000, interval: 200 });
+      const last = updates().at(-1)!;
+      expect(last.error).toBeUndefined();
+      expect(last.found!.right_index_tip).toBeGreaterThan(0.5);
+      // (A label and progress arrive only when the detector really runs: a saved track for this video is reused.)
+      // The project file (checked by the engine on opening) now has the points, and only the ones the effect uses.
+      const opened = (await call("project:open", file)) as { project?: { tracking?: Record<string, { points: Record<string, { c: number[] }> }> }; error?: string };
+      expect(opened.error).toBeUndefined();
+      const mediaId = Object.keys(opened.project!.tracking!)[0];
+      expect(Object.keys(opened.project!.tracking![mediaId].points).sort()).toEqual(["right_index_tip"]);
+      expect(opened.project!.tracking![mediaId].points.right_index_tip.c.some((c) => c > 0.5)).toBe(true);
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }, 180_000);
 });

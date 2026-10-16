@@ -1664,3 +1664,19 @@ kbd {
   font-size: 15px;
   margin: var(--s2) 0 0;
 }
+
+/* ---- tracked effects */
+.canvas .picture .trackfx-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1080px;
+  height: 1920px;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.clip.type-trackfx {
+  background: linear-gradient(180deg, #8b5cf6, #6d3fd8);
+  color: #fff;
+}

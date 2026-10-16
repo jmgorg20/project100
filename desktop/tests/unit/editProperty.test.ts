@@ -15,6 +15,7 @@ import { addCaption, addEmoji, correctCaptions, editWordText, setCaptionLook, to
 import { addFx, addGrade, addTransition, addZoom, setAudioSettings, speedRamp } from "../../src/shared/effectsEdit";
 import { addBroll, replaceBroll, setBrollRequest } from "../../src/shared/brollEdit";
 import type { BrollMeta } from "../../src/shared/types";
+import { addTrackFx } from "../../src/shared/trackEdit";
 
 const python = process.platform === "win32" ? "python" : "python3";
 const repo = path.resolve(__dirname, "..", "..", "..");
@@ -32,7 +33,8 @@ function randomEdit(p: Project, r: () => number): Project {
   if (!clips.length) return insertMedia(p, "m1", 0).project;
   const { t, c } = clips[Math.floor(r() * clips.length)];
   const at = r() * (projectDuration(p) + 1);
-  const pick = Math.floor(r() * 22);
+  const pick = Math.floor(r() * 25);
+  if (pick >= 22) return trackEdit(p, r, t, c, at);
   if (pick >= 19) return brollEdit(p, r, t, c, at);
   if (pick >= 11) return phase2Edit(p, r, pick, t, c, at);
   switch (pick) {
@@ -59,6 +61,19 @@ function randomEdit(p: Project, r: () => number): Project {
     default:
       return moveClip(p, clips.find((x) => x.t.kind !== "video")?.c.id ?? c.id, at).project;
   }
+}
+
+function trackEdit(p: Project, r: () => number, _t: Project["tracks"][number], c: Project["tracks"][number]["clips"][number], at: number): Project {
+  if (c.type === "trackfx" && r() < 0.6) {
+    const effects = ["glow", "spark", "aura", "energy"] as const;
+    const points = ["palm", "index_tip", "fingertips", "face", "body", "wrist"] as const;
+    return setClipProps(p, c.id, r() < 0.5
+      ? { effect: effects[Math.floor(r() * 4)], point: points[Math.floor(r() * 6)], hand: (["left", "right", "any"] as const)[Math.floor(r() * 3)] }
+      : { size: r() * 5, smooth: r() * 1.4 - 0.2, intensity: r() * 1.3, color: r() < 0.5 ? "#33CCFF" : "", fade_in: r() * 2, fade_out: r() * 2 });
+  }
+  const effects = ["glow", "spark", "aura", "energy", "clip"] as const;
+  const effect = effects[Math.floor(r() * 5)];
+  return addTrackFx(p, effect, at, { media: effect === "clip" ? (r() < 0.5 ? "m2" : "m1") : undefined, seconds: 0.5 + r() * 3 }).project;
 }
 
 function brollEdit(p: Project, r: () => number, t: Project["tracks"][number], c: Project["tracks"][number]["clips"][number], at: number): Project {

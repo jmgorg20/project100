@@ -5,10 +5,19 @@ import type { CaptionLook } from "../../shared/captionEdit";
 import { allowedProps, findClip, hasSource, speedOf, type ClipPatch } from "../../shared/edit";
 import { BROLL_STYLES, describeSource } from "../../shared/brollEdit";
 import { FX_INFO, GRADES, RAMPS } from "../../shared/effectsEdit";
-import type { BrollMeta, BrollStyle, Clip, FxEffect, Media, Project, Word } from "../../shared/types";
+import { HAND_LABELS, POINTS, TRACK_FX, trackState } from "../../shared/trackEdit";
+import type { BrollMeta, BrollStyle, Clip, FxEffect, Media, Project, TrackEffect, TrackHand, TrackPointKind, Word } from "../../shared/types";
 import { mmss } from "../components/Player";
 import { TaskStatus, type BrollTask } from "./BrollPanel";
 import { CaptionEditor } from "./CaptionEditor";
+
+export interface TrackClipActions {
+  /** Following (tracking) is available / running. */
+  ready: boolean;
+  busy: boolean;
+  onFollow: () => void;
+  onSetup: () => void;
+}
 
 export interface BrollClipActions {
   task: BrollTask | null;
@@ -41,6 +50,7 @@ interface InspectorProps {
   onDelete: () => void;
   captions: CaptionActions;
   broll: BrollClipActions;
+  tracked: TrackClipActions;
   /** Shown when nothing is selected (the project's own settings). */
   empty?: ReactNode;
 }
@@ -80,7 +90,7 @@ const SPEEDS = [0.5, 1, 1.5, 2, 3];
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(1)} s`;
 
-export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, broll, empty }: InspectorProps) {
+export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, broll, tracked, empty }: InspectorProps) {
   if (selection.length > 1) {
     return (
       <div className="inspector" data-testid="inspector">
@@ -129,7 +139,9 @@ export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDele
                 : "Punch-in zoom"
               : clip.type === "fx"
                 ? `Effect: ${FX_INFO[clip.effect as FxEffect]?.label ?? clip.effect}`
-                : "Colour grade";
+                : clip.type === "trackfx"
+                  ? `Tracked effect: ${TRACK_FX[clip.effect as TrackEffect]?.label ?? clip.effect}`
+                  : "Colour grade";
   const crop = { zoom: clip.crop?.zoom ?? 1, x: clip.crop?.x ?? 0.5, y: clip.crop?.y ?? 0.5 };
   const maxFade = Math.min(5, clip.duration);
 
@@ -239,7 +251,9 @@ export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDele
         </Section>
       )}
 
-      {allowed.has("effect") && (
+      {clip.type === "trackfx" && <TrackFxSection project={project} clip={clip} set={set} actions={tracked} />}
+
+      {allowed.has("effect") && clip.type !== "trackfx" && (
         <Section title="Effect · Epekto">
           <select value={clip.effect} onChange={(e) => set({ effect: e.target.value as FxEffect }, "effect")} aria-label="Effect">
             {(Object.keys(FX_INFO) as FxEffect[]).map((k) => (
@@ -332,6 +346,95 @@ function BrollSection({ clip, media, actions }: { clip: Clip; media?: Media; act
           </div>
         </>
       )}
+    </Section>
+  );
+}
+
+function TrackFxSection({ project, clip, set, actions }: { project: Project; clip: Clip; set: (patch: ClipPatch, key: string) => void; actions: TrackClipActions }) {
+  const effect = (clip.effect as TrackEffect) ?? "glow";
+  const point = clip.point ?? "palm";
+  const isHandPoint = POINTS.find((p) => p.id === point)?.hand ?? true;
+  const state = trackState(project, clip);
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const own = TRACK_FX[effect].color;
+  const files = project.media.filter((m) => m.kind !== "audio");
+  const maxFade = Math.min(5, clip.duration);
+  return (
+    <Section title="Follows · Sinusundan">
+      <label className="insp-field">
+        <span className="insp-label">Effect</span>
+        <select value={effect} onChange={(e) => set({ effect: e.target.value as TrackEffect, ...(e.target.value === "clip" && !clip.media && files[0] ? { media: files[0].id } : {}) }, "tfx-effect")} aria-label="Tracked effect">
+          {(Object.keys(TRACK_FX) as TrackEffect[]).map((k) => (
+            <option key={k} value={k}>{TRACK_FX[k].label} · {TRACK_FX[k].tl}</option>
+          ))}
+        </select>
+      </label>
+      <label className="insp-field">
+        <span className="insp-label">Follows</span>
+        <select value={point} onChange={(e) => set({ point: e.target.value as TrackPointKind }, "tfx-point")} aria-label="Follows">
+          {POINTS.map((p) => (
+            <option key={p.id} value={p.id}>{p.label} · {p.tl}</option>
+          ))}
+        </select>
+      </label>
+      {isHandPoint && (
+        <label className="insp-field">
+          <span className="insp-label">Which hand · Aling kamay</span>
+          <select value={clip.hand ?? "any"} onChange={(e) => set({ hand: e.target.value as TrackHand }, "tfx-hand")} aria-label="Which hand">
+            {(Object.keys(HAND_LABELS) as TrackHand[]).map((h) => (
+              <option key={h} value={h}>{HAND_LABELS[h]}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {!state.tracked ? (
+        <div className="notice small" data-testid="track-state">
+          <p style={{ margin: 0 }}>This video has not been followed yet, so there is nothing for the effect to follow. · Hindi pa nasusundan ang video.</p>
+          <button className="btn small primary" style={{ marginTop: 6 }} onClick={actions.ready ? actions.onFollow : actions.onSetup} disabled={actions.busy} data-testid="track-follow-here">
+            {actions.ready ? "Follow my hands in this video" : "Set up tracking…"}
+          </button>
+        </div>
+      ) : state.found !== null ? (
+        <p className={`small${state.found < 0.25 ? " warn" : " muted"}`} data-testid="track-state" style={{ margin: 0 }}>
+          {state.names.length === 0
+            ? "This point was not saved for this video. Follow again."
+            : state.found < 0.25
+              ? `Found in only ${pct(state.found)} of this moment, so the effect will mostly not show. A clearer, brighter shot of the hand helps.`
+              : `Found in ${pct(state.found)} of this moment. When it is lost, the effect fades out instead of jumping.`}
+        </p>
+      ) : null}
+      <Slider label="Strength" value={clip.intensity ?? 0.8} min={0} max={1} step={0.01} format={pct} onChange={(v) => set({ intensity: v }, "intensity")} testId="intensity" />
+      <Slider label="Size" value={clip.size ?? 1} min={0.1} max={4} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => set({ size: v }, "tfx-size")} testId="tfx-size" />
+      <Slider label="Steadiness" hint="0 = exact, 1 = smooth" value={clip.smooth ?? 0.5} min={0} max={1} step={0.01} format={pct} onChange={(v) => set({ smooth: v }, "tfx-smooth")} testId="tfx-smooth" />
+      <label className="insp-field">
+        <span className="insp-label">Colour · Kulay</span>
+        <span className="row">
+          <input type="color" value={clip.color ?? own} onChange={(e) => set({ color: e.target.value }, "tfx-color")} aria-label="Effect colour" data-testid="tfx-color" />
+          <button className="btn small ghost" onClick={() => set({ color: "" }, "tfx-color-reset")} disabled={!clip.color}>Own colour</button>
+        </span>
+      </label>
+      <Slider label="Fade in" value={clip.fade_in ?? 0.15} min={0} max={maxFade} step={0.05} format={(v) => `${v.toFixed(2)} s`} onChange={(v) => set({ fade_in: v }, "fade_in")} testId="fade-in" />
+      <Slider label="Fade out" value={clip.fade_out ?? 0.2} min={0} max={maxFade} step={0.05} format={(v) => `${v.toFixed(2)} s`} onChange={(v) => set({ fade_out: v }, "fade_out")} testId="fade-out" />
+      {effect === "clip" && (
+        <>
+          <label className="insp-field">
+            <span className="insp-label">Your clip</span>
+            <select value={clip.media ?? ""} onChange={(e) => set({ media: e.target.value }, "tfx-media")} aria-label="Effect clip file">
+              {files.map((m) => (
+                <option key={m.id} value={m.id}>{m.name ?? m.path.split(/[\\/]/).pop()}</option>
+              ))}
+            </select>
+          </label>
+          <label className="insp-field">
+            <span className="insp-label">Background</span>
+            <select value={clip.blend ?? "screen"} onChange={(e) => set({ blend: e.target.value as "screen" | "alpha" }, "tfx-blend")} aria-label="Effect clip background">
+              <option value="screen">Black background (screen blend)</option>
+              <option value="alpha">Transparent (has its own alpha)</option>
+            </select>
+          </label>
+        </>
+      )}
+      <p className="muted small">Drag the clip's edges on the timeline to change when it starts and ends.</p>
     </Section>
   );
 }

@@ -347,6 +347,12 @@ MODEL_FILES = {"hand": "hand_landmarker.task", "face": "blaze_face_short_range.t
 MODEL_SIZES = {"hand": "about 8 MB", "face": "under 1 MB", "pose": "about 6 MB"}
 
 
+def models_dir():
+    """Where the model files live: models/tracking/, or the folder in AUTOEDIT_TRACKING_MODELS."""
+    import os
+    return Path(os.environ.get("AUTOEDIT_TRACKING_MODELS") or MODEL_DIR)
+
+
 def settings_of(cfg):
     """The tracking settings: config.yaml's, with the models folder as the default place for
     the model files (`models/tracking/`), so most people need no setting at all."""
@@ -356,7 +362,7 @@ def settings_of(cfg):
         given = str(t.get(f"{kind}_model") or "")
         if given:
             return given
-        default = MODEL_DIR / MODEL_FILES[kind]
+        default = models_dir() / MODEL_FILES[kind]
         return str(default) if default.is_file() else ""
     return {"hand_model": model("hand"), "face_model": model("face"), "pose_model": model("pose"),
             "fps": float(t.get("fps") or 30),
@@ -672,8 +678,8 @@ def _mmss(seconds):
 def model_info():
     """What each model is, where it comes from and where it would be saved."""
     return [{"kind": k, "file": MODEL_FILES[k], "url": MODEL_URLS[k], "page": MODEL_PAGES[k],
-             "size": MODEL_SIZES[k], "path": str(MODEL_DIR / MODEL_FILES[k]),
-             "present": (MODEL_DIR / MODEL_FILES[k]).is_file()} for k in MODEL_FILES]
+             "size": MODEL_SIZES[k], "path": str(models_dir() / MODEL_FILES[k]),
+             "present": (models_dir() / MODEL_FILES[k]).is_file()} for k in MODEL_FILES]
 
 
 def download_models(kinds, folder=None, cancel=None, log=print):
@@ -682,7 +688,7 @@ def download_models(kinds, folder=None, cancel=None, log=print):
     fetches a model by itself."""
     import os
     import requests
-    folder = Path(folder or MODEL_DIR)
+    folder = Path(folder or models_dir())
     folder.mkdir(parents=True, exist_ok=True)
     paths = {}
     for kind in kinds:

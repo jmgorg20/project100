@@ -506,7 +506,7 @@ export function setSpeed(p: Project, id: string, speed: number): Project {
 }
 
 export type ClipPatch = Partial<
-  Pick<Clip, "volume" | "fade_in" | "fade_out" | "opacity" | "crop" | "fit" | "x" | "y" | "width" | "height" | "animation" | "amount" | "anchor_y" | "grade" | "label" | "ease" | "intensity" | "effect">
+  Pick<Clip, "volume" | "fade_in" | "fade_out" | "opacity" | "crop" | "fit" | "x" | "y" | "width" | "height" | "animation" | "amount" | "anchor_y" | "grade" | "label" | "ease" | "intensity" | "effect" | "point" | "hand" | "size" | "smooth" | "color" | "blend" | "media">
 >;
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -523,6 +523,7 @@ export function allowedProps(track: Track, clip: Clip): Set<keyof ClipPatch> {
   else if (clip.type === "zoom") add("amount", "anchor_y", "ease");
   else if (clip.type === "grade") add("grade", "intensity");
   else if (clip.type === "fx") add("effect", "intensity");
+  else if (clip.type === "trackfx") add("effect", "point", "hand", "size", "smooth", "color", "blend", "media", "intensity", "fade_in", "fade_out");
   return a;
 }
 
@@ -553,6 +554,23 @@ export function setClipProps(p: Project, id: string, patch: ClipPatch): Project 
         const v = r4(clamp(patch[k] ?? 0, 0, Math.max(0, c.duration - other)));
         if (v > 0) n[k] = v;
         else delete n[k];
+      }
+    }
+    if (c.type === "trackfx") {
+      if (patch.size !== undefined) n.size = r4(clamp(patch.size, 0.1, 4));
+      if (patch.smooth !== undefined) n.smooth = r4(clamp(patch.smooth, 0, 1));
+      if (patch.color !== undefined) {
+        if (/^#[0-9a-fA-F]{6}$/.test(patch.color)) n.color = patch.color.toLowerCase();
+        else delete n.color; // "" or anything else: the effect's own colour
+      }
+      if (patch.effect !== undefined || patch.media !== undefined) {
+        if (n.effect === "clip") {
+          const m = p.media.find((x) => x.id === n.media);
+          if (!m || m.kind === "audio") throw new EditError("Choose a video or picture file for your own effect clip.");
+        } else {
+          delete n.media;
+          delete n.blend;
+        }
       }
     }
     if (patch.crop !== undefined) {
