@@ -66,7 +66,74 @@ Lock a track (🔓 → 🔒) to keep it exactly where it is.
 - **B-roll / photo:** position, size, opacity, pop-in animation.
 - **Zoom effect, colour grade:** amount, and which colour look.
 
-Caption text editing, styles per caption, sound effects and transitions come in the next update.
+
+## Captions · Mga caption
+
+Click a caption **on the picture** (or its clip on the timeline). On the right you can then:
+- **Words:**
+  - type over a word (typing two words splits its time between them; clearing a word removes it);
+  - change when it starts;
+  - ★ highlight it in the keyword colour;
+  - add an emoji (😂🔥❤️👍…) after the word you clicked last.
+- **Listen again · Pakinggan ulit:** sends that part of the video to the transcriber again,
+  with your vocabulary, and replaces just those captions. Undo brings the old ones back.
+  It needs your Groq key, or the local transcriber.
+- **Look:**
+  - all 13 caption styles;
+  - place: the style's own, lower, middle or top;
+  - size;
+  - whether ★ highlights are coloured;
+  - tick **Change every caption** to apply it to all of them.
+- **Add a caption:** with nothing selected, type it under **Captions** on the right; it goes
+  at the playhead.
+
+### Your words & corrections (Taglish)
+
+With nothing selected, click **Your words & corrections**:
+- **Words:** names, brands and slang the transcriber should spell right (GCash, Shopee,
+  Ate Rose…). They are sent with every transcription as a hint.
+- **Corrections:** "when it hears… → write…" (e.g. *g cash → GCash*). Case doesn't matter.
+  They are applied to every transcript, including ones saved before.
+- **Save & fix this video's captions** also fixes the captions already on this timeline.
+
+They are kept in `vocabulary.json` next to the editor (start from `vocabulary.example.json`),
+so the command line uses them too.
+
+## Sound · Tunog
+
+With nothing selected:
+- **Even out the loudness:** −14 LUFS is what TikTok, Reels and YouTube use.
+- **Lower the music when someone talks:** ducking.
+- **Reduce background noise:** steady fans and hiss. The noise level is measured in the
+  pauses of your speech, so it adapts to each recording.
+- **🎙 Record a voice-over:**
+  1. pick a microphone and watch the level bar;
+  2. press Record (3-2-1);
+  3. press Stop and listen;
+  4. **Use it**: it goes on the Voice-over track at the playhead, and the file is kept in a
+     `recordings` folder next to the project.
+
+The **Music** and **Sound FX** tabs on the left list your own folders (choose them once). You
+can search, listen, and **＋** a file at the playhead. The app never ships music: use only
+sounds you have the right to use.
+
+Ducking and noise reduction are heard in the **export**; the live preview plays the sound as
+recorded.
+
+## Effects and transitions · Mga epekto
+
+The **Effects** tab adds, at the playhead:
+- punch-in zoom, smooth zoom;
+- shake, flash, dip to black, glitch, whip blur.
+
+**Transitions** go on the nearest cut of the main video (flash, whip blur, dip to black,
+glitch). **Colour looks** go on the clip at the playhead, or on the whole video.
+
+Each one is a normal clip on the Effects track: drag it, trim it, and set its **Strength** on
+the right. A zoom has **Zoom in over** (0 = punch-in).
+
+**Speed ramp:** select a main clip and choose a ramp under Speed (speed up, slow down, bullet
+time, montage). The clip becomes 3 parts with their own speeds, which you can change later.
 
 ### Keyboard shortcuts · Mga shortcut
 
@@ -116,4 +183,9 @@ Known differences:
 - fonts, outlines and colour grades are drawn by the browser;
 - volume above 100% plays at 100% in the preview;
 - "Show all, blurred background" shows black instead of the blurred copy;
-- the sound of B-roll clips is not used (in the export either).
+- the sound of B-roll clips is not used (in the export either);
+- effects:
+  - the flash, dip, shake and smooth zoom follow the engine's timing;
+  - glitch and whip blur are only rough look-alikes;
+  - colour strength is blended in CSS;
+- ducking and noise reduction are only in the export.

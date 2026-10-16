@@ -132,7 +132,7 @@ function EffectsList({ actions }: { actions: EffectActions }) {
       <label className="toggle-inline small">
         <input type="checkbox" checked={whole} onChange={(e) => setWhole(e.target.checked)} /> Whole video (else: the clip at the playhead)
       </label>
-      <div className="fx-grid">
+      <div className="fx-grid grades">
         {GRADES.filter((g) => g !== "none").map((g) => (
           <button key={g} className="btn small" onClick={() => actions.onGrade(g, whole)}>{g.replace(/_/g, " ")}</button>
         ))}
