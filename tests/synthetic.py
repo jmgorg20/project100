@@ -84,3 +84,18 @@ def pcm(media, rate=8000):
     out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(media), "-ac", "1", "-ar", str(rate),
                           "-f", "s16le", "-"], capture_output=True, check=True).stdout
     return array.array("h", out)
+
+
+def make_marker_video(path, width=720, height=1280, duration=4.0, marker=(0.3, 0.6), size=0.04):
+    """A dark picture with one white square at `marker` (0-1 of the frame), and silence: where a
+    tracked effect should land is visible in the picture."""
+    mx, my = int(marker[0] * width), int(marker[1] * height)
+    side = max(4, int(size * width))
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+         f"color=c=0x101018:s={width}x{height}:r=30:d={duration},"
+         f"drawbox=x={mx - side // 2}:y={my - side // 2}:w={side}:h={side}:color=white:t=fill",
+         "-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo", "-t", str(duration),
+         "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", str(path)],
+        check=True)
+    return Path(path)

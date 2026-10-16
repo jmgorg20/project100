@@ -45,6 +45,13 @@
     "transcript": {
       "$ref": "#/$defs/transcript"
     },
+    "tracking": {
+      "type": "object",
+      "description": "Tracked points per media id.",
+      "additionalProperties": {
+        "$ref": "#/$defs/trackData"
+      }
+    },
     "meta": {
       "type": "object",
       "description": "Free-form notes (who made it, pipeline settings)."
@@ -382,7 +389,22 @@
                       "$ref": "#/$defs/fxClip"
                     },
                     "else": {
-                      "$ref": "#/$defs/zoomClip"
+                      "if": {
+                        "properties": {
+                          "type": {
+                            "const": "trackfx"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      },
+                      "then": {
+                        "$ref": "#/$defs/trackFxClip"
+                      },
+                      "else": {
+                        "$ref": "#/$defs/zoomClip"
+                      }
                     }
                   }
                 }
@@ -1140,6 +1162,198 @@
         "credit": {
           "type": "string",
           "maxLength": 600
+        }
+      }
+    },
+    "trackPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "c"
+      ],
+      "description": "One tracked point: samples at start + i / fps. x, y: 0-1 across the source frame (y down); c: confidence (0 = not found); s: size as a fraction of the frame width.",
+      "properties": {
+        "x": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "y": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "c": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "s": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "trackData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fps",
+        "points"
+      ],
+      "description": "Where the speaker's hands, face and body are in one video (see docs/tracking.md).",
+      "properties": {
+        "fps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 120
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "swap_hands": {
+          "type": "boolean"
+        },
+        "points": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/trackPoint"
+          }
+        }
+      }
+    },
+    "trackFxClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "effect"
+      ],
+      "description": "An effect that follows a tracked point (a hand, the face or the body) of the main video: a glow, sparks, an aura, pulsing energy rings, or your own clip (black background, screen blend; or with alpha).",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "trackfx"
+        },
+        "effect": {
+          "enum": [
+            "glow",
+            "spark",
+            "aura",
+            "energy",
+            "clip"
+          ]
+        },
+        "point": {
+          "enum": [
+            "palm",
+            "wrist",
+            "thumb_tip",
+            "index_tip",
+            "middle_tip",
+            "ring_tip",
+            "pinky_tip",
+            "fingertips",
+            "face",
+            "body"
+          ],
+          "description": "Which point to follow (default palm). 'fingertips' = all five fingertips."
+        },
+        "hand": {
+          "enum": [
+            "left",
+            "right",
+            "any"
+          ],
+          "description": "Which hand (default any: the one found most). Ignored for face and body."
+        },
+        "intensity": {
+          "$ref": "#/$defs/intensity"
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 4,
+          "description": "1 = normal size."
+        },
+        "smooth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "0 = follow the raw points, 1 = very steady."
+        },
+        "fade_in": {
+          "$ref": "#/$defs/fade"
+        },
+        "fade_out": {
+          "$ref": "#/$defs/fade"
+        },
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "blend": {
+          "enum": [
+            "screen",
+            "alpha"
+          ],
+          "description": "effect 'clip': black background added with screen blend (default), or a clip with its own alpha."
+        }
+      },
+      "if": {
+        "properties": {
+          "effect": {
+            "const": "clip"
+          }
+        },
+        "required": [
+          "effect"
+        ]
+      },
+      "then": {
+        "required": [
+          "media"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "media"
+          ]
         }
       }
     }

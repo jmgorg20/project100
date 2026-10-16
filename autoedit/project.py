@@ -127,6 +127,13 @@ def _semantic_problems(data):
 
     if video_tracks > 1:
         problems.append("tracks: only one main video track is allowed")
+    from .tracking import check_track_data
+    for media_id, track in (data.get("tracking") or {}).items():
+        if media_id not in media:
+            problems.append(f"tracking: unknown media '{media_id}'")
+        elif media[media_id]["kind"] != "video":
+            problems.append(f"tracking: '{media_id}' is not a video")
+        problems += [f"tracking['{media_id}']: {p}" for p in check_track_data(track)]
     transcript = data.get("transcript")
     if transcript and transcript["media"] not in media:
         problems.append(f"transcript: unknown media '{transcript['media']}'")
@@ -144,7 +151,8 @@ def _clip_problems(track, clip, media, frame, where):
     if m is not None:
         wanted = {("video", "video"): ("video",), ("video", "image"): ("image",),
                   ("overlay", "video"): ("video",), ("overlay", "image"): ("image",),
-                  ("audio", "audio"): ("audio", "video")}[(kind, ctype)]
+                  ("audio", "audio"): ("audio", "video"),
+                  ("effect", "trackfx"): ("video", "image")}[(kind, ctype)]
         if m["kind"] not in wanted:
             problems.append(f"{where}: needs {' or '.join(wanted)} media, but "
                             f"'{ref}' is {m['kind']}")
