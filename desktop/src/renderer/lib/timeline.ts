@@ -56,9 +56,62 @@ export function segmentAt(segs: Segment[], t: number): number {
   return segs.length - 1;
 }
 
-/** Source-file time for a timeline time inside a video segment. */
+/** Source-file time for a timeline time inside a video segment (speed included). */
 export function sourceTime(seg: Segment, t: number): number {
-  return (seg.clip?.in ?? 0) + Math.max(0, t - seg.start);
+  return clipSourceTime(seg.clip, Math.max(seg.start, t));
+}
+
+/** Source-file time of a clip at timeline time t: in + (t - start) x speed. */
+export function clipSourceTime(clip: Clip | null, t: number): number {
+  if (!clip) return 0;
+  return (clip.in ?? 0) + Math.max(0, t - clip.start) * (clip.speed ?? 1);
+}
+
+/** Timeline time when a clip's source is at `source` seconds (inverse of clipSourceTime). */
+export function timelineTimeOf(clip: Clip, source: number): number {
+  return clip.start + (source - (clip.in ?? 0)) / (clip.speed ?? 1);
+}
+
+/**
+ * Sound level of a clip at timeline time t: its volume with linear fades (as FFmpeg's afade).
+ * The preview can only play up to 100%; louder settings are capped there (the export is not).
+ */
+export function clipGain(clip: Clip, t: number): number {
+  const local = t - clip.start;
+  let g = clip.volume ?? 1;
+  if (clip.fade_in && local < clip.fade_in) g *= Math.max(0, local / clip.fade_in);
+  const left = clip.duration - local;
+  if (clip.fade_out && left < clip.fade_out) g *= Math.max(0, left / clip.fade_out);
+  return g;
+}
+
+/**
+ * Where the source picture goes on the 1080x1920 canvas for "fill" with a reframe: the same
+ * maths as the engine (scale to cover 1080*zoom x 1920*zoom, then keep a 1080x1920 window
+ * at (x, y) of the spare room). Returns the picture's box in canvas pixels.
+ */
+export function cropBox(sourceW: number, sourceH: number, crop?: { zoom?: number; x?: number; y?: number }) {
+  const zoom = crop?.zoom ?? 1;
+  const fx = crop?.x ?? 0.5;
+  const fy = crop?.y ?? 0.5;
+  const W = CANVAS.width;
+  const H = CANVAS.height;
+  const coverW = Math.ceil((W * zoom) / 2) * 2;
+  const coverH = Math.ceil((H * zoom) / 2) * 2;
+  const k = Math.max(coverW / sourceW, coverH / sourceH);
+  const width = sourceW * k;
+  const height = sourceH * k;
+  return { left: -(width - W) * fx, top: -(height - H) * fy, width, height };
+}
+
+/** Audio-track clips (music, voice-over, effects) sounding at t, with their track. */
+export function audioClipsAt(project: Project, t: number): { clip: Clip; muted: boolean }[] {
+  const out: { clip: Clip; muted: boolean }[] = [];
+  for (const track of project.tracks) {
+    if (track.kind !== "audio") continue;
+    for (const clip of track.clips) if (t >= clip.start && t < clip.start + clip.duration) out.push({ clip, muted: Boolean(track.muted) });
+  }
+  return out;
 }
 
 function visibleClips(project: Project, kind: string, t: number): Clip[] {

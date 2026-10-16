@@ -1,7 +1,49 @@
 // What the window can ask the main process (exposed as window.api by the preload script).
 import type {
-  ContentType, Cost, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Plan, Provider, Settings, VideoHistory,
+  ContentType, Cost, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Media, Plan, Project, Provider, Settings, VideoHistory,
 } from "./types";
+
+export interface OpenedProject {
+  path: string;
+  project?: Project;
+  /** A copy made before the first edit in the app ("<name>.before-editing.project.json"). */
+  backup?: string;
+  error?: string;
+}
+
+/** A file's sound outline: one value (0-255) per 1/per_second of a second. */
+export interface Peaks {
+  duration: number;
+  per_second: number;
+  peaks: number[];
+  has_audio?: boolean;
+}
+
+/** Small pictures along a video: one every `every` seconds of the source. */
+export interface Thumbs {
+  every: number;
+  height: number;
+  files: string[];
+}
+
+export interface ExportOptions {
+  output: string;
+  /** 1920 = 1080x1920, 1280 = 720x1280, 960 = 540x960. */
+  height: 1920 | 1280 | 960;
+  fps: 24 | 25 | 30 | 50 | 60;
+  /** Lower = better quality and bigger file. */
+  crf: number;
+  speed: "veryfast" | "fast" | "medium" | "slow";
+}
+
+export interface ExportUpdate {
+  taskId: string;
+  percent?: number;
+  done?: boolean;
+  output?: string;
+  error?: string;
+  cancelled?: boolean;
+}
 
 export interface EstimateResult extends Partial<Cost> {
   text?: string;
@@ -47,6 +89,22 @@ export interface AppApi {
   cancelGenTask(taskId: string): Promise<void>;
   onGenTask(callback: (update: GenTaskUpdate) => void): () => void;
   openPath(path: string): Promise<void>;
+  showInFolder(path: string): Promise<void>;
+  // ---- the timeline editor
+  /** Read a project file (checked by the engine). */
+  openProject(path: string): Promise<OpenedProject>;
+  /** Write the project (atomically: a crash never leaves a half-written file). */
+  saveProject(path: string, project: Project): Promise<{ ok: boolean; error?: string }>;
+  pickProject(): Promise<string | null>;
+  /** Videos, pictures and sound files to add to a project. */
+  pickMedia(): Promise<string[]>;
+  pickExportPath(defaultPath: string): Promise<string | null>;
+  mediaInfo(paths: string[]): Promise<{ media: Media[]; errors: { path: string; message: string }[] }>;
+  peaks(path: string): Promise<Peaks | { error: string }>;
+  thumbs(path: string): Promise<Thumbs | { error: string }>;
+  startExport(projectPath: string, options: ExportOptions): Promise<string>;
+  cancelExport(taskId: string): Promise<void>;
+  onExport(callback: (update: ExportUpdate) => void): () => void;
   onJobChanged(callback: (job: Job) => void): () => void;
   onHistoryChanged(callback: (history: VideoHistory) => void): () => void;
 }

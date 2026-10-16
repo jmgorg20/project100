@@ -2,8 +2,10 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ExportOptions, ExportUpdate } from "../shared/api";
 import { versionFromJob } from "../shared/jobs";
-import type { ContentType, EngineEvent, Job, JobRequest, Plan, Provider, Settings } from "../shared/types";
+import { backupPathFor } from "../shared/paths";
+import type { ContentType, EngineEvent, Job, JobRequest, Plan, Project, Provider, Settings } from "../shared/types";
 import { runEngine, type EngineConfig, type RunHandle } from "./engine";
 import { HistoryStore } from "./historyStore";
 import { freeOutputPath, jobArgs, modelFor } from "./jobArgs";
@@ -13,6 +15,7 @@ import { defaultSettings, loadSettings, saveSettings } from "./settings";
 
 const VIDEO_TYPES = ["mp4", "mov", "m4v", "mkv", "avi", "webm", "3gp"];
 const PHOTO_TYPES = ["png", "jpg", "jpeg", "webp", "bmp"];
+const AUDIO_TYPES = ["mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "wma"];
 
 const dataDir = () => app.getPath("userData");
 const settingsFile = () => path.join(dataDir(), "settings.json");
@@ -27,6 +30,9 @@ let queue: JobQueue;
 const takenOutputs = new Set<string>();
 const genTasks = new Map<string, RunHandle>();
 let genCounter = 0;
+const exportTasks = new Map<string, RunHandle>();
+const peaksCache = new Map<string, unknown>();
+const thumbsCache = new Map<string, unknown>();
 
 // After "cancel", the engine gets this long to stop by itself before it is killed. It must be
 // longer than the engine's own wait for WanGP to stop a job (Bridge.STOP_GRACE, 60 s), so the
@@ -77,6 +83,43 @@ function startGenTask(args: string[]): string {
     send("gen:task", { taskId, done: true, code: r.code, cancelled: r.cancelled, startError: r.startError });
   });
   return taskId;
+}
+
+/** Write a file atomically: a crash or power cut never leaves a half-written project. */
+export function writeAtomic(file: string, text: string): void {
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, text, "utf-8");
+  fs.renameSync(tmp, file);
+}
+
+function startExport(projectPath: string, o: ExportOptions): string {
+  const taskId = `export${++genCounter}`;
+  const args = ["render", projectPath, "--output", o.output, "--height", String(o.height), "--fps", String(o.fps), "--crf", String(o.crf), "--speed", o.speed];
+  const update = (u: Omit<ExportUpdate, "taskId">) => send("export:task", { taskId, ...u });
+  let error: string | undefined;
+  let output: string | undefined;
+  const handle = runEngine(engineConfig(), args, (event) => {
+    if (event.type === "progress") update({ percent: event.percent });
+    if (event.type === "result" && typeof event.output === "string") output = event.output;
+    if (event.type === "error") error = event.message;
+  });
+  exportTasks.set(taskId, handle);
+  handle.done.then((r) => {
+    exportTasks.delete(taskId);
+    if (r.cancelled) update({ done: true, cancelled: true });
+    else if (r.startError || error || r.code !== 0) update({ done: true, error: r.startError ?? error ?? `The export stopped (exit code ${r.code}).` });
+    else update({ done: true, percent: 100, output });
+  });
+  return taskId;
+}
+
+async function cachedEngine(cache: Map<string, unknown>, args: string[], key: string) {
+  if (cache.has(key)) return cache.get(key);
+  const r = await engineOnce(args);
+  if (r.error || !r.result) return { error: r.error ?? "No answer from the editor engine." };
+  const { type: _type, ...data } = r.result;
+  cache.set(key, data);
+  return data;
 }
 
 async function genStatus(check: boolean) {
@@ -170,6 +213,63 @@ function registerIpc(): void {
   );
   ipcMain.handle("gen:cancel", (_e, taskId: string) => genTasks.get(taskId)?.cancel());
   ipcMain.handle("app:openPath", (_e, target: string) => shell.openPath(target));
+  ipcMain.handle("app:showInFolder", (_e, target: string) => shell.showItemInFolder(target));
+  // ---- timeline editor
+  ipcMain.handle("project:open", async (_e, file: string) => {
+    let project: Project;
+    try {
+      project = JSON.parse(fs.readFileSync(file, "utf-8"));
+    } catch (err) {
+      return { path: file, error: `Could not open the project: ${(err as Error).message}` };
+    }
+    const check = await engineOnce(["validate", file]);
+    if (check.error) return { path: file, error: check.error };
+    const backup = backupPathFor(file);
+    try {
+      if (!fs.existsSync(backup)) fs.copyFileSync(file, backup);
+    } catch {
+      // read-only folder: editing still works, there is just no backup
+    }
+    return { path: file, project, backup: fs.existsSync(backup) ? backup : undefined };
+  });
+  ipcMain.handle("project:save", (_e, file: string, project: Project) => {
+    if (!/\.json$/i.test(file)) return { ok: false, error: "Projects are saved as .project.json files." };
+    try {
+      writeAtomic(file, JSON.stringify(project, null, 1) + "\n");
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: `Could not save: ${(err as Error).message}` };
+    }
+  });
+  ipcMain.handle("dialog:project", async () => {
+    const r = await dialog.showOpenDialog(window!, {
+      title: "Open a project",
+      properties: ["openFile"],
+      filters: [{ name: "Projects", extensions: ["json"] }],
+    });
+    return r.canceled ? null : r.filePaths[0];
+  });
+  ipcMain.handle("dialog:media", async () => {
+    const r = await dialog.showOpenDialog(window!, {
+      title: "Add videos, pictures or sound",
+      properties: ["openFile", "multiSelections"],
+      filters: [{ name: "Media", extensions: [...VIDEO_TYPES, ...PHOTO_TYPES, ...AUDIO_TYPES] }],
+    });
+    return r.canceled ? [] : r.filePaths;
+  });
+  ipcMain.handle("dialog:exportPath", async (_e, defaultPath: string) => {
+    const r = await dialog.showSaveDialog(window!, { title: "Export video", defaultPath, filters: [{ name: "MP4 video", extensions: ["mp4"] }] });
+    return r.canceled || !r.filePath ? null : r.filePath;
+  });
+  ipcMain.handle("media:info", async (_e, paths: string[]) => {
+    const r = await engineOnce(["media-info", ...paths]);
+    if (r.error || !r.result) return { media: [], errors: paths.map((p) => ({ path: p, message: r.error ?? "No answer from the editor engine." })) };
+    return { media: r.result.media, errors: r.result.errors };
+  });
+  ipcMain.handle("media:peaks", (_e, file: string) => cachedEngine(peaksCache, ["peaks", file], file));
+  ipcMain.handle("media:thumbs", (_e, file: string) => cachedEngine(thumbsCache, ["thumbs", file], file));
+  ipcMain.handle("export:start", (_e, projectPath: string, options: ExportOptions) => startExport(projectPath, options));
+  ipcMain.handle("export:cancel", (_e, taskId: string) => exportTasks.get(taskId)?.cancel());
   ipcMain.handle("engine:check", async () => {
     const r = await engineOnce(["validate", path.join(settings.engineDir, "examples", "project.json")]);
     return r.error ? { ok: false, message: r.error } : { ok: true, message: "The editor engine is ready." };
@@ -236,5 +336,6 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   queue.cancelAll();
   genTasks.forEach((handle) => handle.cancel());
+  exportTasks.forEach((handle) => handle.cancel());
   Promise.race([queue.whenIdle(), new Promise((r) => setTimeout(r, 15_000))]).then(() => app.quit());
 });

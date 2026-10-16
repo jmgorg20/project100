@@ -387,6 +387,26 @@ textarea {
   object-fit: contain;
 }
 
+/* The main picture layer: zoom effects and colour grades apply to it, not to overlays. */
+.canvas .picture {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Fill/reframe: the box is placed exactly like the engine's scale + crop. */
+.canvas .picture .framed {
+  inset: auto;
+  object-fit: fill;
+}
+
+/* Overlay pictures and B-roll fit inside their box (the engine scales them to fit). */
+.canvas .overlay-photo {
+  position: absolute;
+  inset: auto;
+  object-fit: contain;
+}
+
 .caption {
   position: absolute;
   white-space: nowrap;
