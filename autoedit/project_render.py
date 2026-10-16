@@ -296,16 +296,31 @@ def effect_layers(project, fps, clip_type, key):
 
 
 def add_zooms(graph, current, project, fps):
+    """Zoom effects. A plain zoom (punch-in) crops at once; one with `ease` grows smoothly
+    from 100% to its amount over `ease` seconds, then holds."""
     layers = effect_layers(project, fps, "zoom",
                            lambda c: (float(c["amount"]),
-                                      float(c.get("anchor_y", DEFAULT_ANCHOR_Y))))
+                                      float(c.get("anchor_y", DEFAULT_ANCHOR_Y)),
+                                      float(c.get("ease", 0)), c["start"] if c.get("ease") else 0))
     layers = [(k, r) for k, r in layers if k[0] > 1.0]
     if not layers:
         return current
     labels = [f"zsrc{i}" for i in range(len(layers) + 1)]
     graph.add(f"[{current}]split={len(labels)}" + "".join(f"[{l}]" for l in labels))
     current = labels[0]
-    for i, ((amount, anchor), ranges) in enumerate(layers, start=1):
+    for i, ((amount, anchor, ease, t0), ranges) in enumerate(layers, start=1):
+        if ease > 0:
+            # Grow from 100% to `amount` over `ease` seconds (t = timeline time), keep the
+            # 1080x1920 window centred horizontally and at `anchor` vertically.
+            # The growing picture is placed with overlay (its x/y follow each frame's size;
+            # a crop after a size-changing scale would keep using the first frame's size).
+            z = f"(1+{amount - 1:g}*min(1,max(0,(t-{t0:.4f})/{ease:g})))"
+            graph.add(f"[{labels[i]}]scale=w='trunc({W}*{z}/2)*2':h='trunc({H}*{z}/2)*2':"
+                      f"eval=frame,setsar=1[zoomed{i}]",
+                      f"[{current}][zoomed{i}]overlay=x='(W-w)/2':y='(H-h)*{anchor:g}':"
+                      f"eval=frame:enable='{frames_expression(ranges, fps)}'[zoomout{i}]")
+            current = f"zoomout{i}"
+            continue
         graph.add(f"[{labels[i]}]crop=w=iw/{amount:g}:h=ih/{amount:g}:x=(iw-ow)/2:"
                   f"y=(ih-oh)*{anchor:g},scale={W}:{H},setsar=1[zoomed{i}]",
                   f"[{current}][zoomed{i}]overlay=0:0:enable='{frames_expression(ranges, fps)}'"
@@ -314,27 +329,86 @@ def add_zooms(graph, current, project, fps):
     return current
 
 
+def graded(graph, src, out, name, intensity, tag):
+    """`src` with a colour grade at `intensity` (1 = full: the grade alone; 0.5 = halfway)."""
+    chain = grade_filter(name) or "null"
+    if intensity >= 1 or chain == "null":
+        graph.add(f"[{src}]{chain}[{out}]")
+    elif intensity <= 0:
+        graph.add(f"[{src}]null[{out}]")
+    else:
+        graph.add(f"[{src}]split[{tag}o][{tag}g]", f"[{tag}g]{chain}[{tag}c]",
+                  f"[{tag}o][{tag}c]blend=all_mode=normal:all_opacity={intensity:g}[{out}]")
+
+
 def add_grades(graph, current, project, fps, total_frames):
-    layers = effect_layers(project, fps, "grade", lambda c: c["grade"])
+    layers = effect_layers(project, fps, "grade",
+                           lambda c: (c["grade"], float(c.get("intensity", 1.0))))
     if not layers:
         return current
-    base = "null"
-    first_name, first_ranges = layers[0]
+    (first_name, first_k), first_ranges = layers[0]
     if first_ranges[0][0] <= 0 and first_ranges[-1][1] >= total_frames and len(first_ranges) == 1:
-        base = grade_filter(first_name) or "null"     # covers everything: apply directly
-        layers = layers[1:]
+        layers = layers[1:]                            # covers everything: apply directly
+        graded(graph, current, "graded0", first_name, first_k, "gb")
+    else:
+        graph.add(f"[{current}]null[graded0]")
+    current = "graded0"
     if not layers:
-        graph.add(f"[{current}]{base}[graded]")
-        return "graded"
+        return current
     labels = [f"gsrc{i}" for i in range(len(layers) + 1)]
     graph.add(f"[{current}]split={len(labels)}" + "".join(f"[{l}]" for l in labels))
-    graph.add(f"[{labels[0]}]{base}[graded0]")
-    current = "graded0"
-    for i, (name, ranges) in enumerate(layers, start=1):
-        graph.add(f"[{labels[i]}]{grade_filter(name) or 'null'}[gradealt{i}]",
-                  f"[{current}][gradealt{i}]overlay=0:0:enable='{frames_expression(ranges, fps)}'"
+    current = labels[0]
+    for i, ((name, k), ranges) in enumerate(layers, start=1):
+        graded(graph, labels[i], f"gradealt{i}", name, k, f"g{i}")
+        graph.add(f"[{current}][gradealt{i}]overlay=0:0:enable='{frames_expression(ranges, fps)}'"
                   f"[graded{i}]")
         current = f"graded{i}"
+    return current
+
+
+def triangle(t0, d):
+    """0 at the start and end of [t0, t0 + d], 1 in the middle (FFmpeg expression in t)."""
+    return f"max(0,1-abs(2*(t-{t0 + d / 2:.4f})/{d:.4f}))"
+
+
+def add_fx(graph, current, project, fps):
+    """Moment effects on the main picture (also used as transitions on a cut)."""
+    k = 0
+    for track in visible_tracks(project, "effect"):
+        for clip in sorted(track["clips"], key=lambda c: c["start"]):
+            if clip["type"] != "fx":
+                continue
+            f0, f1 = clip_frames(clip, fps)
+            if f1 <= f0:
+                continue
+            t0, d = f0 / fps, (f1 - f0) / fps
+            i = float(clip.get("intensity", 0.6))
+            on = f"enable='{frames_expression([(f0, f1)], fps)}'"
+            out = f"fx{k}"
+            effect = clip["effect"]
+            # eq's brightness only moves the luma, so the colour fades out with it (else a dip
+            # to "black" stays dark red).
+            if effect in ("flash", "dip"):
+                tri = triangle(t0, d)
+                amount = 0.25 + 0.75 * i if effect == "flash" else -(0.3 + 0.7 * i)
+                graph.add(f"[{current}]eq=brightness='{amount:g}*{tri}':"
+                          f"saturation='1-{i:g}*{tri}':eval=frame:{on}[{out}]")
+            elif effect == "glitch":
+                shift = int(round(6 + 34 * i))
+                graph.add(f"[{current}]rgbashift=rh={shift}:bh=-{shift}:gv={shift // 3}:{on},"
+                          f"noise=alls={int(10 + 30 * i)}:allf=t:{on}[{out}]")
+            elif effect == "whip":
+                graph.add(f"[{current}]gblur=sigma={8 + 52 * i:g}:sigmaV=0:steps=2:{on}[{out}]")
+            elif effect == "shake":
+                a = int(round(8 + 40 * i))
+                graph.add(f"[{current}]split[fxa{k}][fxb{k}]",
+                          f"[fxb{k}]crop=w=iw-{2 * a}:h=ih-{2 * a}:x='{a}+{a}*sin(n*1.9)':"
+                          f"y='{a}+{a}*cos(n*2.7)',scale={W}:{H},setsar=1[fxs{k}]",
+                          f"[fxa{k}][fxs{k}]overlay=0:0:{on}[{out}]")
+            else:
+                continue
+            current = out
+            k += 1
     return current
 
 
@@ -421,15 +495,30 @@ def build_project_ass(project, fonts_folder):
 
 # ---------------------------------------------------------------- sound
 
+def speech_noise_floor(project, media, base_dir):
+    """The background noise level (dBFS) of the speech: main video and voice-over files."""
+    from .media_tools import noise_floor_db
+    ids = set()
+    for track in project["tracks"]:
+        if track.get("muted"):
+            continue
+        if track["kind"] == "video" or (track["kind"] == "audio" and track["role"] in DIALOG_ROLES):
+            ids |= {c["media"] for c in track["clips"] if c.get("media")}
+    floors = [noise_floor_db(resolve_media_path(media[i], base_dir)) for i in sorted(ids)
+              if media[i]["kind"] != "image" and media[i].get("has_audio", True)]
+    floors = [f for f in floors if f is not None]
+    return max(floors) if floors else None
+
+
 def add_audio_tracks(graph, project, media, base_dir, fps, dialog):
     """Mix the audio tracks with the main track's sound. Returns the final audio label."""
-    clips = {"dialog": [], "post": []}
+    clips = {"dialog": [], "music": [], "sfx": []}
     for track in project["tracks"]:
         if track["kind"] != "audio" or track.get("muted"):
             continue
-        bus = "dialog" if track["role"] in DIALOG_ROLES else "post"
+        bus = "dialog" if track["role"] in DIALOG_ROLES else track["role"]
         clips[bus] += [c for c in track["clips"] if float(c.get("volume", 1.0)) > 0]
-    everything = clips["dialog"] + clips["post"]
+    everything = clips["dialog"] + clips["music"] + clips["sfx"]
     by_media = {}
     for clip in everything:
         by_media.setdefault(clip["media"], []).append(clip)
@@ -462,20 +551,46 @@ def add_audio_tracks(graph, project, media, base_dir, fps, dialog):
 
     counter = iter(range(len(everything)))
     dialog_parts = [clip_chain(c, next(counter)) for c in clips["dialog"]]
-    post_parts = [clip_chain(c, next(counter)) for c in clips["post"]]
+    music_parts = [clip_chain(c, next(counter)) for c in clips["music"]]
+    sfx_parts = [clip_chain(c, next(counter)) for c in clips["sfx"]]
 
     if dialog_parts:
         ins = f"[{dialog}]" + "".join(f"[{p}]" for p in dialog_parts)
         graph.add(f"{ins}amix=inputs={len(dialog_parts) + 1}:duration=first:normalize=0[dialogmix]")
         dialog = "dialogmix"
     audio = project["settings"].get("audio", {})
+    denoise = float(audio.get("denoise", 0))
+    if denoise > 0:
+        # FFT noise reduction. Its noise floor must be near the real noise level, so it is
+        # measured in the pauses of the speech files.
+        floor = speech_noise_floor(project, media, base_dir)
+        nf = min(-20.0, max(-80.0, (floor if floor is not None else -50.0) + 5))
+        graph.add(f"[{dialog}]afftdn=nr={10 + 30 * denoise:g}:nf={nf:.1f}[denoised]")
+        dialog = "denoised"
     if audio.get("normalize"):
         graph.add(f"[{dialog}]loudnorm=I={audio.get('loudness', -14):g}:"
                   f"TP={audio.get('true_peak', -1.5):g}:LRA=11,aresample={AUDIO_RATE}[speech]")
         dialog = "speech"
-    if post_parts:
-        ins = f"[{dialog}]" + "".join(f"[{p}]" for p in post_parts)
-        graph.add(f"{ins}amix=inputs={len(post_parts) + 1}:duration=first:normalize=0,"
+    post = []
+    ducking = float(audio.get("ducking", 0))
+    if music_parts:
+        ins = "".join(f"[{p}]" for p in music_parts)
+        if len(music_parts) > 1:
+            graph.add(f"{ins}amix=inputs={len(music_parts)}:duration=longest:normalize=0[musicmix]")
+            music = "musicmix"
+        else:
+            music = music_parts[0]
+        if ducking > 0:
+            # Lower the music while someone speaks: the speech is the compressor's key.
+            graph.add(f"[{dialog}]asplit=2[speechout][speechkey]",
+                      f"[{music}][speechkey]sidechaincompress=threshold=0.015:"
+                      f"ratio={2 + 18 * ducking:g}:attack=15:release=350:makeup=1[ducked]")
+            dialog, music = "speechout", "ducked"
+        post.append(music)
+    post += sfx_parts
+    if post:
+        ins = f"[{dialog}]" + "".join(f"[{p}]" for p in post)
+        graph.add(f"{ins}amix=inputs={len(post) + 1}:duration=first:normalize=0,"
                   f"alimiter=limit=0.95[aout]")
     else:
         graph.add(f"[{dialog}]anull[aout]")
@@ -501,6 +616,7 @@ def build_command(project, base_dir, output, ass_name=None, export=None, frame=N
                                      with_audio)
     current = add_zooms(graph, current, project, fps)
     current = add_grades(graph, current, project, fps, total_frames)
+    current = add_fx(graph, current, project, fps)
     current = add_overlays(graph, current, project, media, base_dir, fps)
     if ass_name:
         graph.add(f"[{current}]subtitles={ass_name}:fontsdir=fonts[capout]")

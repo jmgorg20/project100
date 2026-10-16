@@ -124,19 +124,69 @@ function visibleClips(project: Project, kind: string, t: number): Clip[] {
   return result;
 }
 
-/** Zoom amount and anchor at t (later tracks win, like the render). */
+/** Zoom amount and anchor at t (later tracks win, like the render); smooth zooms grow. */
 export function zoomAt(project: Project, t: number): { amount: number; anchorY: number } {
   let zoom = { amount: 1, anchorY: 0.4 };
   for (const clip of visibleClips(project, "effect", t)) {
-    if (clip.type === "zoom" && (clip.amount ?? 1) > 1) zoom = { amount: clip.amount ?? 1, anchorY: clip.anchor_y ?? 0.4 };
+    if (clip.type !== "zoom" || (clip.amount ?? 1) <= 1) continue;
+    const full = clip.amount ?? 1;
+    const k = clip.ease ? Math.min(1, Math.max(0, (t - clip.start) / clip.ease)) : 1;
+    zoom = { amount: 1 + (full - 1) * k, anchorY: clip.anchor_y ?? 0.4 };
   }
   return zoom;
 }
 
 export function gradeAt(project: Project, t: number): string {
-  let grade = "none";
-  for (const clip of visibleClips(project, "effect", t)) if (clip.type === "grade") grade = clip.grade ?? "none";
-  return grade;
+  return gradeLookAt(project, t).grade;
+}
+
+export function gradeLookAt(project: Project, t: number): { grade: string; intensity: number } {
+  let look = { grade: "none", intensity: 1 };
+  for (const clip of visibleClips(project, "effect", t)) if (clip.type === "grade") look = { grade: clip.grade ?? "none", intensity: clip.intensity ?? 1 };
+  return look;
+}
+
+/** CSS filter for a colour look at a strength (0-1), like the engine's blend with the original. */
+export function gradeCss(grade: string, intensity = 1): string {
+  const parts = GRADE_PARTS[grade] ?? [];
+  if (!parts.length || intensity <= 0) return "none";
+  return parts
+    .map(([fn, v]) => {
+      const neutral = fn === "sepia" || fn === "grayscale" || fn === "hue-rotate" ? 0 : 1;
+      const value = neutral + (v - neutral) * Math.min(1, intensity);
+      return fn === "hue-rotate" ? `hue-rotate(${value}deg)` : `${fn}(${+value.toFixed(3)})`;
+    })
+    .join(" ");
+}
+
+const GRADE_PARTS: Record<string, [string, number][]> = {
+  none: [],
+  natural_clean: [["contrast", 1.06], ["brightness", 1.01], ["saturate", 1.12]],
+  warm: [["sepia", 0.12], ["saturate", 1.08]],
+  black_and_white: [["grayscale", 1], ["contrast", 1.15]],
+  orange_teal: [["contrast", 1.05], ["saturate", 1.15], ["hue-rotate", -6]],
+  high_contrast: [["contrast", 1.25], ["saturate", 1.15], ["brightness", 0.99]],
+};
+
+export interface FxState {
+  effect: string;
+  intensity: number;
+  /** 0 at the start and end of the effect, 1 in its middle (as the engine's flash/dip). */
+  peak: number;
+  frame: number;
+}
+
+/** Moment effects (shake, flash...) on screen at t. */
+export function fxAt(project: Project, t: number): FxState[] {
+  const fps = project.settings.fps;
+  return visibleClips(project, "effect", t)
+    .filter((c) => c.type === "fx")
+    .map((c) => ({
+      effect: c.effect ?? "flash",
+      intensity: c.intensity ?? 0.6,
+      peak: Math.max(0, 1 - Math.abs((2 * (t - (c.start + c.duration / 2))) / c.duration)),
+      frame: Math.floor(t * fps + 1e-6),
+    }));
 }
 
 /** CSS filter that approximates each colour grade (the render uses FFmpeg's exact filters). */
@@ -148,6 +198,39 @@ export const GRADE_CSS: Record<string, string> = {
   orange_teal: "contrast(1.05) saturate(1.15) hue-rotate(-6deg)",
   high_contrast: "contrast(1.25) saturate(1.15) brightness(0.99)",
 };
+
+/**
+ * How the preview draws moment effects (an approximation; "Exact frame" shows the engine's):
+ * transform/filter for the picture, and the colour/opacity of a layer over it.
+ */
+export function fxStyle(states: FxState[], canvasW: number, canvasH: number): { transform: string; filter: string; overlay: { color: string; opacity: number } | null } {
+  const transforms: string[] = [];
+  const filters: string[] = [];
+  let overlay: { color: string; opacity: number } | null = null;
+  for (const s of states) {
+    const i = s.intensity;
+    if (s.effect === "shake") {
+      const a = Math.round(8 + 40 * i);
+      // The engine crops (W-2a) x (H-2a) at a moving offset and scales it back up.
+      const kx = canvasW / (canvasW - 2 * a);
+      const ky = canvasH / (canvasH - 2 * a);
+      transforms.push(`scale(${kx.toFixed(4)}, ${ky.toFixed(4)}) translate(${(-a * Math.sin(s.frame * 1.9)).toFixed(1)}px, ${(-a * Math.cos(s.frame * 2.7)).toFixed(1)}px)`);
+    } else if (s.effect === "flash") {
+      overlay = { color: "#ffffff", opacity: (0.25 + 0.75 * i) * s.peak };
+      filters.push(`saturate(${(1 - i * s.peak).toFixed(3)})`);
+    } else if (s.effect === "dip") {
+      overlay = { color: "#000000", opacity: Math.min(1, (0.3 + 0.7 * i) * s.peak) };
+      filters.push(`saturate(${(1 - i * s.peak).toFixed(3)})`);
+    } else if (s.effect === "glitch") {
+      const shift = Math.round(6 + 34 * i);
+      transforms.push(`translateX(${s.frame % 2 ? shift / 3 : -shift / 3}px)`);
+      filters.push(`hue-rotate(${(s.frame * 37) % 90 - 45}deg) contrast(${1 + 0.3 * i})`);
+    } else if (s.effect === "whip") {
+      filters.push(`blur(${((8 + 52 * i) / 3).toFixed(1)}px)`);
+    }
+  }
+  return { transform: transforms.join(" "), filter: filters.join(" "), overlay };
+}
 
 export function overlaysAt(project: Project, t: number): Clip[] {
   return visibleClips(project, "overlay", t);

@@ -113,3 +113,25 @@ def thumbs(path, cache_dir, height=120, max_count=300):
     data = {"every": every, "height": height, "files": files}
     _write_json(index, data)
     return data
+
+
+def noise_floor_db(path, window=0.05, percentile=10):
+    """Level of the quiet parts of a file's sound (dBFS): the background noise in the pauses.
+
+    The `percentile`-th quietest 50 ms window, measured at the file's own sample rate (all of
+    the hiss counts). None if the file has no sound.
+    """
+    run = subprocess.run(
+        [find_tool("ffmpeg"), "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", "48000",
+         "-af", f"asetnsamples=n={int(48000 * window)},astats=metadata=1:reset=1,"
+                "ametadata=mode=print:key=lavfi.astats.Overall.RMS_level:file=-",
+         "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    levels = []
+    for line in run.stdout.splitlines():
+        if line.startswith("lavfi.astats.Overall.RMS_level="):
+            value = line.split("=", 1)[1]
+            levels.append(-120.0 if value in ("-inf", "inf", "nan") else float(value))
+    if not levels:
+        return None
+    levels.sort()
+    return levels[min(len(levels) - 1, len(levels) * percentile // 100)]

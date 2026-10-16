@@ -121,6 +121,11 @@ def build_parser():
     pk = sub.add_parser("peaks", help="waveform outline of a file's sound (cached)")
     pk.add_argument("file")
     pk.add_argument("--per-second", type=int, default=50)
+    rt = sub.add_parser("retranscribe", help="transcribe part of a project's timeline again and "
+                                              "replace the captions there (saves the project)")
+    rt.add_argument("project")
+    rt.add_argument("--start", type=float, required=True, help="timeline seconds")
+    rt.add_argument("--end", type=float, required=True, help="timeline seconds")
     th = sub.add_parser("thumbs", help="small pictures along a video for the timeline (cached)")
     th.add_argument("file")
     th.add_argument("--height", type=int, default=120)
@@ -295,6 +300,26 @@ def cmd_peaks(args, reporter):
                  per_second=args.per_second)
     print(f"{len(data['peaks'])} values, {data['per_second']} per second")
     reporter.result(**data)
+
+
+def cmd_retranscribe(args, reporter):
+    import shutil
+    import time
+    from autoedit.project import load_project, save_project
+    from autoedit.retranscribe import retranscribe
+    cfg = load_config(args.config)
+    project_file = Path(args.project).resolve()
+    project = load_project(project_file)
+    work = project_path(cfg["work_folder"]) / f"retranscribe-{time.strftime('%Y%m%d-%H%M%S')}"
+    try:
+        if reporter:
+            reporter.stage("transcript", "Listening again")
+        project, count = retranscribe(project, project_file, cfg, args.start, args.end, work)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    save_project(project, project_file)
+    print(f"{count} words between {args.start:.2f}s and {args.end:.2f}s; saved {project_file.name}")
+    reporter.result(project=str(project_file), words=count)
 
 
 def cmd_thumbs(args, reporter):
@@ -602,6 +627,8 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_peaks(args, reporter)
         elif args.command == "thumbs":
             cmd_thumbs(args, reporter)
+        elif args.command == "retranscribe":
+            cmd_retranscribe(args, reporter)
         elif args.command == "ui-data":
             import json
             from autoedit.ui_data import ui_data

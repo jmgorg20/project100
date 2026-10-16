@@ -1,10 +1,22 @@
 // Settings of the selected clip: speed, volume, fades, reframe, overlay position, effects.
 // Every change goes through the pure edit functions (shared/edit.ts), so values stay valid.
 import type { ReactNode } from "react";
+import type { CaptionLook } from "../../shared/captionEdit";
 import { allowedProps, findClip, hasSource, speedOf, type ClipPatch } from "../../shared/edit";
-import type { Project } from "../../shared/types";
+import { FX_INFO, GRADES, RAMPS } from "../../shared/effectsEdit";
+import type { FxEffect, Project, Word } from "../../shared/types";
 import { mmss } from "../components/Player";
-import { GRADE_CSS } from "../lib/timeline";
+import { CaptionEditor } from "./CaptionEditor";
+
+export interface CaptionActions {
+  onWords: (id: string, words: Word[], key: string) => void;
+  onWordText: (id: string, index: number, text: string) => void;
+  onHighlight: (id: string, index: number) => void;
+  onEmoji: (id: string, index: number, emoji: string) => void;
+  onLook: (id: string, look: CaptionLook, all: boolean) => void;
+  onRetranscribe: (id: string) => void;
+  busy: boolean;
+}
 
 interface InspectorProps {
   project: Project;
@@ -12,7 +24,11 @@ interface InspectorProps {
   /** key groups quick changes (slider drags) into one undo step. */
   onProps: (id: string, patch: ClipPatch, key: string) => void;
   onSpeed: (id: string, speed: number) => void;
+  onRamp: (id: string, ramp: string) => void;
   onDelete: () => void;
+  captions: CaptionActions;
+  /** Shown when nothing is selected (the project's own settings). */
+  empty?: ReactNode;
 }
 
 function Slider({ label, hint, value, min, max, step, format, onChange, testId }: {
@@ -50,7 +66,7 @@ const SPEEDS = [0.5, 1, 1.5, 2, 3];
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(1)} s`;
 
-export function Inspector({ project, selection, onProps, onSpeed, onDelete }: InspectorProps) {
+export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, empty }: InspectorProps) {
   if (selection.length > 1) {
     return (
       <div className="inspector" data-testid="inspector">
@@ -60,6 +76,13 @@ export function Inspector({ project, selection, onProps, onSpeed, onDelete }: In
     );
   }
   const found = selection.length ? findClip(project, selection[0]) : null;
+  if (!found && empty) {
+    return (
+      <div className="inspector" data-testid="inspector">
+        {empty}
+      </div>
+    );
+  }
   if (!found) {
     return (
       <div className="inspector empty" data-testid="inspector">
@@ -78,7 +101,21 @@ export function Inspector({ project, selection, onProps, onSpeed, onDelete }: In
   const m = project.media.find((x) => x.id === clip.media);
   const set = (patch: ClipPatch, key: string) => onProps(clip.id, patch, `${key}:${clip.id}`);
   const kindName =
-    track.kind === "video" ? "Main video clip" : track.kind === "overlay" ? "B-roll / photo" : track.kind === "audio" ? `Sound (${track.name ?? track.role})` : track.kind === "caption" ? "Caption" : clip.type === "zoom" ? "Zoom effect" : "Colour grade";
+    track.kind === "video"
+      ? "Main video clip"
+      : track.kind === "overlay"
+        ? "B-roll / photo"
+        : track.kind === "audio"
+          ? `Sound (${track.name ?? track.role})`
+          : track.kind === "caption"
+            ? "Caption"
+            : clip.type === "zoom"
+              ? clip.ease
+                ? "Smooth zoom"
+                : "Punch-in zoom"
+              : clip.type === "fx"
+                ? `Effect: ${FX_INFO[clip.effect as FxEffect]?.label ?? clip.effect}`
+                : "Colour grade";
   const crop = { zoom: clip.crop?.zoom ?? 1, x: clip.crop?.x ?? 0.5, y: clip.crop?.y ?? 0.5 };
   const maxFade = Math.min(5, clip.duration);
 
@@ -104,6 +141,17 @@ export function Inspector({ project, selection, onProps, onSpeed, onDelete }: In
           </div>
           <Slider label="Speed" value={speedOf(clip)} min={0.25} max={4} step={0.05} format={(v) => `${v.toFixed(2)}x`} onChange={(v) => onSpeed(clip.id, v)} testId="speed" />
           <p className="muted small">The sound keeps its pitch. Main clips: what comes after moves to fit.</p>
+          {track.kind === "video" && clip.type === "video" && (
+            <label className="insp-field">
+              <span className="insp-label">Speed ramp</span>
+              <select value="" onChange={(e) => e.target.value && onRamp(clip.id, e.target.value)} aria-label="Speed ramp">
+                <option value="">Choose a ramp…</option>
+                {Object.entries(RAMPS).map(([k, r]) => (
+                  <option key={k} value={k}>{r.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
         </Section>
       )}
 
@@ -160,23 +208,44 @@ export function Inspector({ project, selection, onProps, onSpeed, onDelete }: In
         <Section title="Zoom">
           <Slider label="Amount" value={clip.amount ?? 1.2} min={1} max={2.5} step={0.01} format={pct} onChange={(v) => set({ amount: v }, "amount")} />
           <Slider label="Towards" hint="top ↔ bottom" value={clip.anchor_y ?? 0.4} min={0} max={1} step={0.01} format={pct} onChange={(v) => set({ anchor_y: v }, "anchor")} />
+          <Slider label="Zoom in over" hint="0 = punch-in" value={clip.ease ?? 0} min={0} max={Math.min(3, clip.duration)} step={0.05} format={secs} onChange={(v) => set({ ease: v }, "ease")} testId="zoom-ease" />
         </Section>
       )}
 
       {allowed.has("grade") && (
         <Section title="Colour · Kulay">
           <select value={clip.grade} onChange={(e) => set({ grade: e.target.value }, "grade")} aria-label="Colour grade">
-            {Object.keys(GRADE_CSS).map((g) => (
+            {GRADES.map((g) => (
               <option key={g} value={g}>{g.replace(/_/g, " ")}</option>
             ))}
           </select>
+          <Slider label="Strength" value={clip.intensity ?? 1} min={0} max={1} step={0.01} format={pct} onChange={(v) => set({ intensity: v }, "intensity")} testId="intensity" />
+        </Section>
+      )}
+
+      {allowed.has("effect") && (
+        <Section title="Effect · Epekto">
+          <select value={clip.effect} onChange={(e) => set({ effect: e.target.value as FxEffect }, "effect")} aria-label="Effect">
+            {(Object.keys(FX_INFO) as FxEffect[]).map((k) => (
+              <option key={k} value={k}>{FX_INFO[k].label} · {FX_INFO[k].tl}</option>
+            ))}
+          </select>
+          <Slider label="Strength" value={clip.intensity ?? 0.6} min={0} max={1} step={0.01} format={pct} onChange={(v) => set({ intensity: v }, "intensity")} testId="intensity" />
+          <p className="muted small">Drag the clip's edges on the timeline to make it longer or shorter.</p>
         </Section>
       )}
 
       {clip.type === "caption" && (
-        <Section title="Caption · Caption">
-          <p className="insp-caption">{(clip.words ?? []).map((w) => w.text).join(" ")}</p>
-        </Section>
+        <CaptionEditor
+          clip={clip}
+          busy={captions.busy}
+          onWords={(words, key) => captions.onWords(clip.id, words, key)}
+          onWordText={(i, text) => captions.onWordText(clip.id, i, text)}
+          onHighlight={(i) => captions.onHighlight(clip.id, i)}
+          onEmoji={(i, e) => captions.onEmoji(clip.id, i, e)}
+          onLook={(l, all) => captions.onLook(clip.id, l, all)}
+          onRetranscribe={() => captions.onRetranscribe(clip.id)}
+        />
       )}
 
       <div className="insp-actions">

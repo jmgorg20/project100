@@ -288,9 +288,10 @@ def load_words(video, cfg, cache, job_dir, duration):
     provider = str(t["provider"]).lower()
     model = t["groq_model"] if provider == "groq" else t["local_model"]
     key = f"{cache.fingerprint(video)}-{provider}-{model}-{cfg['language']}" if cache else None
+    from .vocabulary import fix_words
     data = cache.get("transcripts", key) if cache else None
     if data:
-        return words_from_data(data), True, 0.0
+        return fix_words(words_from_data(data), cfg), True, 0.0
     words = transcribe(video, cfg, job_dir)
     if cache:
         path = cache.folder / "transcripts" / f"{key}.json"
@@ -298,7 +299,7 @@ def load_words(video, cfg, cache, job_dir, duration):
         save_transcript(words, path, cfg["language"])
     cost = transcription_cost(cfg["ai"].get("prices") or {}, model, duration) \
         if provider == "groq" else 0.0
-    return words, False, cost
+    return fix_words(words, cfg), False, cost
 
 
 def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=None,

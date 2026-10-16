@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from pathlib import Path
 
 import pytest
 
@@ -80,3 +81,23 @@ def test_cli_media_info_peaks_thumbs_and_render_fps(media):  # noqa: F811
     assert proc.returncode == 0, err
     v, _a, _d = ffprobe(tmp / "fps25.mp4")
     assert int(v["nb_frames"]) == 50 and v["r_frame_rate"] == "25/1"
+
+
+def test_a_browser_recording_without_a_stated_length_is_measured_and_renders(media):  # noqa: F811
+    """Voice-overs recorded in the app are WebM files that do not state their length."""
+    from autoedit.ffmpeg_tools import probe
+    from autoedit.project import media_from_file
+    from autoedit.project_render import render_project
+    from tests.test_project_render import FAST
+    recording = Path(__file__).with_name("data") / "browser_recording.webm"
+    assert probe(recording)["duration"] == pytest.approx(1.92, abs=0.1)
+    tmp, p = media
+    m = media_from_file(recording, "rec")
+    assert m["kind"] == "audio" and m["duration"] > 1.5
+    p["media"].append(m)
+    tracks(p)["main"]["clips"] = [vclip("v1", 0.0, 0.0, duration=2.0, volume=0)]
+    tracks(p)["voiceover"]["clips"] = [{"id": "vo", "type": "audio", "media": "rec", "start": 0.0,
+                                        "duration": m["duration"], "in": 0.0, "out": m["duration"]}]
+    out = render_project(p, tmp / "vo.mp4", base_dir=tmp, export=FAST)
+    _v, a, _d = ffprobe(out)
+    assert float(a[0]["duration"]) == pytest.approx(2.0, abs=0.05)

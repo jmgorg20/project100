@@ -36,6 +36,13 @@ export interface ExportOptions {
   speed: "veryfast" | "fast" | "medium" | "slow";
 }
 
+export interface LibraryFile {
+  path: string;
+  name: string;
+  /** Folder inside the library ("" = top). */
+  group: string;
+}
+
 export interface ExportUpdate {
   taskId: string;
   percent?: number;
@@ -105,6 +112,17 @@ export interface AppApi {
   startExport(projectPath: string, options: ExportOptions): Promise<string>;
   cancelExport(taskId: string): Promise<void>;
   onExport(callback: (update: ExportUpdate) => void): () => void;
+  // ---- captions, sound, effects
+  /** Your words and corrections (vocabulary.json next to the editor engine). */
+  getVocabulary(): Promise<{ words: string[]; corrections: { from: string; to: string }[] }>;
+  setVocabulary(v: { words: string[]; corrections: { from: string; to: string }[] }): Promise<{ ok: boolean; error?: string }>;
+  /** Sound files in your music or sound-effect folder (Settings). */
+  listLibrary(kind: "music" | "sfx"): Promise<{ folder: string; files: LibraryFile[]; error?: string }>;
+  pickFolder(title: string): Promise<string | null>;
+  /** Save a voice-over recorded in the app next to the project; returns its path. */
+  saveRecording(projectPath: string, data: Uint8Array, extension: string): Promise<{ path?: string; error?: string }>;
+  /** Transcribe start-end (timeline seconds) again and replace the captions there (saves the project). */
+  retranscribe(projectPath: string, start: number, end: number): Promise<{ project?: Project; words?: number; error?: string }>;
   onJobChanged(callback: (job: Job) => void): () => void;
   onHistoryChanged(callback: (history: VideoHistory) => void): () => void;
 }

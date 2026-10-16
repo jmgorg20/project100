@@ -22,7 +22,7 @@ python editor.py validate my.project.json
 | `format` | always `"autoedit-project"` |
 | `version` | `2` (version `1` files still load unchanged). A newer version is refused with "made by a newer version of the editor". |
 | `name` | display name |
-| `settings` | `width` 1080, `height` 1920 (version 1 is vertical only; export can scale down), `fps` (24, 25, 30, 50 or 60), `background` colour for empty parts, `audio` loudness settings, `fonts` (family names for the regular/bold/heavy caption fonts) |
+| `settings` | `width` 1080, `height` 1920 (vertical only; export can scale down), `fps` (24, 25, 30, 50 or 60), `background` colour for empty parts, `audio` (`normalize`, `loudness`, `true_peak`; `ducking` 0-1: lower the music while someone speaks; `denoise` 0-1: reduce steady noise in the speech), `fonts` (family names for the regular/bold/heavy caption fonts) |
 | `media` | the files: `id`, `kind` (`video`, `image`, `audio`), `path` (absolute, or relative to the project file), `duration` (seconds, 0 for images), `width`, `height`, `has_audio` |
 | `tracks` | the timeline, drawn bottom to top in list order |
 | `transcript` | optional: the word timings of a video (`media`, `language`, `words` with source-file times). Used by the AI. |
@@ -40,8 +40,9 @@ track may not overlap; use another track of the same kind instead.
 | `video` (only one: the main track) | `video` | `in`, `out`, `volume` (0-4, 1 = as recorded), `fit` (`fill` crops to fill the frame, `blur` shows the whole picture over a blurred copy), optional `layout` (`{"type": "split" or "pip", "screen": <media id>}` combines it with a screen recording that started at the same moment). Version 2: `speed` (0.25-4), `fade_in`/`fade_out` (its sound, seconds), `crop` (see below) |
 | | `image` | `fit`; version 2: `crop` |
 | `overlay` (photos, B-roll, logo) | `image` or `video` | `x`, `y` (centre, pixels on the 1080x1920 frame), `width`, `height` (the picture is scaled to fit inside), `opacity` (0-1), `animation` (`none`, `pop`); `video` also needs `in`/`out`, and may have `speed` |
-| `effect` | `zoom` | `amount` (1-5), `anchor_y` (0 = zoom towards the top, 0.5 = the middle; default 0.4) |
-| | `grade` | `grade`: `natural_clean`, `none`, `warm`, `black_and_white`, `orange_teal`, `high_contrast` |
+| `effect` | `zoom` | `amount` (1-5), `anchor_y` (0 = zoom towards the top, 0.5 = the middle; default 0.4); `ease` (seconds to grow from 100%; 0 or missing = punch-in) |
+| | `grade` | `grade`: `natural_clean`, `none`, `warm`, `black_and_white`, `orange_teal`, `high_contrast`; `intensity` (0-1, default 1: blended with the original) |
+| | `fx` | `effect`: `shake`, `flash` (to white), `dip` (to black), `glitch` (colour split + noise), `whip` (sideways motion blur); `intensity` (0-1, default 0.6). Flash and dip peak in the middle of the clip. Used for transitions too (a short `fx` clip centred on a cut). |
 | `caption` | `caption` | `style` (name or number 1-13), `highlight_keywords` (true/false), `overrides` (size, colours, outline, `zone` `lower`/`center`/`top`/`divider`, `align`, case, words per line...), `words` (each `text`, `start`, `end` in seconds **from the start of the clip**, `highlight`) |
 | `audio` (needs a `role`: `original`, `voiceover`, `music`, `sfx`) | `audio` | `in`, `out`, `volume`, `fade_in`, `fade_out` (seconds); version 2: `speed` |
 
@@ -77,12 +78,17 @@ One FFmpeg command, in this order:
    framing are decoded together in one pass (like the original editor). Reordered clips,
    other files, stills and gaps become separate pieces joined with `concat`.
 2. **Zoom** effect clips, then **colour grade** clips (on overlapping clips, the later
-   track wins).
+   track wins), then **fx** clips (shake, flash, dip, glitch, whip) in track order.
 3. **Overlay** tracks, in track order (later tracks on top).
 4. **Captions** (on top of everything).
-5. **Sound:** the main track's sound plus `original`/`voice-over` tracks form the speech;
-   if `settings.audio.normalize` is on, the speech is evened out to `loudness` LUFS; then
-   `music` and `sfx` tracks are mixed in at their own volume and a limiter stops clipping.
+5. **Sound:**
+   - The main track's sound plus the `original`/`voice-over` tracks form the speech.
+   - With `denoise`, FFmpeg's `afftdn` lowers steady noise. Its noise floor is measured in
+     the pauses of the speech files.
+   - If `settings.audio.normalize` is on, the speech is evened out to `loudness` LUFS.
+   - The `music` tracks are mixed and, with `ducking`, compressed whenever the speech is
+     louder than a whisper (`sidechaincompress`, keyed by the speech).
+   - Then the music and `sfx` are mixed in at their own volume, and a limiter stops clipping.
 6. Export size (1080x1920, 720x1280 or 540x960), H.264 + AAC, 48 kHz.
 
 ## Command line (also used by the desktop app)

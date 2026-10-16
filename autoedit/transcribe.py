@@ -27,15 +27,23 @@ def load_dotenv(path=None):
             os.environ[key] = value
 
 
-def extract_audio(video, out_path):
-    """Small mono MP3 of the speech: fast to upload and enough for Whisper."""
-    run_ffmpeg(["-i", str(video), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libmp3lame",
+def extract_audio(video, out_path, start=None, end=None):
+    """Small mono MP3 of the speech: fast to upload and enough for Whisper.
+
+    `start`/`end` (seconds in the file): only that part.
+    """
+    part = []
+    if start is not None:
+        part += ["-ss", f"{max(0.0, start):.3f}"]
+    if end is not None:
+        part += ["-t", f"{max(0.05, end - (start or 0)):.3f}"]
+    run_ffmpeg([*part, "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libmp3lame",
                 "-b:a", "32k", str(out_path)], "extracting audio for transcription",
                show_progress=False)
     return out_path
 
 
-def transcribe_groq(audio_path, language, model):
+def transcribe_groq(audio_path, language, model, prompt=None):
     import requests
 
     load_dotenv()
@@ -59,6 +67,8 @@ def transcribe_groq(audio_path, language, model):
         "timestamp_granularities[]": ["word", "segment"],
         "temperature": "0",
     }
+    if prompt:
+        data["prompt"] = prompt          # your vocabulary: helps Whisper spell names right
     try:
         with open(audio_path, "rb") as f:
             response = requests.post(
@@ -79,7 +89,7 @@ def transcribe_groq(audio_path, language, model):
     return words_from_data(response.json())
 
 
-def transcribe_local(audio_path, language, model_name, device):
+def transcribe_local(audio_path, language, model_name, device, prompt=None):
     try:
         from faster_whisper import WhisperModel
     except ImportError:
@@ -93,7 +103,8 @@ def transcribe_local(audio_path, language, model_name, device):
     except Exception as exc:  # CUDA missing, bad model name...
         raise EditorError(f"Could not load the local Whisper model '{model_name}': {exc}")
     segments, _info = model.transcribe(str(audio_path), language=language,
-                                       word_timestamps=True, vad_filter=False)
+                                       word_timestamps=True, vad_filter=False,
+                                       initial_prompt=prompt)
     words = []
     for segment in segments:
         for w in segment.words or []:
@@ -103,12 +114,25 @@ def transcribe_local(audio_path, language, model_name, device):
     return words_from_data({"words": words})
 
 
-def transcribe(video, cfg, work_dir):
-    audio = extract_audio(video, Path(work_dir) / "speech.mp3")
+def transcribe(video, cfg, work_dir, start=None, end=None):
+    """Word timestamps of a file's speech (or of start-end seconds of it, in file time).
+
+    Your vocabulary (vocabulary.json) is sent as a hint; corrections are applied by the
+    callers (vocabulary.fix_words), so they also reach transcripts saved earlier.
+    """
+    from .vocabulary import load_vocabulary, prompt_for, vocabulary_path
+    audio = extract_audio(video, Path(work_dir) / "speech.mp3", start, end)
     t = cfg["transcription"]
     provider = str(t["provider"]).lower()
+    prompt = prompt_for(load_vocabulary(vocabulary_path(cfg)))
     if provider == "groq":
-        return transcribe_groq(audio, cfg["language"], t["groq_model"])
-    if provider == "local":
-        return transcribe_local(audio, cfg["language"], t["local_model"], t["local_device"])
-    raise EditorError(f"Unknown transcription provider '{t['provider']}'. Use 'groq' or 'local'.")
+        words = transcribe_groq(audio, cfg["language"], t["groq_model"], prompt)
+    elif provider == "local":
+        words = transcribe_local(audio, cfg["language"], t["local_model"], t["local_device"],
+                                 prompt)
+    else:
+        raise EditorError(f"Unknown transcription provider '{t['provider']}'. "
+                          f"Use 'groq' or 'local'.")
+    if start:
+        words = [w.copy(start=w.start + start, end=w.end + start) for w in words]
+    return words

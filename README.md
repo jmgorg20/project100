@@ -41,7 +41,7 @@ anything by hand. See [Project files](#project-files).
 Be aware of what has and has not been checked:
 
 **Tested (automatically, on Linux with FFmpeg 6.1, Python 3.13):**
-- 239 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
+- 250 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
   keyword rules, settings, edit plans, watch mode, and all 13 caption styles. Each style
   is turned into a subtitle file and drawn by FFmpeg/libass to check that text appears.
 - **Project files:** the schema and ~30 kinds of mistakes (each with a clear message);
@@ -69,8 +69,18 @@ Be aware of what has and has not been checked:
   10 browser tests drive the editor; the projects it saves are validated by the engine. The
   main process opens, saves, reads media and exports with the real engine (size, frame rate,
   progress, cancel). See [docs/timeline-editor.md](docs/timeline-editor.md).
-- **Desktop app:** 100 unit tests (including the app's main process driving the real
-  engine from start to finished video, undo/redo, exact frame) and 25 browser tests of the
+- **Captions, sound and effects in the editor:**
+  - **Effects** are checked pixel by pixel in real renders (shake, flash, dip to black,
+    glitch, whip blur, smooth zoom and colour strength).
+  - **Ducking** is measured: the music is more than 2.5× quieter while the voice plays,
+    and back to normal after.
+  - **Noise reduction** is measured: hiss more than 5× lower, with the voice kept.
+  - **Vocabulary corrections** give the same result in the app and in the engine.
+  - **"Listen again"** maps words through sped-up clips correctly (tested with a fake
+    transcriber).
+  - A **voice-over recorded in Chromium** (fake microphone) is saved, measured and rendered.
+- **Desktop app:** 133 unit tests (including the app's main process driving the real
+  engine from start to finished video, undo/redo, exact frame) and 31 browser tests of the
   window (Playwright, at 1280x800 and 1920x1080, with screenshots checked by eye): Auto mode
   on by default and rendering with no extra clicks, live progress, the summary and cost,
   undo/redo, review with Auto mode off, the fallback warning, keys never shown, the
@@ -91,6 +101,12 @@ Be aware of what has and has not been checked:
   `tl`, word timestamps, key not printed).
 
 **Not tested:**
+- **Real speech:**
+  - how well "listen again" and the vocabulary hint work on real Taglish speech (no
+    transcriber could be reached here);
+  - noise reduction and ducking on real recordings (only synthetic tones and white noise
+    were measured);
+  - recording with a real microphone (only Chromium's fake microphone).
 - **The timeline editor inside the real Electron window on Windows:**
   - mouse dragging, file drops from Windows Explorer, the save dialog;
   - playing MP4 (H.264) in the preview: the tests use a browser that has no H.264, with WebM copies.
@@ -310,7 +326,9 @@ playhead.
 If the AI's plan fails the checks twice (or the AI cannot be reached), you get the normal
 preset edit and a "Heads up" at the top of the summary saying why.
 
-**Fix it by hand · Ayusin nang mano-mano.** Click **Edit on timeline** under the summary (or
+**Fix it by hand · Ayusin nang mano-mano.** Captions (words, timing, style, emoji, "listen
+again"), your Taglish vocabulary, music/SFX from your own folders, voice-over recording,
+ducking, noise reduction, effects, transitions and speed ramps are all in the editor too. Click **Edit on timeline** under the summary (or
 **Open project…** at the top) to open the edit in the timeline editor:
 - split, trim, delete, move and reorder clips;
 - change speed, volume and fades, and reframe for 9:16;

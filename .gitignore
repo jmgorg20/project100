@@ -237,3 +237,4 @@ assets/sfx/*
 generation_templates/*
 !generation_templates/.gitkeep
 !generation_templates/README.txt
+/vocabulary.json

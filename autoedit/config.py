@@ -19,6 +19,7 @@ DEFAULTS = {
         "groq_model": "whisper-large-v3",
         "local_model": "medium",
         "local_device": "auto",
+        "vocabulary_file": "vocabulary.json",
     },
     "presets": {
         "fast": {

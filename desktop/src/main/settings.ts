@@ -14,6 +14,8 @@ export function defaultSettings(platform: string, engineDir: string): Settings {
     transcribeWith: "groq",
     autoMode: true,
     consentAccepted: false,
+    musicFolder: "",
+    sfxFolder: "",
   };
 }
 

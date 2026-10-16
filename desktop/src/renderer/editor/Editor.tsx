@@ -13,9 +13,14 @@ import { createHistory, pushHistory, redoHistory, undoHistory, type History } fr
 import { FrameDialog } from "../components/Dialogs";
 import { Player, mmss, type PlayerHandle } from "../components/Player";
 import { api, mediaUrl } from "../lib/api";
+import { addCaption, addEmoji, correctCaptions, editWordText, setCaptionLook, setCaptionWords, toggleHighlight } from "../../shared/captionEdit";
+import { addFx, addGrade, addTransition, addZoom, setAudioSettings, speedRamp } from "../../shared/effectsEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Inspector } from "./Inspector";
-import { MediaBin } from "./MediaBin";
+import { LeftPanel } from "./LeftPanel";
+import { ProjectPanel } from "./ProjectPanel";
+import { Recorder } from "./Recorder";
+import { VocabularyDialog } from "./VocabularyDialog";
 import { SHORTCUTS, actionFor, typingInto, type Action } from "./shortcuts";
 import { Timeline } from "./Timeline";
 
@@ -40,6 +45,13 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
   const [showExport, setShowExport] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [showRecorder, setShowRecorder] = useState(false);
+  const [showVocab, setShowVocab] = useState(false);
+  const [retranscribing, setRetranscribing] = useState(false);
+  const [folders, setFolders] = useState({ music: "", sfx: "" });
+  useEffect(() => {
+    api.getSettings().then((st) => setFolders({ music: st.musicFolder ?? "", sfx: st.sfxFolder ?? "" }));
+  }, []);
   const [frame, setFrame] = useState<{ url?: string; error?: string } | null>(null);
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef<PlayerHandle>(null);
@@ -255,7 +267,7 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (showExport || frame || typingInto(e.target)) return;
+      if (showExport || frame || showRecorder || showVocab || typingInto(e.target)) return;
       const action = actionFor(e);
       if (!action) return;
       e.preventDefault();
@@ -263,7 +275,7 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [run, showExport, frame]);
+  }, [run, showExport, frame, showRecorder, showVocab]);
 
   // ---- media
   const importFiles = async (paths: string[]) => {
@@ -287,6 +299,60 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
       return r.project;
     });
     if (added) setSelection([added]);
+  };
+
+  /** A file from your music/sound folders or a new recording: add it on its sound track. */
+  const addSoundFile = async (file: string, role: "music" | "sfx" | "voiceover") => {
+    const r = await api.mediaInfo([file]);
+    if (!r.media.length) {
+      setToast(r.errors[0]?.message ?? `Could not read ${baseName(file)}.`);
+      return;
+    }
+    let added: string | null = null;
+    apply((p) => {
+      const withMedia = addMedia(p, r.media);
+      const q = withMedia.project;
+      const track = q.tracks.find((t) => t.kind === "audio" && t.role === role && !t.locked);
+      const target = track ? q : { ...q, tracks: [...q.tracks, { id: `${role}_${Date.now() % 100000}`, kind: "audio" as const, role, name: role === "sfx" ? "Sound effects" : role === "voiceover" ? "Voice-over" : "Music", clips: [] }] };
+      const trackId = (track ?? target.tracks[target.tracks.length - 1]).id;
+      const ins = insertMedia(target, withMedia.ids[0], playhead, trackId);
+      added = ins.clipId;
+      return ins.project;
+    });
+    if (added) setSelection([added]);
+  };
+
+  const chooseFolder = async (kind: "music" | "sfx") => {
+    const folder = await api.pickFolder(kind === "music" ? "Your music folder" : "Your sound-effects folder");
+    if (!folder) return;
+    await api.setSettings(kind === "music" ? { musicFolder: folder } : { sfxFolder: folder });
+    setFolders((f) => ({ ...f, [kind]: folder }));
+  };
+
+  const withNewClip = (fn: (p: Project) => { project: Project; clipId: string }) => {
+    let added: string | null = null;
+    apply((p) => {
+      const r = fn(p);
+      added = r.clipId;
+      return r.project;
+    });
+    if (added) setSelection([added]);
+  };
+
+  const retranscribe = async (id: string) => {
+    if (!project) return;
+    const f = findClip(project, id);
+    if (!f) return;
+    const problem = await saveNow();
+    if (problem) return setToast(problem);
+    setRetranscribing(true);
+    const r = await api.retranscribe(path, f.clip.start, f.clip.start + f.clip.duration);
+    setRetranscribing(false);
+    if (!r.project) return setToast(r.error ?? "Could not transcribe that part again.");
+    savedProject.current = r.project; // the engine saved it
+    if (histRef.current) commit(pushHistory(histRef.current, r.project));
+    savedProject.current = histRef.current?.present ?? r.project;
+    setToast(`Listened again: ${r.words ?? 0} words. Undo (Ctrl+Z) brings the old captions back.`);
   };
 
   const exactFrame = async () => {
@@ -348,10 +414,27 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
         <button className="btn small primary" onClick={() => setShowExport(true)} data-testid="export">Export</button>
       </header>
 
-      <MediaBin project={project} thumbs={thumbs} url={url} busy={importing} onImport={async () => importFiles(await api.pickMedia())} onAdd={(id, where) => addAt(id, where)} />
+      <LeftPanel
+        project={project}
+        thumbs={thumbs}
+        url={url}
+        busy={importing}
+        onImport={async () => importFiles(await api.pickMedia())}
+        onAdd={(id, where) => addAt(id, where)}
+        onAddLibrary={(file, kind) => void addSoundFile(file, kind)}
+        folders={folders}
+        onChooseFolder={chooseFolder}
+        effects={{
+          onFx: (fx) => withNewClip((p) => addFx(p, fx, playhead)),
+          onTransition: (fx) => withNewClip((p) => addTransition(p, fx, playhead)),
+          onZoom: (kind) => withNewClip((p) => addZoom(p, kind, playhead)),
+          onGrade: (grade, whole) =>
+            withNewClip((p) => addGrade(p, grade, whole ? undefined : mainTrack(p)?.clips.find((c) => playhead >= c.start && playhead < clipEnd(c))?.id)),
+        }}
+      />
 
       <main className="ed-preview" aria-label="Preview">
-        <Player ref={playerRef} project={project} videoPath={null} mediaUrl={url} keepTime compact onTime={setPlayhead} onPlaying={setPlaying} />
+        <Player ref={playerRef} project={project} videoPath={null} mediaUrl={url} keepTime compact onTime={setPlayhead} onPlaying={setPlaying} onCaptionClick={(id) => setSelection([id])} />
         <div className="ed-transport">
           <button className="btn small" onClick={() => run("play")} aria-label={playing ? "Pause" : "Play"} data-testid="play">{playing ? "❚❚" : "▶"}</button>
           <span className="time" data-testid="time">{mmss(playhead)} / {mmss(total)}</span>
@@ -365,7 +448,26 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
           selection={selection}
           onProps={(id, patch: ClipPatch, key) => apply((p) => setClipProps(p, id, patch), key)}
           onSpeed={(id, sp) => apply((p) => setSpeed(p, id, sp), `speed:${id}`)}
+          onRamp={(id, ramp) => apply((p) => speedRamp(p, id, ramp as never))}
           onDelete={remove}
+          captions={{
+            busy: retranscribing,
+            onWords: (id, words, key) => apply((p) => setCaptionWords(p, id, words), `${key}:${id}`),
+            onWordText: (id, i, text) => apply((p) => editWordText(p, id, i, text)),
+            onHighlight: (id, i) => apply((p) => toggleHighlight(p, id, i)),
+            onEmoji: (id, i, e) => apply((p) => addEmoji(p, id, i, e)),
+            onLook: (id, look, all) => apply((p) => setCaptionLook(p, all ? "all" : [id], look), `look:${all ? "all" : id}`),
+            onRetranscribe: (id) => void retranscribe(id),
+          }}
+          empty={
+            <ProjectPanel
+              project={project}
+              onAudio={(patch, key) => apply((p) => setAudioSettings(p, patch), `audio:${key}`)}
+              onVocabulary={() => setShowVocab(true)}
+              onAddCaption={(text) => withNewClip((p) => addCaption(p, playhead, text))}
+              onRecord={() => setShowRecorder(true)}
+            />
+          }
         />
       </aside>
 
@@ -411,6 +513,32 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
         <ExportDialog projectPath={path} defaultOutput={exportPathFor(path)} fps={fps} beforeExport={saveNow} onClose={() => setShowExport(false)} />
       )}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
+      {showRecorder && (
+        <Recorder
+          startAt={mmss(playhead)}
+          onClose={() => setShowRecorder(false)}
+          onUse={async (data, extension) => {
+            const r = await api.saveRecording(path, data, extension);
+            if (!r.path) return setToast(r.error ?? "Could not save the recording.");
+            await addSoundFile(r.path, "voiceover");
+            setShowRecorder(false);
+          }}
+        />
+      )}
+      {showVocab && (
+        <VocabularyDialog
+          onClose={() => setShowVocab(false)}
+          onApply={(corrections) => {
+            let changed = 0;
+            apply((p) => {
+              const r = correctCaptions(p, corrections);
+              changed = r.changed;
+              return r.project;
+            });
+            setToast(changed ? `Fixed ${changed} caption${changed === 1 ? "" : "s"}.` : "No caption needed fixing.");
+          }}
+        />
+      )}
       {frame && (
         <FrameDialog
           previewNote="This is the true frame from the FFmpeg engine at the playhead: what the export will look like."

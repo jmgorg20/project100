@@ -11,6 +11,8 @@ import {
 } from "../../src/shared/edit";
 import type { Project } from "../../src/shared/types";
 import { sample } from "./edit.test";
+import { addCaption, addEmoji, correctCaptions, editWordText, setCaptionLook, toggleHighlight } from "../../src/shared/captionEdit";
+import { addFx, addGrade, addTransition, addZoom, setAudioSettings, speedRamp } from "../../src/shared/effectsEdit";
 
 const python = process.platform === "win32" ? "python" : "python3";
 const repo = path.resolve(__dirname, "..", "..", "..");
@@ -28,7 +30,9 @@ function randomEdit(p: Project, r: () => number): Project {
   if (!clips.length) return insertMedia(p, "m1", 0).project;
   const { t, c } = clips[Math.floor(r() * clips.length)];
   const at = r() * (projectDuration(p) + 1);
-  switch (Math.floor(r() * 11)) {
+  const pick = Math.floor(r() * 19);
+  if (pick >= 11) return phase2Edit(p, r, pick, t, c, at);
+  switch (pick) {
     case 0:
       return splitClip(p, c.id, c.start + r() * c.duration).project;
     case 1:
@@ -51,6 +55,31 @@ function randomEdit(p: Project, r: () => number): Project {
       return setTrackFlag(p, t.id, ["muted", "hidden", "locked"][Math.floor(r() * 3)] as "muted", r() < 0.5);
     default:
       return moveClip(p, clips.find((x) => x.t.kind !== "video")?.c.id ?? c.id, at).project;
+  }
+}
+
+function phase2Edit(p: Project, r: () => number, pick: number, t: Project["tracks"][number], c: Project["tracks"][number]["clips"][number], at: number): Project {
+  const fx = (["shake", "flash", "dip", "glitch", "whip"] as const)[Math.floor(r() * 5)];
+  const caps = p.tracks.filter((x) => x.kind === "caption").flatMap((x) => x.clips);
+  const cap = caps[Math.floor(r() * caps.length)];
+  switch (pick) {
+    case 11:
+      return addFx(p, fx, at, r()).project;
+    case 12:
+      return addTransition(p, fx, at, r()).project;
+    case 13:
+      return r() < 0.5 ? addZoom(p, r() < 0.5 ? "punch" : "smooth", at).project : addGrade(p, "orange_teal", t.kind === "video" ? c.id : undefined, r()).project;
+    case 14:
+      return t.kind === "video" ? speedRamp(p, c.id, (["speed_up", "slow_down", "bullet", "montage"] as const)[Math.floor(r() * 4)]) : setAudioSettings(p, { ducking: r(), denoise: r(), normalize: r() < 0.5 });
+    case 15:
+      if (!cap) return addCaption(p, at, "Kumusta mga kaibigan").project;
+      return editWordText(p, cap.id, Math.floor(r() * cap.words!.length), r() < 0.2 ? "" : r() < 0.5 ? "GCash na" : "salamat");
+    case 16:
+      return cap ? setCaptionLook(p, r() < 0.5 ? "all" : [cap.id], { style: r() < 0.5 ? "bold_caps" : "one_word", zone: (["auto", "lower", "center", "top"] as const)[Math.floor(r() * 4)], size: r() < 0.3 ? null : 40 + r() * 200 }) : p;
+    case 17:
+      return cap ? (r() < 0.5 ? toggleHighlight(p, cap.id, 0) : addEmoji(p, cap.id, Math.floor(r() * 9), "🔥")) : p;
+    default:
+      return r() < 0.5 ? correctCaptions(p, [{ from: "kumusta", to: "Hello" }, { from: "kayo", to: "kayong lahat" }]).project : addCaption(p, at, "Bagong caption dito").project;
   }
 }
 

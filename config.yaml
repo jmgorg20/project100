@@ -20,6 +20,7 @@ transcription:
   groq_model: whisper-large-v3
   local_model: medium         # local model size: small, medium, large-v3 (bigger = slower, better)
   local_device: auto          # auto, cpu or cuda (NVIDIA graphics card)
+  vocabulary_file: vocabulary.json   # your words + corrections (the app edits it)
 
 presets:
   fast:
