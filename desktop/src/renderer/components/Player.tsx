@@ -7,8 +7,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Clip, Media, Project, Word } from "../../shared/types";
 import {
-  CANVAS, GRADE_CSS, audioClipsAt, captionAt, captionPlacement, clipGain, clipSourceTime, cropBox, displayText, duration, gradeAt,
-  overlaysAt, popOpacity, popScale, segmentAt, segments, sourceTime, zoomAt, type CaptionFrame,
+  CANVAS, audioClipsAt, captionAt, captionPlacement, clipGain, clipSourceTime, cropBox, displayText, duration, fxAt, fxStyle, gradeCss,
+  gradeLookAt, overlaysAt, popOpacity, popScale, segmentAt, segments, sourceTime, zoomAt, type CaptionFrame,
 } from "../lib/timeline";
 
 // libass sizes text so that ascent + descent equals the style size; Inter's is 1.211 em.
@@ -44,7 +44,7 @@ function useStageSize(): [React.RefObject<HTMLDivElement | null>, { width: numbe
   return [ref, size];
 }
 
-function CaptionView({ frame }: { frame: CaptionFrame }) {
+function CaptionView({ frame, onClick }: { frame: CaptionFrame; onClick?: (id: string) => void }) {
   const { style, lines, active } = frame;
   const place = captionPlacement(style, lines.length);
   const fontSize = style.size / INTER_LINE;
@@ -63,7 +63,13 @@ function CaptionView({ frame }: { frame: CaptionFrame }) {
   };
   let index = 0;
   return (
-    <div className="caption" style={base} data-testid="caption">
+    <div
+      className={`caption${onClick ? " clickable" : ""}`}
+      style={base}
+      data-testid="caption"
+      onClick={onClick ? () => onClick(frame.clip.id) : undefined}
+      title={onClick ? "Click to edit this caption" : undefined}
+    >
       {lines.map((line: Word[], row) => (
         <div key={row} style={style.box ? { background: style.box_color, padding: `0 ${style.box_padding}px`, display: "table", margin: "0 auto" } : undefined}>
           {line.map((word, i) => {
@@ -171,10 +177,12 @@ interface PlayerProps {
   /** Hide the player's own transport bar (the editor has its own). */
   compact?: boolean;
   onPlaying?: (playing: boolean) => void;
+  /** Clicking a caption on the picture (the editor selects it). */
+  onCaptionClick?: (clipId: string) => void;
 }
 
 export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
-  { project, videoPath, mediaUrl, onExactFrame, emptyText, onTime, keepTime, compact, onPlaying },
+  { project, videoPath, mediaUrl, onExactFrame, emptyText, onTime, keepTime, compact, onPlaying, onCaptionClick },
   handle,
 ) {
   const [wrapRef, size] = useStageSize();
@@ -332,7 +340,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const showVideo = !project || seg?.clip?.type === "video";
   const still = project && seg?.clip?.type === "image" ? media.get(seg.clip.media ?? "") : null;
   const zoom = project ? zoomAt(project, time) : { amount: 1, anchorY: 0.4 };
-  const grade = project ? GRADE_CSS[gradeAt(project, time)] ?? "none" : "none";
+  const look = project ? gradeLookAt(project, time) : { grade: "none", intensity: 1 };
+  const fx = project ? fxStyle(fxAt(project, time), CANVAS.width, CANVAS.height) : { transform: "", filter: "", overlay: null };
+  const gradeFilter = gradeCss(look.grade, look.intensity);
+  const grade = [gradeFilter === "none" ? "" : gradeFilter, fx.filter].filter(Boolean).join(" ") || "none";
   const caption = project ? captionAt(project, time) : null;
   const overlays = project ? overlaysAt(project, time) : [];
   const sounds = project ? audioClipsAt(project, time) : [];
@@ -349,10 +360,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               <div
                 className="picture"
                 style={{
-                  transform: zoom.amount > 1 ? `scale(${zoom.amount})` : undefined,
+                  transform: [zoom.amount > 1 ? `scale(${zoom.amount})` : "", fx.transform].filter(Boolean).join(" ") || undefined,
                   transformOrigin: `50% ${zoom.anchorY * 100}%`,
                   filter: grade,
                 }}
+                data-testid="picture"
               >
                 <video
                   ref={videoRef}
@@ -365,6 +377,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                   preload="auto"
                 />
                 {still && stillFrame && <img className={`still ${stillFrame.className ?? ""}`} src={mediaUrl(still.path)} alt="" style={stillFrame.style} />}
+                {fx.overlay && <div className="fx-layer" style={{ background: fx.overlay.color, opacity: fx.overlay.opacity }} data-testid="fx-layer" />}
               </div>
               {overlays.map((clip) => {
                 const m = media.get(clip.media ?? "");
@@ -372,7 +385,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 if (m?.kind === "video" && clip.type === "video") return <OverlayVideoView key={clip.id} clip={clip} t={time} url={mediaUrl(m.path)} playing={playing} />;
                 return null;
               })}
-              {caption && <CaptionView frame={caption} />}
+              {caption && <CaptionView frame={caption} onClick={onCaptionClick} />}
             </div>
             {sounds.map(({ clip, muted }) => {
               const m = media.get(clip.media ?? "");

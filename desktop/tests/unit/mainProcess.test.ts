@@ -51,6 +51,7 @@ vi.mock("electron", () => {
       decryptString: (b: Buffer) => Buffer.from(b).reverse().toString(),
     },
     shell: { openExternal: () => {}, openPath: async () => "" },
+    session: { defaultSession: { setPermissionRequestHandler: () => {}, setPermissionCheckHandler: () => {} } },
   };
 });
 
@@ -334,4 +335,65 @@ save_project(p, sys.argv[2])`, path.join(tmp, "talk.mp4"), file], { cwd: repo })
     expect(fs.existsSync(path.join(tmp, "never.mp4"))).toBe(false);
     expect(fs.existsSync(path.join(tmp, "never.part.mp4"))).toBe(false);
   }, 200_000);
+
+  // ---------------------------------------------------------------- captions, sound, effects
+
+  it("reads and saves your vocabulary next to the engine (starting from the example)", async () => {
+    const file = path.join(repo, "vocabulary.json");
+    const had = fs.existsSync(file) ? fs.readFileSync(file, "utf-8") : null;
+    try {
+      if (had !== null) fs.rmSync(file);
+      const first = (await call("vocab:get")) as { words: string[] };
+      expect(first.words).toContain("GCash"); // from vocabulary.example.json
+      expect(await call("vocab:set", { words: ["Ate Rose", " "], corrections: [{ from: "g cash", to: "GCash" }, { from: "", to: "x" }] })).toEqual({ ok: true });
+      expect(JSON.parse(fs.readFileSync(file, "utf-8"))).toEqual({ words: ["Ate Rose"], corrections: [{ from: "g cash", to: "GCash" }] });
+      expect(await call("vocab:get")).toEqual({ words: ["Ate Rose"], corrections: [{ from: "g cash", to: "GCash" }] });
+    } finally {
+      if (had !== null) fs.writeFileSync(file, had);
+      else fs.rmSync(file, { force: true });
+    }
+  });
+
+  it("lists your music folder (sound files only, also in sub-folders)", async () => {
+    const music = path.join(tmp, "My Music");
+    fs.mkdirSync(path.join(music, "Upbeat"), { recursive: true });
+    fs.writeFileSync(path.join(music, "a song.mp3"), "x");
+    fs.writeFileSync(path.join(music, "Upbeat", "b.WAV"), "x");
+    fs.writeFileSync(path.join(music, "cover.jpg"), "x");
+    expect(await call("library:list", "music")).toEqual({ folder: "", files: [] }); // no folder chosen yet
+    await call("settings:set", { musicFolder: music });
+    const r = (await call("library:list", "music")) as { files: { name: string; group: string }[] };
+    expect(r.files.map((f) => [f.name, f.group])).toEqual([["a song.mp3", ""], ["b.WAV", "Upbeat"]]);
+    await call("settings:set", { musicFolder: path.join(tmp, "gone") });
+    expect(((await call("library:list", "music")) as { error: string }).error).toContain("not found");
+  });
+
+  it("saves a recording next to the project, and the engine can read its length", async () => {
+    const file = path.join(tmp, "edit me.project.json");
+    const data = new Uint8Array(fs.readFileSync(path.join(repo, "tests", "data", "browser_recording.webm")));
+    const r = (await call("media:saveRecording", file, data, "webm")) as { path: string };
+    expect(path.dirname(r.path)).toBe(path.join(tmp, "recordings"));
+    expect(fs.readFileSync(r.path).length).toBe(data.length);
+    const info = (await call("media:info", [r.path])) as { media: { kind: string; duration: number }[] };
+    expect(info.media[0].kind).toBe("audio");
+    expect(info.media[0].duration).toBeGreaterThan(1.5);
+    expect(((await call("media:saveRecording", file, data, "../x")) as { error: string }).error).toBeTruthy();
+  }, 60_000);
+
+  it("listen again: the engine's error comes back clearly (no transcriber key in the tests)", async () => {
+    const file = path.join(tmp, "edit me.project.json");
+    const before = fs.readFileSync(file, "utf-8");
+    const env = { ...process.env };
+    // Empty (not removed): the engine then does not read a real key from your .env file.
+    process.env.GROQ_API_KEY = "";
+    try {
+      const r = (await call("project:retranscribe", file, 0, 1)) as { error?: string; project?: unknown };
+      expect(r.project).toBeUndefined();
+      expect(r.error).toMatch(/GROQ_API_KEY|Groq|transcrib/i);
+    } finally {
+      if (env.GROQ_API_KEY === undefined) delete process.env.GROQ_API_KEY;
+      else process.env.GROQ_API_KEY = env.GROQ_API_KEY;
+    }
+    expect(fs.readFileSync(file, "utf-8")).toBe(before); // nothing changed
+  }, 120_000);
 });

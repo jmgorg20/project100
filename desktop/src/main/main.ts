@@ -1,9 +1,10 @@
 // Electron main process: window, settings, encrypted keys, the job queue and the engine.
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExportOptions, ExportUpdate } from "../shared/api";
 import { versionFromJob } from "../shared/jobs";
+import { cleanVocabulary } from "../shared/captionEdit";
 import { backupPathFor } from "../shared/paths";
 import type { ContentType, EngineEvent, Job, JobRequest, Plan, Project, Provider, Settings } from "../shared/types";
 import { runEngine, type EngineConfig, type RunHandle } from "./engine";
@@ -112,6 +113,31 @@ function startExport(projectPath: string, o: ExportOptions): string {
   });
   return taskId;
 }
+
+/** Sound files in a folder (and up to 3 folders down), for the music / sound-effect library. */
+export function listAudioFiles(folder: string, limit = 1000): { path: string; name: string; group: string }[] {
+  const out: { path: string; name: string; group: string }[] = [];
+  const walk = (dir: string, depth: number) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (out.length >= limit) return;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory() && depth < 3 && !e.name.startsWith(".")) walk(full, depth + 1);
+      else if (e.isFile() && AUDIO_TYPES.includes(path.extname(e.name).slice(1).toLowerCase())) {
+        out.push({ path: full, name: e.name, group: path.relative(folder, dir) });
+      }
+    }
+  };
+  walk(folder, 0);
+  return out;
+}
+
+const vocabularyFile = () => path.join(settings.engineDir, "vocabulary.json");
 
 async function cachedEngine(cache: Map<string, unknown>, args: string[], key: string) {
   if (cache.has(key)) return cache.get(key);
@@ -270,6 +296,58 @@ function registerIpc(): void {
   ipcMain.handle("media:thumbs", (_e, file: string) => cachedEngine(thumbsCache, ["thumbs", file], file));
   ipcMain.handle("export:start", (_e, projectPath: string, options: ExportOptions) => startExport(projectPath, options));
   ipcMain.handle("export:cancel", (_e, taskId: string) => exportTasks.get(taskId)?.cancel());
+  // ---- captions, sound, effects
+  ipcMain.handle("vocab:get", () => {
+    for (const file of [vocabularyFile(), path.join(settings.engineDir, "vocabulary.example.json")]) {
+      try {
+        return cleanVocabulary(JSON.parse(fs.readFileSync(file, "utf-8")));
+      } catch {
+        // missing or damaged: try the next one
+      }
+    }
+    return cleanVocabulary({});
+  });
+  ipcMain.handle("vocab:set", (_e, v: unknown) => {
+    try {
+      writeAtomic(vocabularyFile(), JSON.stringify(cleanVocabulary(v as never), null, 1) + "\n");
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: `Could not save your vocabulary: ${(err as Error).message}` };
+    }
+  });
+  ipcMain.handle("library:list", (_e, kind: "music" | "sfx") => {
+    const folder = kind === "music" ? settings.musicFolder : settings.sfxFolder;
+    if (!folder) return { folder: "", files: [] };
+    if (!fs.existsSync(folder)) return { folder, files: [], error: `The folder ${folder} was not found.` };
+    return { folder, files: listAudioFiles(folder) };
+  });
+  ipcMain.handle("dialog:folder", async (_e, title: string) => {
+    const r = await dialog.showOpenDialog(window!, { title, properties: ["openDirectory"] });
+    return r.canceled ? null : r.filePaths[0];
+  });
+  ipcMain.handle("media:saveRecording", (_e, projectPath: string, data: Uint8Array, extension: string) => {
+    if (!/^[a-z0-9]{2,5}$/.test(extension)) return { error: "Unknown recording format." };
+    try {
+      const dir = path.join(path.dirname(projectPath), "recordings");
+      fs.mkdirSync(dir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
+      let file = path.join(dir, `voiceover-${stamp}.${extension}`);
+      for (let n = 2; fs.existsSync(file); n++) file = path.join(dir, `voiceover-${stamp}-${n}.${extension}`);
+      fs.writeFileSync(file, Buffer.from(data));
+      return { path: file };
+    } catch (err) {
+      return { error: `Could not save the recording: ${(err as Error).message}` };
+    }
+  });
+  ipcMain.handle("project:retranscribe", async (_e, projectPath: string, start: number, end: number) => {
+    const r = await engineOnce(["retranscribe", projectPath, "--start", String(start), "--end", String(end)]);
+    if (r.error || !r.result) return { error: r.error ?? "No answer from the editor engine." };
+    try {
+      return { project: JSON.parse(fs.readFileSync(projectPath, "utf-8")), words: r.result.words };
+    } catch (err) {
+      return { error: (err as Error).message };
+    }
+  });
   ipcMain.handle("engine:check", async () => {
     const r = await engineOnce(["validate", path.join(settings.engineDir, "examples", "project.json")]);
     return r.error ? { ok: false, message: r.error } : { ok: true, message: "The editor engine is ready." };
@@ -306,6 +384,11 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // The microphone, for recording voice-overs in the editor (this app's own window only).
+  session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
+    callback(permission === "media" && wc === window?.webContents);
+  });
+  session.defaultSession.setPermissionCheckHandler((wc, permission) => permission === "media" && wc === window?.webContents);
   settings = loadSettings(settingsFile(), defaultSettings(process.platform, defaultEngineDir()));
   keys = new KeyStore(path.join(dataDir(), "keys.json"), safeStorage);
   history = new HistoryStore(path.join(dataDir(), "history.json"));

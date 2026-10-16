@@ -76,6 +76,8 @@ def probe(path):
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
     audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
     duration = float(data.get("format", {}).get("duration") or 0)
+    if duration <= 0 and (video or audio):
+        duration = decoded_duration(path)
     info = {
         "duration": duration,
         "has_video": video is not None,
@@ -84,6 +86,17 @@ def probe(path):
         "height": int(video.get("height", 0)) if video else 0,
     }
     return info
+
+
+def decoded_duration(path):
+    """Length found by decoding the file, for files that do not state it (e.g. a voice-over
+    recorded in the app: browsers write WebM without a duration). 0 if it cannot be read."""
+    import re
+    result = subprocess.run([find_tool("ffmpeg"), "-v", "info", "-nostats", "-i", str(path),
+                             "-progress", "pipe:1", "-f", "null", "-"],
+                            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    times = re.findall(r"out_time_us=(\d+)", result.stdout)
+    return int(times[-1]) / 1e6 if times else 0.0
 
 
 def probe_video_with_audio(path):

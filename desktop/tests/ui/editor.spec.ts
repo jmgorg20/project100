@@ -1,48 +1,10 @@
 // The timeline editor in Chromium with the stand-in bridge (?mock=1). The project is the
 // engine's real AI-edit fixture; every project the editor saves is checked by the engine.
 import { expect, test, type Page } from "@playwright/test";
-import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import type { Project } from "../../src/shared/types";
+import { clipsOn, engineProblems, mainOf, openEditor, savedAfter } from "./editorHelpers";
 import { SHOTS, open } from "./helpers";
-
-const python = process.platform === "win32" ? "python" : "python3";
-const repo = path.resolve(__dirname, "..", "..", "..");
-
-async function openEditor(page: Page, query = "mock=1&consent=1&speed=4") {
-  await open(page, query);
-  await page.getByRole("button", { name: "Open project…" }).click();
-  await expect(page.getByTestId("timeline")).toBeVisible();
-  await expect(page.getByTestId("save-state")).toHaveText(/Saved/);
-}
-
-const clipsOn = (page: Page, track: string) => page.getByTestId(`track-${track}`).getByTestId("clip");
-
-const saveCount = (page: Page) => page.evaluate(() => (window as unknown as { savedProjects: unknown[] }).savedProjects.length);
-
-/** Do something in the editor and return the project it saves next (autosave). */
-async function savedAfter(page: Page, action: () => Promise<void>): Promise<Project> {
-  const before = await saveCount(page);
-  await action();
-  await expect.poll(() => saveCount(page), { timeout: 5000 }).toBeGreaterThan(before);
-  await expect(page.getByTestId("save-state")).toHaveText(/Saved/);
-  return page.evaluate(() => {
-    const w = window as unknown as { savedProjects: { project: Project }[] };
-    return w.savedProjects[w.savedProjects.length - 1].project;
-  });
-}
-
-/** The engine's own validator (autoedit/project.py) on a project the editor saved. */
-function engineProblems(project: Project): string[] {
-  const out = execFileSync(python, ["-c", "import json,sys; from autoedit.project import validate_project; print(json.dumps(validate_project(json.load(sys.stdin))))"], {
-    cwd: repo,
-    input: JSON.stringify(project),
-    encoding: "utf-8",
-  });
-  return JSON.parse(out);
-}
-
-const mainOf = (p: Project) => [...p.tracks.find((t) => t.kind === "video")!.clips].sort((a, b) => a.start - b.start);
 
 async function editorLayoutProblems(page: Page): Promise<string[]> {
   return page.evaluate(() => {

@@ -51,6 +51,12 @@ const api: AppApi = {
   startExport: (projectPath, options) => ipcRenderer.invoke("export:start", projectPath, options),
   cancelExport: (taskId) => ipcRenderer.invoke("export:cancel", taskId),
   onExport: (callback) => listen<ExportUpdate>("export:task", callback),
+  getVocabulary: () => ipcRenderer.invoke("vocab:get"),
+  setVocabulary: (v) => ipcRenderer.invoke("vocab:set", v),
+  listLibrary: (kind) => ipcRenderer.invoke("library:list", kind),
+  pickFolder: (title) => ipcRenderer.invoke("dialog:folder", title),
+  saveRecording: (projectPath, data, extension) => ipcRenderer.invoke("media:saveRecording", projectPath, data, extension),
+  retranscribe: (projectPath, start, end) => ipcRenderer.invoke("project:retranscribe", projectPath, start, end),
   onJobChanged: (callback) => listen<Job>("job:changed", callback),
   onHistoryChanged: (callback) => listen<VideoHistory>("history:changed", callback),
 };

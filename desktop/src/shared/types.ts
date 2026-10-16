@@ -266,6 +266,9 @@ export interface Settings {
   transcribeWith: "groq" | "local";
   autoMode: boolean;
   consentAccepted: boolean;
+  /** Your own music and sound-effect folders (the app never ships music). */
+  musicFolder: string;
+  sfxFolder: string;
 }
 
 export interface KeyStatus {

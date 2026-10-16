@@ -24,7 +24,7 @@ export function createMockApi(): AppApi {
   let settings: Settings = {
     pythonPath: "python", engineDir: "C:/AutoEditor", outputDir: "C:/AutoEditor/output", provider: "groq",
     groqModel: "openai/gpt-oss-120b", anthropicModel: "claude-opus-5-5", transcribeWith: "groq", autoMode: true,
-    consentAccepted: params.has("consent"),
+    consentAccepted: params.has("consent"), musicFolder: params.has("music") ? "C:/Users/me/Music" : "", sfxFolder: "",
   };
   let keys: KeysStatus = { encryptionAvailable: true, groq: { set: true, hint: "••••a1b2" }, anthropic: { set: false, hint: "" } };
   const jobs = new Map<string, Job>();
@@ -39,7 +39,15 @@ export function createMockApi(): AppApi {
   const stoppedTasks = new Set<string>();
   const opened: string[] = [];
   // The timeline editor: the AI edit's project, and what the engine said about the demo files.
-  const w = window as unknown as { savedProjects: { path: string; project: Project }[]; shownInFolder: string[]; exports: unknown[] };
+  const w = window as unknown as {
+    savedProjects: { path: string; project: Project }[];
+    shownInFolder: string[];
+    exports: unknown[];
+    vocabulary: { words: string[]; corrections: { from: string; to: string }[] };
+    recordings: number[];
+  };
+  w.vocabulary = { words: ["GCash", "Shopee"], corrections: [{ from: "g cash", to: "GCash" }] };
+  w.recordings = [];
   w.savedProjects = [];
   w.shownInFolder = [];
   w.exports = [];
@@ -322,6 +330,39 @@ export function createMockApi(): AppApi {
         exportListeners.forEach((l) => l({ taskId, done: true, percent: 100, output: options.output }));
       })();
       return taskId;
+    },
+    getVocabulary: async () => structuredClone(w.vocabulary),
+    setVocabulary: async (v) => {
+      w.vocabulary = structuredClone(v);
+      return { ok: true };
+    },
+    listLibrary: async (kind) => {
+      const folder = kind === "music" ? settings.musicFolder : settings.sfxFolder;
+      if (!folder) return { folder: "", files: [] };
+      return {
+        folder,
+        files: [
+          { path: `${folder}/tone.wav`, name: "tone.wav", group: "" },
+          { path: `${folder}/Upbeat/Sunny.mp3`, name: "Sunny.mp3", group: "Upbeat" },
+        ],
+      };
+    },
+    pickFolder: async () => "C:/Users/me/Sounds",
+    saveRecording: async (_projectPath, data) => {
+      w.recordings.push(data.length);
+      // The stand-in has no disk: the "recording" becomes the demo tone (what the engine reads back).
+      return { path: "C:/Videos/tone.wav" };
+    },
+    retranscribe: async (projectPath, start, end) => {
+      await wait(300 / speed);
+      const saved = [...w.savedProjects].reverse().find((x) => x.path === projectPath);
+      const project = structuredClone(saved?.project ?? ((await fetch("/fixtures/demo.project.json").then((r) => r.json())) as Project));
+      const caps = project.tracks.find((t) => t.kind === "caption")!;
+      caps.clips = caps.clips.filter((c) => c.start + c.duration <= start || c.start >= end);
+      caps.clips.push({ id: "rt1", type: "caption", start, duration: Math.max(0.3, end - start), style: "bold_caps", words: [{ text: "Pakinggan", start: 0, end: 0.4 }, { text: "ulit", start: 0.45, end: 0.8 }] });
+      caps.clips.sort((a, b) => a.start - b.start);
+      w.savedProjects.push({ path: projectPath, project });
+      return { project, words: 2 };
     },
     cancelExport: async (taskId) => {
       stoppedExports.add(taskId);
