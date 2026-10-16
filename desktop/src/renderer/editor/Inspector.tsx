@@ -1,12 +1,25 @@
 // Settings of the selected clip: speed, volume, fades, reframe, overlay position, effects.
 // Every change goes through the pure edit functions (shared/edit.ts), so values stay valid.
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { CaptionLook } from "../../shared/captionEdit";
 import { allowedProps, findClip, hasSource, speedOf, type ClipPatch } from "../../shared/edit";
+import { BROLL_STYLES, describeSource } from "../../shared/brollEdit";
 import { FX_INFO, GRADES, RAMPS } from "../../shared/effectsEdit";
-import type { FxEffect, Project, Word } from "../../shared/types";
+import type { BrollMeta, BrollStyle, Clip, FxEffect, Media, Project, Word } from "../../shared/types";
 import { mmss } from "../components/Player";
+import { TaskStatus, type BrollTask } from "./BrollPanel";
 import { CaptionEditor } from "./CaptionEditor";
+
+export interface BrollClipActions {
+  task: BrollTask | null;
+  onCancel: () => void;
+  /** Same description, another file: your folder, then stock, then AI. */
+  onFindAnother: (id: string) => void;
+  /** Make it again with AI (a new version). */
+  onRegenerate: (id: string, quality: "draft" | "final") => void;
+  onReplaceFile: (id: string) => void;
+  onDescribe: (id: string, patch: Pick<BrollMeta, "prompt" | "search" | "style">, key: string) => void;
+}
 
 export interface CaptionActions {
   onWords: (id: string, words: Word[], key: string) => void;
@@ -27,6 +40,7 @@ interface InspectorProps {
   onRamp: (id: string, ramp: string) => void;
   onDelete: () => void;
   captions: CaptionActions;
+  broll: BrollClipActions;
   /** Shown when nothing is selected (the project's own settings). */
   empty?: ReactNode;
 }
@@ -66,7 +80,7 @@ const SPEEDS = [0.5, 1, 1.5, 2, 3];
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(1)} s`;
 
-export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, empty }: InspectorProps) {
+export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, broll, empty }: InspectorProps) {
   if (selection.length > 1) {
     return (
       <div className="inspector" data-testid="inspector">
@@ -184,6 +198,8 @@ export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDele
         </Section>
       )}
 
+      {track.kind === "overlay" && clip.media && <BrollSection clip={clip} media={m} actions={broll} />}
+
       {allowed.has("x") && (
         <Section title="Position · Puwesto">
           <Slider label="Left ↔ right" value={clip.x ?? 540} min={0} max={1080} step={1} format={(v) => `${Math.round(v)}`} onChange={(v) => set({ x: v }, "x")} />
@@ -252,5 +268,70 @@ export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDele
         <button className="btn small danger" onClick={onDelete}>Delete clip</button>
       </div>
     </div>
+  );
+}
+
+function BrollSection({ clip, media, actions }: { clip: Clip; media?: Media; actions: BrollClipActions }) {
+  const meta: BrollMeta = clip.broll ?? { source: "file", kind: clip.type === "video" ? "video" : "image" };
+  const [quality, setQuality] = useState<"draft" | "final">("final");
+  const describe = (patch: Pick<BrollMeta, "prompt" | "search" | "style">, key: string) => actions.onDescribe(clip.id, patch, `${key}:${clip.id}`);
+  const stock = meta.source === "pexels" || meta.source === "pixabay";
+  const hasWords = Boolean((meta.prompt ?? "").trim() || (meta.search ?? "").trim());
+  return (
+    <Section title="B-roll">
+      <p className="small broll-source" data-testid="broll-source">
+        {meta.ai_generated && <span className="badge-ai">AI</span>} {describeSource(meta, media?.name ?? "")}
+      </p>
+      {stock && (
+        <p className="small" style={{ margin: 0 }}>
+          {meta.page && <a href={meta.page} target="_blank" rel="noreferrer">Source page</a>}
+          {meta.license_url && (
+            <>
+              {" · "}
+              <a href={meta.license_url} target="_blank" rel="noreferrer">{meta.license ?? "Licence"}</a>
+            </>
+          )}
+        </p>
+      )}
+      {meta.ai_generated && (
+        <p className="muted small" style={{ margin: 0 }}>
+          Made with AI: turn on the platform's "AI-generated" label when you post (TikTok, Facebook, YouTube ask for it).
+          {meta.license_url && <> <a href={meta.license_url} target="_blank" rel="noreferrer">Model licence</a></>}
+        </p>
+      )}
+      <label className="insp-field">
+        <span className="insp-label">What it shows</span>
+        <textarea rows={2} value={meta.prompt ?? ""} onChange={(e) => describe({ prompt: e.target.value }, "broll-prompt")} aria-label="What the B-roll shows" />
+      </label>
+      <label className="insp-field">
+        <span className="insp-label">Search words</span>
+        <input type="text" value={meta.search ?? ""} onChange={(e) => describe({ search: e.target.value }, "broll-search")} aria-label="B-roll search words" />
+      </label>
+      <label className="insp-field">
+        <span className="insp-label">Look · Itsura</span>
+        <select value={meta.style ?? "realistic"} onChange={(e) => describe({ style: e.target.value as BrollStyle }, "broll-style")} aria-label="B-roll look">
+          {BROLL_STYLES.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
+        </select>
+      </label>
+      {actions.task ? (
+        <TaskStatus task={actions.task} onCancel={actions.onCancel} />
+      ) : (
+        <>
+          <div className="seg-row">
+            <button className="btn small" disabled={!hasWords} onClick={() => actions.onFindAnother(clip.id)} title="Your folder, then free stock, then AI">Find another · Iba pa</button>
+            <button className="btn small" onClick={() => actions.onReplaceFile(clip.id)}>Replace with a file…</button>
+          </div>
+          <div className="seg-row">
+            <button className="btn small" disabled={!hasWords} onClick={() => actions.onRegenerate(clip.id, quality)}>Regenerate with AI · Gawin ulit</button>
+            <select value={quality} onChange={(e) => setQuality(e.target.value as "draft" | "final")} aria-label="Regenerate quality">
+              <option value="final">Final</option>
+              <option value="draft">Quick draft</option>
+            </select>
+          </div>
+        </>
+      )}
+    </Section>
   );
 }

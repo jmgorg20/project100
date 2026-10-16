@@ -2,7 +2,7 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ExportOptions, ExportUpdate } from "../shared/api";
+import type { BrollFound, BrollRequest, BrollUpdate, ExportOptions, ExportUpdate } from "../shared/api";
 import { versionFromJob } from "../shared/jobs";
 import { cleanVocabulary } from "../shared/captionEdit";
 import { backupPathFor } from "../shared/paths";
@@ -32,6 +32,7 @@ const takenOutputs = new Set<string>();
 const genTasks = new Map<string, RunHandle>();
 let genCounter = 0;
 const exportTasks = new Map<string, RunHandle>();
+const brollTasks = new Map<string, RunHandle>();
 const peaksCache = new Map<string, unknown>();
 const thumbsCache = new Map<string, unknown>();
 
@@ -93,6 +94,45 @@ export function writeAtomic(file: string, text: string): void {
   fs.renameSync(tmp, file);
 }
 
+/** The engine's "broll" command for one item; its stage/progress lines go to the window. */
+export function brollArgs(r: BrollRequest, settings: Pick<Settings, "brollFolder" | "useStock">): string[] {
+  // "--name=value": typed text that starts with "-" is still a value, not an option.
+  const args = [
+    "broll", "--kind", r.kind, `--prompt=${r.prompt}`, `--search=${r.search}`, "--style", r.style,
+    "--source", r.source,
+    "--duration", String(r.duration), "--position", r.position, "--quality", r.quality,
+    `--library=${settings.brollFolder}`,
+    `--download-folder=${path.join(path.dirname(r.projectPath), "broll")}`,
+  ];
+  for (const x of r.exclude) args.push(`--exclude=${x}`);
+  if (r.newVersion) args.push("--new-version");
+  return args;
+}
+
+function startBroll(request: BrollRequest): string {
+  const taskId = `broll${++genCounter}`;
+  const update = (u: Omit<BrollUpdate, "taskId">) => send("broll:task", { taskId, ...u });
+  let error: string | undefined;
+  let result: BrollFound | undefined;
+  // Without stock (Settings), the engine gets no stock keys at all.
+  const config = engineConfig();
+  if (!settings.useStock) config.env = Object.fromEntries(Object.entries(config.env ?? {}).filter(([k]) => !/^(PEXELS|PIXABAY)_/.test(k)));
+  const handle = runEngine(config, brollArgs(request, settings), (event) => {
+    if (event.type === "stage") update({ label: event.label });
+    if (event.type === "progress") update({ percent: event.percent });
+    if (event.type === "result") result = event as unknown as BrollFound;
+    if (event.type === "error") error = event.message;
+  });
+  brollTasks.set(taskId, handle);
+  handle.done.then((r) => {
+    brollTasks.delete(taskId);
+    if (r.cancelled) update({ done: true, cancelled: true });
+    else if (r.startError || error || r.code !== 0 || !result) update({ done: true, error: r.startError ?? error ?? `The B-roll search stopped (exit code ${r.code}).` });
+    else update({ done: true, result: { file: result.file, media: result.media, broll: result.broll, notes: result.notes ?? [] } });
+  });
+  return taskId;
+}
+
 function startExport(projectPath: string, o: ExportOptions): string {
   const taskId = `export${++genCounter}`;
   const args = ["render", projectPath, "--output", o.output, "--height", String(o.height), "--fps", String(o.fps), "--crf", String(o.crf), "--speed", o.speed];
@@ -116,6 +156,11 @@ function startExport(projectPath: string, o: ExportOptions): string {
 
 /** Sound files in a folder (and up to 3 folders down), for the music / sound-effect library. */
 export function listAudioFiles(folder: string, limit = 1000): { path: string; name: string; group: string }[] {
+  return listFiles(folder, AUDIO_TYPES, limit);
+}
+
+/** Files of these types in a folder (and up to 3 folders down), sorted by folder and name. */
+export function listFiles(folder: string, types: string[], limit = 1000): { path: string; name: string; group: string }[] {
   const out: { path: string; name: string; group: string }[] = [];
   const walk = (dir: string, depth: number) => {
     let entries: fs.Dirent[];
@@ -128,7 +173,7 @@ export function listAudioFiles(folder: string, limit = 1000): { path: string; na
       if (out.length >= limit) return;
       const full = path.join(dir, e.name);
       if (e.isDirectory() && depth < 3 && !e.name.startsWith(".")) walk(full, depth + 1);
-      else if (e.isFile() && AUDIO_TYPES.includes(path.extname(e.name).slice(1).toLowerCase())) {
+      else if (e.isFile() && !e.name.startsWith(".") && types.includes(path.extname(e.name).slice(1).toLowerCase())) {
         out.push({ path: full, name: e.name, group: path.relative(folder, dir) });
       }
     }
@@ -315,12 +360,14 @@ function registerIpc(): void {
       return { ok: false, error: `Could not save your vocabulary: ${(err as Error).message}` };
     }
   });
-  ipcMain.handle("library:list", (_e, kind: "music" | "sfx") => {
-    const folder = kind === "music" ? settings.musicFolder : settings.sfxFolder;
+  ipcMain.handle("library:list", (_e, kind: "music" | "sfx" | "broll") => {
+    const folder = kind === "music" ? settings.musicFolder : kind === "sfx" ? settings.sfxFolder : settings.brollFolder;
     if (!folder) return { folder: "", files: [] };
     if (!fs.existsSync(folder)) return { folder, files: [], error: `The folder ${folder} was not found.` };
-    return { folder, files: listAudioFiles(folder) };
+    return { folder, files: kind === "broll" ? listFiles(folder, [...VIDEO_TYPES, ...PHOTO_TYPES], 3000) : listAudioFiles(folder) };
   });
+  ipcMain.handle("broll:start", (_e, request: BrollRequest) => startBroll(request));
+  ipcMain.handle("broll:cancel", (_e, taskId: string) => brollTasks.get(taskId)?.cancel());
   ipcMain.handle("dialog:folder", async (_e, title: string) => {
     const r = await dialog.showOpenDialog(window!, { title, properties: ["openDirectory"] });
     return r.canceled ? null : r.filePaths[0];

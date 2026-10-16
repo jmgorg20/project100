@@ -56,6 +56,24 @@ is taken at `x`, `y` of the spare room (0 = left/top, 0.5 = centre, 1 = right/bo
 Without `crop` (or `{"zoom": 1, "x": 0.5, "y": 0.5}`) it is the usual centred fill. `blur`
 and split/picture-in-picture layouts ignore `crop`.
 
+**B-roll source (optional, any overlay clip).** `broll` says where the picture came from, so
+the editor can show the credit and licence, label AI-made content, and find another or
+regenerate it. The renderer ignores it.
+
+```json
+"broll": {"source": "pexels", "kind": "video", "prompt": "a jeepney on a busy street",
+          "search": "jeepney street", "style": "realistic", "position": "full",
+          "ai_generated": false, "stock_id": "pexels-123", "author": "Ana",
+          "page": "https://www.pexels.com/video/123/", "license": "Pexels License",
+          "license_url": "https://www.pexels.com/license/",
+          "credit": "Video by Ana on Pexels (https://www.pexels.com/video/123/)"}
+```
+
+`source` is required: `library` (your B-roll folder), `pexels`, `pixabay`, `ai` (made with
+WanGP; then `ai_generated` is true and `tier` says which), or `file` (chosen by hand).
+`style`: `realistic`, `cartoon`, `drawing`, `low_poly`, `stylized_3d`, `anime`. See
+[broll.md](broll.md).
+
 Tracks can be `muted` (sound off), `hidden` (picture off) and `locked` (an editing hint for
 the app; the renderer ignores it).
 
@@ -98,6 +116,7 @@ python editor.py edit inbox\talk.mp4 --project-only      # make the project, do 
 python editor.py render output\talk_edited.project.json [--height 1280] [--crf 23] [--speed fast]
 python editor.py frame output\talk_edited.project.json --time 12.5    # exact frame -> PNG
 python editor.py validate output\talk_edited.project.json
+python editor.py broll output\talk_edited.project.json --clip o3   # B-roll: find another (broll.md)
 ```
 
 Add `--json` (before the command) to get progress as JSON lines on stdout, one object per

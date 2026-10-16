@@ -13,6 +13,8 @@ import type { Project } from "../../src/shared/types";
 import { sample } from "./edit.test";
 import { addCaption, addEmoji, correctCaptions, editWordText, setCaptionLook, toggleHighlight } from "../../src/shared/captionEdit";
 import { addFx, addGrade, addTransition, addZoom, setAudioSettings, speedRamp } from "../../src/shared/effectsEdit";
+import { addBroll, replaceBroll, setBrollRequest } from "../../src/shared/brollEdit";
+import type { BrollMeta } from "../../src/shared/types";
 
 const python = process.platform === "win32" ? "python" : "python3";
 const repo = path.resolve(__dirname, "..", "..", "..");
@@ -30,7 +32,8 @@ function randomEdit(p: Project, r: () => number): Project {
   if (!clips.length) return insertMedia(p, "m1", 0).project;
   const { t, c } = clips[Math.floor(r() * clips.length)];
   const at = r() * (projectDuration(p) + 1);
-  const pick = Math.floor(r() * 19);
+  const pick = Math.floor(r() * 22);
+  if (pick >= 19) return brollEdit(p, r, t, c, at);
   if (pick >= 11) return phase2Edit(p, r, pick, t, c, at);
   switch (pick) {
     case 0:
@@ -56,6 +59,17 @@ function randomEdit(p: Project, r: () => number): Project {
     default:
       return moveClip(p, clips.find((x) => x.t.kind !== "video")?.c.id ?? c.id, at).project;
   }
+}
+
+function brollEdit(p: Project, r: () => number, t: Project["tracks"][number], c: Project["tracks"][number]["clips"][number], at: number): Project {
+  const media = r() < 0.5 ? p.media.find((m) => m.id === "m2")! : p.media.find((m) => m.id === "m1")!;
+  const sources: BrollMeta["source"][] = ["library", "pexels", "pixabay", "ai", "file"];
+  const meta: BrollMeta = {
+    source: sources[Math.floor(r() * sources.length)], kind: media.kind === "video" ? "video" : "image", prompt: "a cup of coffee", search: "coffee cup",
+    style: r() < 0.5 ? "realistic" : "cartoon", ai_generated: r() < 0.3, credit: r() < 0.3 ? "Photo by Ana on Pexels (https://www.pexels.com/photo/1/)" : undefined,
+  };
+  if (t.kind === "overlay" && r() < 0.6) return r() < 0.7 ? replaceBroll(p, c.id, media, meta) : setBrollRequest(p, c.id, { search: "jeepney", style: "anime" });
+  return addBroll(p, media, meta, at, 0.5 + r() * 4, (["full", "top", "center"] as const)[Math.floor(r() * 3)]).project;
 }
 
 function phase2Edit(p: Project, r: () => number, pick: number, t: Project["tracks"][number], c: Project["tracks"][number]["clips"][number], at: number): Project {

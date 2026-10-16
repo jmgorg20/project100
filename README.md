@@ -41,7 +41,7 @@ anything by hand. See [Project files](#project-files).
 Be aware of what has and has not been checked:
 
 **Tested (automatically, on Linux with FFmpeg 6.1, Python 3.13):**
-- 250 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
+- 265 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
   keyword rules, settings, edit plans, watch mode, and all 13 caption styles. Each style
   is turned into a subtitle file and drawn by FFmpeg/libass to check that text appears.
 - **Project files:** the schema and ~30 kinds of mistakes (each with a clear message);
@@ -79,14 +79,20 @@ Be aware of what has and has not been checked:
   - **"Listen again"** maps words through sped-up clips correctly (tested with a fake
     transcriber).
   - A **voice-over recorded in Chromium** (fake microphone) is saved, measured and rendered.
-- **Desktop app:** 133 unit tests (including the app's main process driving the real
-  engine from start to finished video, undo/redo, exact frame) and 31 browser tests of the
+- **Desktop app:** 161 unit tests (including the app's main process driving the real
+  engine from start to finished video, undo/redo, exact frame) and 34 browser tests of the
   window (Playwright, at 1280x800 and 1920x1080, with screenshots checked by eye): Auto mode
   on by default and rendering with no extra clicks, live progress, the summary and cost,
   undo/redo, review with Auto mode off, the fallback warning, keys never shown, the
   consent notice, the live preview playing the planned edit, and the AI models window
   (tiers, Compare, per-video limits). The preview's captions
   and photos land where the engine draws them (checked against frames the engine rendered).
+- **B-roll and effects:** matching your B-roll folder, the order folder → stock → AI,
+  Pexels/Pixabay requests and downloads with **faked answers** (no network), credits and
+  licences kept, keys never printed, AI B-roll with the stand-in WanGP, AI-planned effects
+  landing on the right moment, and the editor's find another / regenerate / replace (3
+  browser tests; the editor's B-roll clips match the engine's and pass its validator). Real
+  Pexels/Pixabay calls were **not** made. See [docs/broll.md](docs/broll.md).
 - **AI pictures, clips and voice-over with WanGP** (quality tiers, hardware detection,
   tests, Compare, Auto mode's tier choice and fallback), tested **only against a stand-in
   for WanGP and a fake `nvidia-smi`**: there is no GPU on the test machine. See
@@ -352,6 +358,16 @@ separately. WanGP has its own license, and this app never downloads models.
 
 Setup and details: [docs/generation.md](docs/generation.md).
 
+**B-roll and effects · B-roll at mga epekto.** Ask for it (*"lagyan ng b-roll pag
+nagsasalita ako tungkol sa kape"*, *"cartoon style na b-roll"*, *"may transitions sa bawat
+topic"*). Each B-roll item comes from **your own B-roll folder** first, then **free stock**
+(Pexels/Pixabay, only with your own free key), then **AI** (WanGP). It lands on the timeline
+as a normal clip with its source, credit and licence; click it to **find another**,
+**regenerate** or **replace** it. The AI can also place flashes, whip blurs, shakes, glitches
+and dips (transitions go on a jump cut). The Export window gives you the stock credits to
+paste and reminds you to turn on the platform's AI label for AI-made content. Guide:
+[docs/broll.md](docs/broll.md).
+
 ### From the command line
 
 ```
@@ -360,6 +376,7 @@ python editor.py ai-edit inbox\a.mp4 inbox\b.mp4 -i "Same for both"          # b
 python editor.py ai-edit inbox\myvideo.mp4 -i "..." --no-render               # plan only
 python editor.py ai-edit inbox\myvideo.mp4 --plan-file output\myvideo_edited.plan.json
 python editor.py estimate inbox\myvideo.mp4 --provider anthropic              # cost first
+python editor.py ai-edit inbox\myvideo.mp4 -i "lagyan ng b-roll" --broll-library "D:\My B-roll"
 ```
 
 Use `--provider anthropic` for Claude (needs `ANTHROPIC_API_KEY` in `.env`). Details,
@@ -417,6 +434,8 @@ change the colour, or add your own always-highlight words under `highlight:` in 
 ---
 
 ## Pop-in overlays (B-roll)
+
+(For B-roll the AI finds or makes for you, see [docs/broll.md](docs/broll.md).)
 
 Put images (screenshots, notifications, documents: `.png`, `.jpg`) or short clips (`.mp4`)
 in `assets\overlays\`. Then list keywords in `triggers.yaml`:

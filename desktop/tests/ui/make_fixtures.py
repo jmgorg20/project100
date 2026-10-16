@@ -16,6 +16,9 @@ Writes tests/ui/fixtures/:
                                    the "AI pictures, clips & voice" screen: the engine's status,
                                    test results and a Compare run, made with the fake WanGP in
                                    tests/fake_wangp and a fake nvidia-smi (no GPU, no real models)
+  broll.json, broll_*.png          B-roll found by the engine: two from a library folder, one
+                                   from "Pixabay" (its answer faked, no network) and one made
+                                   by the fake WanGP
 """
 
 import json
@@ -166,6 +169,93 @@ def generation_fixtures(work):
     (OUT / "gen.status.json").write_text(text, encoding="utf-8")
     (OUT / "gen.compare.json").write_text(json.dumps(compare).replace(str(work), "C:/AutoEditor"),
                                           encoding="utf-8")
+    return paths
+
+
+def broll_fixtures(work, gen_paths):
+    """The engine's B-roll finder: library, stock (a faked Pixabay answer) and AI (fake WanGP)."""
+    import requests
+
+    from autoedit import broll
+    library = work / "My B-roll"
+    (library / "coffee").mkdir(parents=True)
+    synthetic.make_image(library / "coffee" / "coffee cup.png", color="saddlebrown", size="720x1280")
+    synthetic.make_image(library / "coffee" / "coffee beans.png", color="black", size="720x1280")
+    synthetic.make_image(library / "jeepney street.png", color="steelblue", size="720x1280")
+    cfg = load_config()
+    cfg["broll"]["library_folder"] = str(library)
+    downloads = work / "broll-downloads"
+    found = []
+
+    def keep(tag, file, meta):
+        name = f"broll_{tag}{Path(file).suffix}"
+        shutil.copy(file, OUT / name)
+        media = media_from_file(OUT / name, "broll")
+        media["path"] = f"C:/Videos/broll/{name}"
+        found.append({"tag": tag, "file": media["path"], "media": media, "broll": meta,
+                      "notes": []})
+
+    first, meta, _ = broll.find_one({"search": "coffee cup"}, cfg, download_folder=downloads)
+    keep("library1", first, meta)
+    second, meta, _ = broll.find_one({"search": "coffee cup"}, cfg, download_folder=downloads,
+                                     exclude=[first])
+    keep("library2", second, meta)
+
+    # Stock: the real search/download code, with Pixabay's answer faked (no network, no key).
+    picture = synthetic.make_image(work / "stock.png", color="seagreen", size="720x1280")
+    real_get = requests.get
+
+    class Answer:
+        status_code, text = 200, ""
+
+        def __init__(self, data=None, body=b""):
+            self.data, self.body = data, body
+
+        def json(self):
+            return self.data
+
+        def iter_content(self, size):
+            yield self.body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_get(url, **kw):
+        if url == "https://pixabay.com/api/":
+            return Answer({"hits": [{"id": 4521, "pageURL": "https://pixabay.com/photos/4521/",
+                                     "user": "Maria_Santos", "imageWidth": 720,
+                                     "imageHeight": 1280,
+                                     "largeImageURL": "https://cdn.pixabay.com/4521.png"}]})
+        return Answer(body=picture.read_bytes())
+    requests.get = fake_get
+    os.environ["PIXABAY_API_KEY"] = "fixture-only"
+    try:
+        stock_cfg = dict(cfg, broll={"library_folder": "", "use_stock": True})
+        file, meta, _ = broll.find_one({"search": "mountain sunrise"}, stock_cfg,
+                                       download_folder=downloads)
+    finally:
+        requests.get = real_get
+        os.environ.pop("PIXABAY_API_KEY")
+    keep("stock", file, meta)
+
+    file, meta, _ = broll.find_one({"prompt": "a cartoon robot waving", "style": "cartoon",
+                                    "source": "ai"}, cfg, quality="draft", gen_paths=gen_paths,
+                                   download_folder=downloads, log=lambda *_: None)
+    keep("ai", file, meta)
+    # The library as the app lists it; the browser can show copies of its pictures.
+    files, media = [], {}
+    for n, f in enumerate(sorted(library.rglob("*.png")), start=1):
+        name = f"broll_lib{n}.png"
+        shutil.copy(f, OUT / name)
+        path = f"C:/Videos/broll/{name}"
+        files.append({"path": path, "name": f.name,
+                      "group": f.parent.relative_to(library).as_posix().replace(".", "")})
+        media[path] = {**media_from_file(f, "lib"), "path": path, "name": f.name}
+    (OUT / "broll.json").write_text(json.dumps({"found": found, "library": files,
+                                                "media": media}, indent=1), encoding="utf-8")
 
 
 def main():
@@ -227,7 +317,7 @@ def main():
                         "-b:v", "1M", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus",
                         str(mp4.with_suffix(".webm"))], check=True)
     editor_fixtures(work)
-    generation_fixtures(work)
+    broll_fixtures(work, generation_fixtures(work))
     shutil.rmtree(work, ignore_errors=True)
     print(f"fixtures written to {OUT}")
 

@@ -84,7 +84,7 @@ test.describe("editor: captions, sound and effects", () => {
 
   test("effects, transitions, zooms, colour and a speed ramp are clips the engine accepts", async ({ page }) => {
     await openEditor(page);
-    await page.getByRole("tab", { name: "Effects" }).click();
+    await page.getByRole("tab", { name: "Effects", exact: true }).click();
     await page.keyboard.press("Shift+ArrowRight");
     let saved = await savedAfter(page, () => page.getByTestId("effects-list").getByRole("button", { name: "Flash", exact: true }).click());
     const flash = effectsOf(saved).find((c) => c.type === "fx" && c.effect === "flash")!;
@@ -134,7 +134,7 @@ test.describe("editor: captions, sound and effects", () => {
     saved = await savedAfter(page, () => library.getByRole("button", { name: "Add tone.wav" }).click());
     expect(saved.tracks.find((t) => t.role === "music")!.clips).toHaveLength(1);
 
-    await page.getByRole("tab", { name: "Sound FX" }).click();
+    await page.getByRole("tab", { name: "Sound effects" }).click();
     await page.getByTestId("library-sfx").getByRole("button", { name: "Choose folder" }).click();
     await expect(page.getByTestId("library-sfx")).toContainText("C:/Users/me/Sounds");
 
@@ -159,8 +159,8 @@ test.describe("editor: captions, sound and effects", () => {
   test("layout with the new panels at 1280x800", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openEditor(page);
-    for (const tab of ["Media", "Music", "Sound FX", "Effects"]) {
-      await page.getByRole("tab", { name: tab }).click();
+    for (const tab of ["Media", "B-roll", "Music", "Sound effects", "Effects"]) {
+      await page.getByRole("tab", { name: tab, exact: true }).click();
       const problems = await page.evaluate(() => {
         const out: string[] = [];
         if (document.documentElement.scrollWidth > window.innerWidth) out.push("page scrolls sideways");

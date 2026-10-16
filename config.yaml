@@ -77,6 +77,10 @@ overlays:                     # pop-in images/clips when a keyword is spoken (se
   triggers_file: triggers.yaml
   folder: assets/overlays
 
+broll:                        # B-roll the AI edit adds: your library, then free stock, then AI
+  library_folder: ""          # a folder with your own clips/pictures; names = what they show
+  use_stock: true             # Pexels/Pixabay, only if PEXELS_API_KEY / PIXABAY_API_KEY is set
+
 sfx:                          # your own sound effects (none are included)
   enabled: false
   volume: 0.4

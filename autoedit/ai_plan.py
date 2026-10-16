@@ -36,9 +36,23 @@ def preset_plan(cfg):
                  "amount": float(pacing["zoom_amount"])},
         "captions": {"enabled": bool(cfg["captions"].get("enabled", True)), "size_scale": 1.0,
                      "position": None, "highlight_words": []},
-        "cuts": [], "zooms": [], "grades": [], "photos": [], "notes": [],
+        "cuts": [], "zooms": [], "grades": [], "effects": [], "photos": [], "notes": [],
         "ai_clips": [], "voiceovers": [],
     }
+
+
+def upgrade_plan(plan):
+    """Fill in what older plans (saved before B-roll sources) do not have. Returns a copy."""
+    if not isinstance(plan, dict):
+        return plan
+    plan = copy.deepcopy(plan)
+    plan.setdefault("effects", [])
+    for clip in plan.get("ai_clips") or []:
+        if isinstance(clip, dict):
+            clip.setdefault("search", " ".join(str(clip.get("prompt", "")).split()[:4])[:80])
+            clip.setdefault("style", "realistic")
+            clip.setdefault("source", "auto")
+    return plan
 
 
 def validate_plan(plan, duration, photo_names=()):
@@ -68,7 +82,7 @@ def validate_plan(plan, duration, photo_names=()):
         [(c["start"], min(c["end"], duration)) for c in plan["cuts"]]))
     if kept < MIN_KEPT_SECONDS:
         problems.append(f"plan.cuts: they remove almost the whole video (only {kept:.1f}s left)")
-    for kind in ("ai_clips", "voiceovers"):
+    for kind in ("ai_clips", "voiceovers", "effects"):
         for i, item in enumerate(plan[kind]):
             if item["at"] >= duration:
                 problems.append(f"plan.{kind}[{i}]: at {item['at']}s is after the end of the "
@@ -88,8 +102,9 @@ def validate_plan(plan, duration, photo_names=()):
 def apply_plan(cfg, plan, photos, generated=None):
     """Settings and pipeline plan for a checked plan. `photos` maps file name -> path.
 
-    `generated` holds the files made for the plan's AI clips and voice-overs:
-    {"ai_clips": [path or None, ...], "voiceovers": [path or None, ...]} (None = not made).
+    `generated` holds the files found or made for the plan's B-roll and voice-overs:
+    {"ai_clips": [path or None, ...], "voiceovers": [path or None, ...]} (None = not made),
+    and optionally "meta": {"ai_clips": [where each came from, ...]} (see broll.py).
     Returns (cfg, pipeline_plan); `cfg` is a copy, the caller's settings are not changed.
     """
     generated = generated or {}
@@ -118,17 +133,23 @@ def apply_plan(cfg, plan, photos, generated=None):
                   for z in plan["zooms"]],
         "grades": [{"start": g["start"], "end": g["end"], "grade": g["grade"]}
                    for g in plan["grades"]],
+        "effects": [{"effect": e["effect"], "at": float(e["at"]), "duration": float(e["duration"]),
+                     "intensity": float(e["intensity"]), "on_cut": bool(e["on_cut"])}
+                    for e in plan.get("effects", [])],
         "overlays": [{"file": Path(photos[p["file"]]), "at": float(p["at"]),
                       "duration": float(p["duration"]), "position": p["position"]}
                      for p in plan["photos"]],
         "caption_overrides": overrides,
         "voiceovers": [],
     }
-    for clip, path in zip(plan.get("ai_clips", []), generated.get("ai_clips", [])):
+    metas = (generated.get("meta") or {}).get("ai_clips") or []
+    for i, (clip, path) in enumerate(zip(plan.get("ai_clips", []), generated.get("ai_clips", []))):
         if path:
+            meta = metas[i] if i < len(metas) and metas[i] else \
+                {"source": "ai", "ai_generated": True}
             pipeline_plan["overlays"].append({"file": Path(path), "at": float(clip["at"]),
                                               "duration": float(clip["duration"]),
-                                              "position": clip["position"]})
+                                              "position": clip["position"], "broll": meta})
     for line, path in zip(plan.get("voiceovers", []), generated.get("voiceovers", [])):
         if path:
             pipeline_plan["voiceovers"].append({"file": Path(path), "at": float(line["at"])})

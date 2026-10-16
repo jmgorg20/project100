@@ -21,6 +21,8 @@ export function jobArgs(job: Job, settings: Settings, files: { instructionFile: 
   if (job.mode === "apply" && job.planFile) args.push("--plan-file", job.planFile);
   if (job.maxGenMinutes !== undefined) args.push("--max-generation-minutes", String(job.maxGenMinutes));
   if (job.maxAiClips !== undefined) args.push("--max-ai-clips", String(job.maxAiClips));
+  if (settings.brollFolder) args.push("--broll-library", settings.brollFolder);
+  if (!settings.useStock) args.push("--no-stock");
   if (job.photos.length) args.push("--photos", ...job.photos);
   return args;
 }

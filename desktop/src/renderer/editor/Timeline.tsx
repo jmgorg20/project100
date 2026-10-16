@@ -361,6 +361,7 @@ const ClipView = memo(function ClipView({
       {showWave && pk && <Waveform peaks={pk} from={from} to={to} width={w} height={track.kind === "video" ? 18 : height - 18} />}
       <span className="clip-label">
         {sp !== 1 && <span className="badge-speed">{sp}x</span>}
+        {clip.broll?.ai_generated && <span className="badge-ai" title="Made with AI">AI</span>}
         {label}
       </span>
       {!track.locked && (

@@ -5,9 +5,20 @@ import type { LibraryFile, Thumbs } from "../../shared/api";
 import { FX_INFO, GRADES } from "../../shared/effectsEdit";
 import type { FxEffect, Project } from "../../shared/types";
 import { api, mediaUrl } from "../lib/api";
+import { BrollPanel, type BrollAsk, type BrollTask } from "./BrollPanel";
 import { MediaBin } from "./MediaBin";
 
-type Tab = "media" | "music" | "sfx" | "effects";
+type Tab = "media" | "broll" | "music" | "sfx" | "effects";
+
+export interface BrollActions {
+  folder: string;
+  stockKeys: string[];
+  task: BrollTask | null;
+  onAsk: (ask: BrollAsk) => void;
+  onCancel: () => void;
+  onAddFile: (file: string) => void;
+  onChooseFolder: () => void;
+}
 
 export interface EffectActions {
   onFx: (effect: FxEffect) => void;
@@ -16,7 +27,7 @@ export interface EffectActions {
   onGrade: (grade: string, wholeVideo: boolean) => void;
 }
 
-export function LeftPanel({ project, thumbs, url, busy, onImport, onAdd, onAddLibrary, effects, folders, onChooseFolder }: {
+export function LeftPanel({ project, thumbs, url, busy, onImport, onAdd, onAddLibrary, effects, folders, onChooseFolder, broll }: {
   project: Project;
   thumbs: Record<string, Thumbs>;
   url: (p: string) => string;
@@ -27,14 +38,18 @@ export function LeftPanel({ project, thumbs, url, busy, onImport, onAdd, onAddLi
   effects: EffectActions;
   folders: { music: string; sfx: string };
   onChooseFolder: (kind: "music" | "sfx") => void;
+  broll: BrollActions;
 }) {
   const [tab, setTab] = useState<Tab>("media");
-  const tabs: [Tab, string][] = [["media", "Media"], ["music", "Music"], ["sfx", "Sound FX"], ["effects", "Effects"]];
+  // [tab, shown text, full name for screen readers and the tooltip]
+  const tabs: [Tab, string, string][] = [
+    ["media", "Media", "Media"], ["broll", "B-roll", "B-roll"], ["music", "Music", "Music"], ["sfx", "SFX", "Sound effects"], ["effects", "Effects", "Effects"],
+  ];
   return (
     <div className="left-panel" data-testid="left-panel">
       <div className="segmented tabs" role="tablist" aria-label="Library">
-        {tabs.map(([k, label]) => (
-          <button key={k} role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)}>
+        {tabs.map(([k, label, full]) => (
+          <button key={k} role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)} aria-label={full} title={full}>
             {label}
           </button>
         ))}
@@ -43,6 +58,7 @@ export function LeftPanel({ project, thumbs, url, busy, onImport, onAdd, onAddLi
       {(tab === "music" || tab === "sfx") && (
         <Library key={`${tab}-${folders[tab]}`} kind={tab} folder={folders[tab]} onChoose={() => onChooseFolder(tab)} onAdd={(f) => onAddLibrary(f, tab)} />
       )}
+      {tab === "broll" && <BrollPanel {...broll} />}
       {tab === "effects" && <EffectsList actions={effects} />}
     </div>
   );

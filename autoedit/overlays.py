@@ -44,6 +44,7 @@ class OverlayEvent:
     start: float        # seconds on the cut timeline
     duration: float
     position: str       # "top" or "center"
+    broll: dict | None = None    # where a B-roll item came from (see broll.py)
 
     @property
     def is_image(self):

@@ -29,8 +29,19 @@ describe("API keys", () => {
       encryptionAvailable: true,
       groq: { set: true, hint: "••••1234" },
       anthropic: { set: false, hint: "" },
+      pexels: { set: false, hint: "" },
+      pixabay: { set: false, hint: "" },
     });
     expect(store.env()).toEqual({ GROQ_API_KEY: "gsk_secret1234" });
+    // Free stock keys (B-roll) are kept the same way.
+    store.set("pexels", "pexels-key-9876");
+    store.set("pixabay", "pixabay-key-5555");
+    expect(fs.readFileSync(file, "utf-8")).not.toMatch(/9876|5555/);
+    expect(store.status().pexels).toEqual({ set: true, hint: "••••9876" });
+    expect(store.env()).toEqual({ GROQ_API_KEY: "gsk_secret1234", PEXELS_API_KEY: "pexels-key-9876", PIXABAY_API_KEY: "pixabay-key-5555" });
+    store.clear("pexels");
+    store.clear("pixabay");
+    expect(() => store.set("openai" as never, "x")).toThrow(/Unknown/);
     store.clear("groq");
     expect(store.env()).toEqual({});
   });
@@ -77,6 +88,10 @@ describe("job arguments", () => {
     const apply = jobArgs(job({ auto: false, mode: "apply", planFile: "/p.json", photos: ["/x.png", "/y.png"] }), settings, files);
     expect(apply).not.toContain("--no-render");
     expect(apply.slice(-5)).toEqual(["--plan-file", "/p.json", "--photos", "/x.png", "/y.png"]);
+    // Your B-roll folder and "no stock" go to the engine; nothing is added when unset.
+    expect(jobArgs(job({}), settings, files)).not.toContain("--broll-library");
+    const broll = jobArgs(job({ photos: ["/x.png"] }), { ...settings, brollFolder: "D:/My B-roll", useStock: false }, files);
+    expect(broll.slice(-5)).toEqual(["--broll-library", "D:/My B-roll", "--no-stock", "--photos", "/x.png"]);
     // Per-video AI generation limits, before --photos (which takes the rest of the list).
     const limited = jobArgs(job({ maxGenMinutes: 12, maxAiClips: 0, photos: ["/x.png"] }), settings, files);
     expect(limited.slice(-6)).toEqual(["--max-generation-minutes", "12", "--max-ai-clips", "0", "--photos", "/x.png"]);

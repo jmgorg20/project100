@@ -15,8 +15,9 @@ import shutil
 import time
 from pathlib import Path
 
-from .ai_gen import availability, generate_for_plan
-from .ai_plan import apply_plan, load_plan_schema, preset_plan, validate_plan
+from .ai_gen import availability
+from .ai_plan import apply_plan, load_plan_schema, preset_plan, upgrade_plan, validate_plan
+from .broll import resolve_plan, sources_text
 from .cache import Cache, key_for
 from .config import project_path
 from .costs import estimate_tokens, format_usd, plan_cost, total, transcription_cost
@@ -30,7 +31,7 @@ from .project_render import render_project
 from .transcribe import transcribe
 from .words import save_transcript, words_from_data
 
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 MAX_ATTEMPTS = 2
 
 SYSTEM_PROMPT = """You plan edits for short vertical videos (TikTok / Facebook Reels) of a \
@@ -56,12 +57,20 @@ what it shows (match words in the file name, e.g. "gcash_receipt.png" when they 
 - captions.highlight_words: words from the transcript worth emphasizing (prices, product \
 names, key terms), only if asked or clearly useful.
 - zooms: extra emphasis zoom-ins on key moments, only if asked (amount 1.2 to 1.4).
-- If the instruction asks for something the program cannot do (music, transitions, face \
-filters, changing what someone said), do not fake it: add a short note to notes.
-- ai_clips and voiceovers: follow AI GENERATION below. Only plan a kind marked available,
-only when the creator asks for it or it clearly helps, and never more than the stated
-number. Clip prompts are concrete and visual, in English; never show real, identifiable
-people or brands. A full-screen clip covers the speaker, so keep it short.
+- effects: short accents (flash, whip, shake, glitch, dip) only if the creator asks for \
+effects or transitions ("lagyan ng transitions", "may effects"), or for a clear punchline. \
+Transitions (flash, whip, dip) go between topics with on_cut true; shake or glitch on a \
+punchline word. At most one every 3 seconds; 0.2 to 0.5 seconds each.
+- If the instruction asks for something the program cannot do (music, face filters, \
+changing what someone said), do not fake it: add a short note to notes.
+- ai_clips are B-roll (pictures or short clips over the speaker), when the creator asks \
+for B-roll / visuals, or it clearly helps. Follow B-ROLL SOURCES below: plan none if no \
+source is available. Put each one where the speaker mentions what it shows. prompt: \
+concrete and visual, in English, never real, identifiable people or brands. search: 2 to 4 \
+English keywords. style: realistic unless the creator asks for a look (cartoon, drawing, \
+low-poly / boxy, robot / 3D, anime). source: auto unless the creator names one. A \
+full-screen clip covers the speaker, so keep it short (1.5 to 3 seconds).
+- voiceovers: follow AI GENERATION below, only if voice-over is available and asked for.
 - Never plan face swaps, deepfakes, voice cloning or lip-sync.
 - summary: one to three short sentences to the creator, in the language of the \
 instruction, describing the edit.
@@ -167,7 +176,7 @@ def request_plan(cfg, provider, model, instruction, words, duration, photo_names
                               cost=_plan_cost(cfg, used_model, usage))
         usage = {k: usage[k] + used[k] for k in usage}
         try:
-            plan = json.loads(text) if text.strip() else None
+            plan = upgrade_plan(json.loads(text)) if text.strip() else None
             problems = ["the answer was empty or cut off"] if plan is None else []
         except ValueError as exc:
             plan, problems = None, [f"the answer is not valid JSON ({exc})"]
@@ -242,6 +251,11 @@ def describe(project, plan, result, raw_duration, photo_names, generation=None):
                        + (f" ({'; '.join(extra)})" if extra else "") + f": {len(captions)} lines.")
     else:
         details.append("No captions.")
+    fx = [c for t in tracks if t["kind"] == "effect" for c in t["clips"] if c["type"] == "fx"]
+    if fx:
+        names = ", ".join(f"{c['effect']} at {mmss(c['start'])}" for c in fx[:8])
+        details.append(f"Added {len(fx)} effect{'s' if len(fx) != 1 else ''}: {names}"
+                       + ("..." if len(fx) > 8 else "."))
     grade_line = f"Colour: {plan['grade'].replace('_', ' ')}."
     for g in plan["grades"]:
         grade_line += (f" {g['grade'].replace('_', ' ')} from {mmss(g['start'])} to "
@@ -263,6 +277,7 @@ def describe(project, plan, result, raw_duration, photo_names, generation=None):
     if unused:
         details.append("Photos not used: " + ", ".join(unused) + ".")
     if generation:
+        details += generation.get("sourced", [])
         for item in generation["done"]:
             details.append(f"{item['item']}: {item['tier']} tier, {item['seconds']:.0f}s"
                            + (f" ({item['reason_text']})" if item.get("reason_text") else "."))
@@ -365,19 +380,22 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                 return [f"the edit could not be built from this plan: {exc}"]
 
         if plan is not None:
+            plan = upgrade_plan(plan)
             problems = validate_plan(plan, duration, photos)
             if problems:
                 raise EditorError("The plan has problems:\n  - " + "\n  - ".join(problems))
             result = PlanResult(plan, given=True, model=None, cost=0.0)
         else:
             try:
-                _, generation_text = availability(gen_paths or GenPaths())
+                gen_ok, generation_text = availability(gen_paths or GenPaths())
             except Exception as exc:          # generation must never block the edit
                 print(f"  ! could not check AI generation: {exc}")
-                generation_text = None
+                gen_ok, generation_text = {}, None
+            generation_text = (generation_text or "AI GENERATION: NOT available. Leave "
+                               "voiceovers empty.") + "\n" + sources_text(cfg, gen_ok)
             result = request_plan(cfg, provider, model, instruction, words, duration,
-                                  list(photos), cache, previous_plan, check, cancel,
-                                  generation_text)
+                                  list(photos), cache, upgrade_plan(previous_plan), check,
+                                  cancel, generation_text)
         reporter.event("plan", **result.as_event(), baseline=preset_plan(cfg))
         check_cancel()
 
@@ -392,12 +410,15 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                 passes = ["draft", "final"]      # Auto mode: quick preview, then final
             else:
                 passes = ["draft"]               # review first: final when applied
-            generation = generate_for_plan(result.plan, passes, gen_paths, max_gen_minutes,
-                                           max_ai_clips, reporter, cancel)
+            generation = resolve_plan(result.plan, cfg, passes, gen_paths, max_gen_minutes,
+                                      max_ai_clips, reporter, cancel,
+                                      download_folder=output.parent / "broll")
             if passes == ["draft", "final"]:
                 reporter.event("project", stage="ai_draft",
-                               project=build(result.plan, generation["draft"]))
-            project = build(result.plan, generation["final" if "final" in passes else "draft"])
+                               project=build(result.plan, {**generation["draft"],
+                                                           "meta": generation["meta"]}))
+            project = build(result.plan, {**generation["final" if "final" in passes else "draft"],
+                                          "meta": generation["meta"]})
             generation["passes"] = passes
             check_cancel()
         project["meta"].update({"made_by": "AI edit", "instruction": instruction,

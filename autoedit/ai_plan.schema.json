@@ -14,6 +14,7 @@
     "cuts",
     "zooms",
     "grades",
+    "effects",
     "photos",
     "notes",
     "ai_clips",
@@ -235,6 +236,59 @@
         }
       }
     },
+    "effects": {
+      "type": "array",
+      "maxItems": 30,
+      "description": "Short visual accents: flash (to white), whip (sideways blur), shake, glitch, dip (to black). Only if the creator asks for effects/transitions, or for a clear punchline or topic change. Empty otherwise.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "effect",
+          "at",
+          "duration",
+          "intensity",
+          "on_cut",
+          "reason"
+        ],
+        "properties": {
+          "effect": {
+            "enum": [
+              "shake",
+              "flash",
+              "dip",
+              "glitch",
+              "whip"
+            ]
+          },
+          "at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "duration": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 2.0,
+            "description": "Seconds; 0.2 to 0.5 is usual."
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "0.6 is normal; 1 is strong."
+          },
+          "on_cut": {
+            "type": "boolean",
+            "description": "true = a transition: placed on the jump cut nearest to `at`."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
     "photos": {
       "type": "array",
       "maxItems": 50,
@@ -289,13 +343,16 @@
     "ai_clips": {
       "type": "array",
       "maxItems": 20,
-      "description": "AI-generated pictures or short video clips (B-roll), only if AI GENERATION says that kind is available and the creator asked for it or it clearly helps. Empty otherwise.",
+      "description": "B-roll: pictures or short video clips shown over the speaker. Each one is taken from the creator's own B-roll library, else free stock (if the creator gave a key), else made with AI generation, as B-ROLL SOURCES says. Only when the creator asked for B-roll/visuals or it clearly helps, and only if some source is available. Empty otherwise.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "kind",
           "prompt",
+          "search",
+          "style",
+          "source",
           "at",
           "duration",
           "position",
@@ -311,7 +368,32 @@
           "prompt": {
             "type": "string",
             "maxLength": 500,
-            "description": "What to generate, in English, concrete and visual. No real people's names or faces."
+            "description": "What to show, in English, concrete and visual (used to generate it with AI). No real people's names or faces, no brands."
+          },
+          "search": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "2 to 4 English keywords to find it in the creator's library or stock sites, e.g. \"coffee cup\", \"jeepney street\"."
+          },
+          "style": {
+            "enum": [
+              "realistic",
+              "cartoon",
+              "drawing",
+              "low_poly",
+              "stylized_3d",
+              "anime"
+            ],
+            "description": "Look: realistic (real footage/photo), cartoon, drawing (hand-drawn sketch), low_poly (boxy 3D), stylized_3d (toy/robot-like 3D), anime. realistic unless the creator asks for another look."
+          },
+          "source": {
+            "enum": [
+              "auto",
+              "library",
+              "stock",
+              "ai"
+            ],
+            "description": "auto = library, then stock, then AI. Only another value if the creator asks (e.g. \"AI-generated lang\")."
           },
           "at": {
             "type": "number",
