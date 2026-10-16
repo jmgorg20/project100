@@ -1,5 +1,9 @@
 """Build the FFmpeg command that does the whole edit in one pass.
 
+The editor now renders through a Project (see project_render.py), which reuses the helpers
+in this file. `build()` is the original single-video renderer, kept as a reference: the
+tests render the same edit both ways and compare the pictures.
+
 Picture:  layout/fit to 1080x1920 -> keep only the chosen segments -> punch-in zooms
           -> colour grade -> pop-in overlays -> watermark -> captions
 Sound:    keep the same segments -> loudness normalisation -> sound effects
@@ -72,33 +76,40 @@ def fit_over_blur(src, out, width, height, fps, tag):
 
 def layout_filters(job):
     """Filters that turn the input(s) into one 1080x1920 picture labelled [base]."""
-    fps = job.fps
-    if job.layout == "face":
-        return [f"[0:v]{fill(fps)}[base]"]
-    if job.layout == "screen":
-        return fit_over_blur("0:v", "base", W, H, fps, "scr")
-    if job.layout == "split":
+    return layout_chain(job.layout, "0:v", "1:v", "base", job.fps, "scr")
+
+
+def layout_chain(layout, face, screen, out, fps, tag):
+    """Filters that turn `face` (and `screen`) into one 1080x1920 picture labelled [out].
+
+    `tag` keeps the intermediate labels unique when several chains share one graph.
+    """
+    if layout == "face":
+        return [f"[{face}]{fill(fps)}[{out}]"]
+    if layout == "screen":
+        return fit_over_blur(face, out, W, H, fps, tag)
+    if layout == "split":
         top_h = 1152                      # screen recording: top 60%
         face_h = H - top_h
         return [
             # tpad: if the recording is shorter than the face video, hold its last frame
-            f"[1:v]tpad=stop_mode=clone:stop=-1[scrsrc]",
-            *fit_over_blur("scrsrc", "scrtop", W, top_h, fps, "scr"),
-            f"[0:v]setpts=PTS-STARTPTS,fps={fps},scale={W}:{face_h}:force_original_aspect_ratio="
+            f"[{screen}]tpad=stop_mode=clone:stop=-1[{tag}src]",
+            *fit_over_blur(f"{tag}src", f"{tag}top", W, top_h, fps, tag),
+            f"[{face}]setpts=PTS-STARTPTS,fps={fps},scale={W}:{face_h}:force_original_aspect_ratio="
             f"increase,crop={W}:{face_h}:(iw-ow)/2:(ih-oh)*0.3,setsar=1,"
-            f"pad={W}:{H}:0:{top_h}[facecanvas]",
-            "[facecanvas][scrtop]overlay=0:0:shortest=1[base]",
+            f"pad={W}:{H}:0:{top_h}[{tag}facecanvas]",
+            f"[{tag}facecanvas][{tag}top]overlay=0:0:shortest=1[{out}]",
         ]
-    if job.layout == "pip":
+    if layout == "pip":
         return [
-            f"[1:v]tpad=stop_mode=clone:stop=-1[scrsrc]",
-            *fit_over_blur("scrsrc", "scrfull", W, H, fps, "scr"),
-            f"[0:v]setpts=PTS-STARTPTS,fps={fps},scale=360:480:force_original_aspect_ratio="
-            f"increase,crop=360:480,setsar=1,pad=372:492:6:6:white[pip]",
+            f"[{screen}]tpad=stop_mode=clone:stop=-1[{tag}src]",
+            *fit_over_blur(f"{tag}src", f"{tag}full", W, H, fps, tag),
+            f"[{face}]setpts=PTS-STARTPTS,fps={fps},scale=360:480:force_original_aspect_ratio="
+            f"increase,crop=360:480,setsar=1,pad=372:492:6:6:white[{tag}pip]",
             # Face top-left, below the app's top bar and away from the right-side buttons.
-            "[scrfull][pip]overlay=40:190:shortest=1[base]",
+            f"[{tag}full][{tag}pip]overlay=40:190:shortest=1[{out}]",
         ]
-    raise ValueError(f"unknown layout {job.layout}")
+    raise ValueError(f"unknown layout {layout}")
 
 
 def pop_scale_expression(duration):
@@ -118,7 +129,7 @@ def build(job: RenderJob):
     g = layout_filters(job)
     fps = job.fps
     keep = keep_expression(job.segments, fps)
-    g.append(f"[base]select='{keep}',setpts=N/{fps}/TB[cut]")
+    g.append(f"[base]select='{keep}',setpts='round(N/{fps}/TB)'[cut]")
     current = "cut"
 
     # Punch-in zooms: a zoomed copy is laid over the picture only while zoomed.
@@ -198,7 +209,7 @@ def build(job: RenderJob):
     g.append(
         f"[0:a]asetpts=PTS-STARTPTS,aresample={AUDIO_RATE},"
         f"aformat=sample_fmts=fltp:channel_layouts=stereo,asetnsamples=n={block}:p=1,"
-        f"aselect='{keep}',asetpts=N/SR/TB,"
+        f"aselect='{keep}',asetpts='round(N/SR/TB)',"
         f"loudnorm=I={job.loudness}:TP={job.true_peak}:LRA=11,aresample={AUDIO_RATE}[speech]"
     )
     audio = "speech"

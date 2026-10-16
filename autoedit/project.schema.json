@@ -1,0 +1,917 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autoedit.local/project.schema.json",
+  "title": "Auto video editor Project",
+  "description": "One edit: media files plus a timeline of tracks and clips. All clip times are seconds on the timeline; 'in'/'out' are seconds in the source file. The AI writes it, the app edits it, the FFmpeg engine renders it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "version",
+    "settings",
+    "media",
+    "tracks"
+  ],
+  "properties": {
+    "format": {
+      "const": "autoedit-project"
+    },
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "settings": {
+      "$ref": "#/$defs/settings"
+    },
+    "media": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/media"
+      }
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/track"
+      }
+    },
+    "transcript": {
+      "$ref": "#/$defs/transcript"
+    },
+    "meta": {
+      "type": "object",
+      "description": "Free-form notes (who made it, pipeline settings)."
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "nullableColor": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        }
+      ]
+    },
+    "volume": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "height",
+        "fps"
+      ],
+      "properties": {
+        "width": {
+          "const": 1080,
+          "description": "Version 1 is vertical 1080x1920 only; export can scale down."
+        },
+        "height": {
+          "const": 1920
+        },
+        "fps": {
+          "enum": [
+            24,
+            25,
+            30,
+            50,
+            60
+          ],
+          "description": "Frames per second. Only rates where 48 kHz audio splits into whole samples per frame."
+        },
+        "background": {
+          "$ref": "#/$defs/color"
+        },
+        "audio": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "normalize": {
+              "type": "boolean",
+              "description": "Even out speech loudness (dialog: main video, original, voice-over)."
+            },
+            "loudness": {
+              "type": "number",
+              "minimum": -70,
+              "maximum": -5
+            },
+            "true_peak": {
+              "type": "number",
+              "minimum": -9,
+              "maximum": 0
+            }
+          }
+        },
+        "fonts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "regular": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bold": {
+              "type": "string",
+              "minLength": 1
+            },
+            "heavy": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "duration"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "video",
+            "image",
+            "audio"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absolute, or relative to the project file."
+        },
+        "name": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds (0 for images)."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "has_audio": {
+          "type": "boolean"
+        }
+      }
+    },
+    "transcript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "media",
+        "language",
+        "words"
+      ],
+      "properties": {
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "language": {
+          "type": "string"
+        },
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "start",
+              "end"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "start": {
+                "type": "number",
+                "minimum": 0
+              },
+              "end": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "clips"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "video",
+            "overlay",
+            "effect",
+            "caption",
+            "audio"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "role": {
+          "enum": [
+            "original",
+            "voiceover",
+            "music",
+            "sfx"
+          ]
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "clips": {
+          "type": "array"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "video"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "image"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  "then": {
+                    "$ref": "#/$defs/imageClip"
+                  },
+                  "else": {
+                    "$ref": "#/$defs/videoClip"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "overlay"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/overlayClip"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "effect"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "grade"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  "then": {
+                    "$ref": "#/$defs/gradeClip"
+                  },
+                  "else": {
+                    "$ref": "#/$defs/zoomClip"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "caption"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/captionClip"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "audio"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "role"
+            ],
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/audioClip"
+                }
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "role"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "videoClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "media",
+        "in",
+        "out"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "video"
+        },
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "in": {
+          "type": "number",
+          "minimum": 0
+        },
+        "out": {
+          "type": "number",
+          "minimum": 0
+        },
+        "volume": {
+          "$ref": "#/$defs/volume"
+        },
+        "fit": {
+          "enum": [
+            "fill",
+            "blur"
+          ],
+          "description": "fill = crop to fill the frame; blur = whole picture over a blurred copy."
+        },
+        "layout": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "screen"
+          ],
+          "description": "Combine with a screen recording that started at the same moment.",
+          "properties": {
+            "type": {
+              "enum": [
+                "split",
+                "pip"
+              ]
+            },
+            "screen": {
+              "$ref": "#/$defs/id"
+            }
+          }
+        }
+      }
+    },
+    "imageClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "media"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "image"
+        },
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "fit": {
+          "enum": [
+            "fill",
+            "blur"
+          ]
+        }
+      }
+    },
+    "overlayClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "media",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "in": {
+          "type": "number",
+          "minimum": 0
+        },
+        "out": {
+          "type": "number",
+          "minimum": 0
+        },
+        "x": {
+          "type": "number",
+          "description": "Centre x in pixels on the 1080x1920 frame."
+        },
+        "y": {
+          "type": "number",
+          "description": "Centre y in pixels."
+        },
+        "width": {
+          "type": "number",
+          "description": "The picture is scaled to fit inside width x height.",
+          "minimum": 1
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "animation": {
+          "enum": [
+            "none",
+            "pop"
+          ]
+        }
+      },
+      "if": {
+        "properties": {
+          "type": {
+            "const": "video"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "in",
+          "out"
+        ]
+      }
+    },
+    "zoomClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "amount"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "zoom"
+        },
+        "amount": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "anchor_y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "gradeClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "grade"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "grade"
+        },
+        "grade": {
+          "enum": [
+            "natural_clean",
+            "none",
+            "warm",
+            "black_and_white",
+            "orange_teal",
+            "high_contrast"
+          ]
+        }
+      }
+    },
+    "captionClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "style",
+        "words"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "caption"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "enum": [
+                "classic",
+                "yellow_pop",
+                "boxed",
+                "bold_caps",
+                "minimal",
+                "neon_green",
+                "one_word",
+                "pink_highlight",
+                "thick_outline",
+                "top_banner",
+                "center_keyword",
+                "typewriter",
+                "pop_word"
+              ]
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 13
+            }
+          ]
+        },
+        "highlight_keywords": {
+          "type": "boolean"
+        },
+        "overrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "font": {
+              "enum": [
+                "regular",
+                "bold",
+                "heavy"
+              ]
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 16,
+              "maximum": 300
+            },
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "active_color": {
+              "$ref": "#/$defs/nullableColor"
+            },
+            "active_box": {
+              "$ref": "#/$defs/nullableColor"
+            },
+            "keyword_color": {
+              "$ref": "#/$defs/nullableColor"
+            },
+            "outline": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 30
+            },
+            "outline_color": {
+              "$ref": "#/$defs/color"
+            },
+            "shadow": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 30
+            },
+            "uppercase": {
+              "type": "boolean"
+            },
+            "lowercase": {
+              "type": "boolean"
+            },
+            "zone": {
+              "enum": [
+                "lower",
+                "center",
+                "top",
+                "divider"
+              ]
+            },
+            "align": {
+              "enum": [
+                "center",
+                "left"
+              ]
+            },
+            "words_per_line": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "max_lines": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4
+            }
+          }
+        },
+        "words": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "start",
+              "end"
+            ],
+            "description": "Word times are seconds from the start of the caption clip.",
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "start": {
+                "type": "number",
+                "minimum": 0
+              },
+              "end": {
+                "type": "number",
+                "minimum": 0
+              },
+              "highlight": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "audioClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "media",
+        "in",
+        "out"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "audio"
+        },
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "in": {
+          "type": "number",
+          "minimum": 0
+        },
+        "out": {
+          "type": "number",
+          "minimum": 0
+        },
+        "volume": {
+          "$ref": "#/$defs/volume"
+        },
+        "fade_in": {
+          "type": "number",
+          "minimum": 0
+        },
+        "fade_out": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
