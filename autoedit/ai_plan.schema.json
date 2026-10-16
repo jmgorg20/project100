@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI edit plan",
+  "description": "What the AI decided for one video. Times are seconds in the RAW video. The editor turns this into a Project with its normal, tested steps.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "style",
+    "grade",
+    "pacing",
+    "zoom",
+    "captions",
+    "cuts",
+    "zooms",
+    "grades",
+    "photos",
+    "notes",
+    "ai_clips",
+    "voiceovers"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "maxLength": 600,
+      "description": "One to three short sentences for the creator, in the language of their instruction."
+    },
+    "style": {
+      "enum": [
+        "classic",
+        "yellow_pop",
+        "boxed",
+        "bold_caps",
+        "minimal",
+        "neon_green",
+        "one_word",
+        "pink_highlight",
+        "thick_outline",
+        "top_banner",
+        "center_keyword",
+        "typewriter",
+        "pop_word"
+      ],
+      "description": "Caption style."
+    },
+    "grade": {
+      "enum": [
+        "natural_clean",
+        "none",
+        "warm",
+        "black_and_white",
+        "orange_teal",
+        "high_contrast"
+      ],
+      "description": "Colour grade for the whole video."
+    },
+    "pacing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "silence_threshold",
+        "remove_fillers"
+      ],
+      "properties": {
+        "silence_threshold": {
+          "type": "number",
+          "minimum": 0.15,
+          "maximum": 2.0,
+          "description": "Cut pauses longer than this many seconds. 0.25 = fast, 0.6 = relaxed."
+        },
+        "remove_fillers": {
+          "type": "boolean",
+          "description": "Cut ah/uh/um/uhm/eh."
+        }
+      }
+    },
+    "zoom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "amount"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Automatic punch-in zoom on jump cuts."
+        },
+        "amount": {
+          "type": "number",
+          "minimum": 1.0,
+          "maximum": 1.6,
+          "description": "1.15 = 115%."
+        }
+      }
+    },
+    "captions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "size_scale",
+        "position",
+        "highlight_words"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "size_scale": {
+          "type": "number",
+          "minimum": 0.6,
+          "maximum": 1.8,
+          "description": "1 = the style's normal size; 1.3 = 30% bigger."
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "lower",
+                "center",
+                "top"
+              ]
+            }
+          ],
+          "description": "null = the style's own position."
+        },
+        "highlight_words": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 40,
+          "description": "Extra words to show in the keyword colour."
+        }
+      }
+    },
+    "cuts": {
+      "type": "array",
+      "maxItems": 200,
+      "description": "Extra parts to REMOVE (retakes, mistakes, topics the creator wants gone). Pauses and fillers are cut automatically; do not list them.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end",
+          "reason"
+        ],
+        "properties": {
+          "start": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "end": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "zooms": {
+      "type": "array",
+      "maxItems": 100,
+      "description": "Extra zoom-ins for emphasis.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end",
+          "amount"
+        ],
+        "properties": {
+          "start": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "end": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 1.0,
+            "maximum": 2.0
+          }
+        }
+      }
+    },
+    "grades": {
+      "type": "array",
+      "maxItems": 50,
+      "description": "A different colour grade for part of the video.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end",
+          "grade"
+        ],
+        "properties": {
+          "start": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "end": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "grade": {
+            "enum": [
+              "natural_clean",
+              "none",
+              "warm",
+              "black_and_white",
+              "orange_teal",
+              "high_contrast"
+            ]
+          }
+        }
+      }
+    },
+    "photos": {
+      "type": "array",
+      "maxItems": 50,
+      "description": "Pop-in photos. Only use the given file names.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file",
+          "at",
+          "duration",
+          "position",
+          "reason"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "duration": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 10.0,
+            "description": "Seconds on screen."
+          },
+          "position": {
+            "enum": [
+              "top",
+              "center"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "maxLength": 300
+      },
+      "description": "Things in the instruction the editor cannot do (say so plainly). Empty if none."
+    },
+    "ai_clips": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "AI-generated pictures or short video clips (B-roll), only if AI GENERATION says that kind is available and the creator asked for it or it clearly helps. Empty otherwise.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "prompt",
+          "at",
+          "duration",
+          "position",
+          "reason"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "image",
+              "video"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "What to generate, in English, concrete and visual. No real people's names or faces."
+          },
+          "at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "duration": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 10.0,
+            "description": "Seconds on screen."
+          },
+          "position": {
+            "enum": [
+              "full",
+              "top",
+              "center"
+            ],
+            "description": "full = covers the screen as a cutaway; top/center = a smaller pop-in."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "voiceovers": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "AI voice-over lines, only if AI GENERATION says voice is available and the creator asked for it. Empty otherwise.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "at",
+          "reason"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Exactly what the voice says, in the creator's language."
+          },
+          "at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    }
+  }
+}

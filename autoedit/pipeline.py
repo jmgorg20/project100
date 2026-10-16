@@ -89,10 +89,12 @@ class MediaList:
 
 
 def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layout=None,
-                       job_dir=None):
+                       job_dir=None, words=None):
     """Steps 1-5 of the edit: decide everything and return it as a Project (no rendering).
 
     Times in the project are on the finished timeline (after cutting, after the intro).
+    `words`: an already-loaded transcript (list of Words), e.g. from the cache.
+    Plan keys beyond the --plan file: "caption_overrides" (caption clip overrides).
     """
     video = Path(video).resolve()
     check_ffmpeg()
@@ -122,7 +124,9 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
 
     # 1. Transcribe (or load an existing transcript).
     print("[1/6] Transcript")
-    if transcript:
+    if words is not None:
+        print(f"  > using the saved transcript ({len(words)} words)")
+    elif transcript:
         words = load_transcript(transcript)
         print(f"  > using {Path(transcript).name} ({len(words)} words)")
     else:
@@ -281,7 +285,8 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
         clip = {"id": ids.next("o"), "type": "image" if ev.is_image else "video",
                 "media": m["id"], "start": round(start + ev.start, 6),
                 "duration": round(duration, 6), "x": cx, "y": cy,
-                "width": max_w, "height": max_h, "animation": "pop"}
+                "width": max_w, "height": max_h,
+                "animation": "none" if ev.position == "full" else "pop"}
         if not ev.is_image:
             clip.update({"in": 0.0, "out": round(duration, 6)})
         photos.append(clip)
@@ -299,6 +304,8 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
         clip["start"] = round(start + clip["start"], 6)
         if layout == "split":
             clip["overrides"] = {"zone": "divider"}
+        if plan.get("caption_overrides"):
+            clip.setdefault("overrides", {}).update(plan["caption_overrides"])
         if cfg["highlight"].get("color") and style.keyword_color:
             clip.setdefault("overrides", {})["keyword_color"] = style.keyword_color
     tracks["captions"]["clips"] = caption_clips
@@ -315,6 +322,24 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
             sfx_clips.append({"id": ids.next("s"), "type": "audio", "media": m["id"],
                               "start": round(at, 6), "duration": round(duration, 6),
                               "in": 0.0, "out": round(duration, 6), "volume": float(volume)})
+    # AI voice-overs (from the AI edit), placed where the plan says, on the voice-over track.
+    voice_clips = []
+    for line in plan.get("voiceovers", []):
+        at = remap_time(line["at"], segments, side="next")
+        if at is None:
+            continue
+        m = media.add(line["file"])
+        duration = min(m["duration"], main_end - (start + at))
+        if duration * fps < 1:
+            continue
+        voice_clips.append({"id": ids.next("a"), "type": "audio", "media": m["id"],
+                            "start": round(start + at, 6), "duration": round(duration, 6),
+                            "in": 0.0, "out": round(duration, 6), "volume": 1.0})
+    if voice_clips:
+        replace_track(project, "voiceover", "audio",
+                      [("Voice-over", lane) for lane in assign_lanes(voice_clips)],
+                      role="voiceover")
+
     sfx_lanes = assign_lanes(sfx_clips) or [[]]
     replace_track(project, "sfx", "audio", [("Sound effects", lane) for lane in sfx_lanes],
                   role="sfx")

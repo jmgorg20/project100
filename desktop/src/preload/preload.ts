@@ -1,0 +1,46 @@
+// The only bridge between the window and the main process (contextIsolation + sandbox).
+// Sandboxed preloads cannot load local modules: only type imports from ../shared.
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
+import type { AppApi } from "../shared/api";
+import type { GenTaskUpdate, Job, VideoHistory } from "../shared/types";
+
+function listen<T>(channel: string, callback: (value: T) => void): () => void {
+  const handler = (_event: IpcRendererEvent, value: T) => callback(value);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+}
+
+const api: AppApi = {
+  platform: process.platform,
+  pathForFile: (file) => webUtils.getPathForFile(file),
+  getSettings: () => ipcRenderer.invoke("settings:get"),
+  setSettings: (patch) => ipcRenderer.invoke("settings:set", patch),
+  keysStatus: () => ipcRenderer.invoke("keys:status"),
+  setKey: (provider, key) => ipcRenderer.invoke("keys:set", provider, key),
+  clearKey: (provider) => ipcRenderer.invoke("keys:clear", provider),
+  pickVideos: () => ipcRenderer.invoke("dialog:videos"),
+  pickPhotos: () => ipcRenderer.invoke("dialog:photos"),
+  addJobs: (requests) => ipcRenderer.invoke("jobs:add", requests),
+  listJobs: () => ipcRenderer.invoke("jobs:list"),
+  cancelJob: (id) => ipcRenderer.invoke("jobs:cancel", id),
+  dismissJob: (id) => ipcRenderer.invoke("jobs:dismiss", id),
+  applyPlan: (jobId, plan) => ipcRenderer.invoke("plan:apply", jobId, plan),
+  history: (video) => ipcRenderer.invoke("history:get", video),
+  undo: (video) => ipcRenderer.invoke("history:undo", video),
+  redo: (video) => ipcRenderer.invoke("history:redo", video),
+  estimate: (video, provider, instruction) => ipcRenderer.invoke("engine:estimate", video, provider, instruction),
+  renderFrame: (projectFile, seconds) => ipcRenderer.invoke("engine:frame", projectFile, seconds),
+  checkEngine: () => ipcRenderer.invoke("engine:check"),
+  genStatus: (checkWangp) => ipcRenderer.invoke("gen:status", checkWangp),
+  setWangp: (folder, python) => ipcRenderer.invoke("gen:setWangp", folder, python),
+  setTier: (type, kind, tier) => ipcRenderer.invoke("gen:setTier", type, kind, tier),
+  startBenchmark: (types) => ipcRenderer.invoke("gen:benchmark", types),
+  startCompare: (type, prompt, seed) => ipcRenderer.invoke("gen:compare", type, prompt, seed),
+  cancelGenTask: (taskId) => ipcRenderer.invoke("gen:cancel", taskId),
+  onGenTask: (callback) => listen<GenTaskUpdate>("gen:task", callback),
+  openPath: (path) => ipcRenderer.invoke("app:openPath", path),
+  onJobChanged: (callback) => listen<Job>("job:changed", callback),
+  onHistoryChanged: (callback) => listen<VideoHistory>("history:changed", callback),
+};
+
+contextBridge.exposeInMainWorld("api", api);

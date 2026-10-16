@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -232,3 +232,8 @@ assets/overlays/*
 !assets/overlays/.gitkeep
 assets/sfx/*
 !assets/sfx/.gitkeep
+# AI generation (WanGP): your settings and exported WanGP settings files
+/generation.json
+generation_templates/*
+!generation_templates/.gitkeep
+!generation_templates/README.txt
