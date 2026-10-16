@@ -2,13 +2,14 @@
 // the left and the selected clip's settings on the right. Opens a .project.json (the AI's
 // result is one), saves by itself, and exports with the FFmpeg engine.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { OpenedProject, Peaks, Thumbs } from "../../shared/api";
+import type { BrollFound, BrollRequest, OpenedProject, Peaks, Thumbs } from "../../shared/api";
+import { addBroll, brollCredits, brollExclusions, replaceBroll, setBrollRequest } from "../../shared/brollEdit";
 import {
   EditError, addMedia, clipEnd, deleteClips, findClip, insertMedia, mainTrack, projectDuration, setClipProps, setSpeed, setTrackFlag,
   splitAt, splitClip, type ClipPatch,
 } from "../../shared/edit";
 import { baseName, exportPathFor, resolveMediaPath } from "../../shared/paths";
-import type { Project } from "../../shared/types";
+import type { BrollMeta, Media, Project } from "../../shared/types";
 import { createHistory, pushHistory, redoHistory, undoHistory, type History } from "../../shared/undo";
 import { FrameDialog } from "../components/Dialogs";
 import { Player, mmss, type PlayerHandle } from "../components/Player";
@@ -20,6 +21,7 @@ import { Inspector } from "./Inspector";
 import { LeftPanel } from "./LeftPanel";
 import { ProjectPanel } from "./ProjectPanel";
 import { Recorder } from "./Recorder";
+import type { BrollAsk } from "./BrollPanel";
 import { VocabularyDialog } from "./VocabularyDialog";
 import { SHORTCUTS, actionFor, typingInto, type Action } from "./shortcuts";
 import { Timeline } from "./Timeline";
@@ -48,10 +50,18 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
   const [showRecorder, setShowRecorder] = useState(false);
   const [showVocab, setShowVocab] = useState(false);
   const [retranscribing, setRetranscribing] = useState(false);
-  const [folders, setFolders] = useState({ music: "", sfx: "" });
+  const [folders, setFolders] = useState({ music: "", sfx: "", broll: "" });
+  const [stockKeys, setStockKeys] = useState<string[]>([]);
   useEffect(() => {
-    api.getSettings().then((st) => setFolders({ music: st.musicFolder ?? "", sfx: st.sfxFolder ?? "" }));
+    api.getSettings().then((st) => {
+      setFolders({ music: st.musicFolder ?? "", sfx: st.sfxFolder ?? "", broll: st.brollFolder ?? "" });
+      api.keysStatus().then((k) => setStockKeys(st.useStock === false ? [] : (["pexels", "pixabay"] as const).filter((x) => k[x]?.set).map((x) => (x === "pexels" ? "Pexels" : "Pixabay"))));
+    });
   }, []);
+  type BrollTarget = { kind: "new"; at: number; duration: number; position: "full" | "top" | "center" } | { kind: "clip"; clipId: string };
+  const [brollTask, setBrollTask] = useState<{ id: string; label: string; percent?: number; target: BrollTarget } | null>(null);
+  const brollTaskRef = useRef<typeof brollTask>(null);
+  brollTaskRef.current = brollTask;
   const [frame, setFrame] = useState<{ url?: string; error?: string } | null>(null);
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef<PlayerHandle>(null);
@@ -339,6 +349,87 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
     if (added) setSelection([added]);
   };
 
+  // ---- B-roll: found or made by the engine, then put on the timeline (one undo step)
+  // What "find another" already showed on each clip (this session), so it moves on.
+  const brollTried = useRef(new Map<string, Set<string>>());
+  const placeBroll = (found: BrollFound, target: BrollTarget) => {
+    if (target.kind === "clip") {
+      const before = histRef.current ? findClip(histRef.current.present, target.clipId) : null;
+      const tried = brollTried.current.get(target.clipId) ?? new Set<string>();
+      const old = before && histRef.current?.present.media.find((m) => m.id === before.clip.media);
+      if (old) tried.add(old.path);
+      if (before?.clip.broll?.stock_id) tried.add(before.clip.broll.stock_id);
+      tried.add(found.media.path);
+      if (found.broll.stock_id) tried.add(found.broll.stock_id);
+      brollTried.current.set(target.clipId, tried);
+      apply((p) => replaceBroll(p, target.clipId, found.media, found.broll));
+      setSelection([target.clipId]);
+    } else withNewClip((p) => addBroll(p, found.media, found.broll, target.at, target.duration, target.position));
+    const notes = found.notes.filter((n) => !n.startsWith("Not done: AI pictures, clips and voice-over"));
+    setToast(`B-roll: ${found.broll.source === "ai" ? "made with AI" : found.broll.source === "library" ? "from your folder" : found.broll.credit ?? "added"}.${notes.length ? `\n${notes.join("\n")}` : ""}`);
+  };
+
+  useEffect(
+    () =>
+      api.onBroll((u) => {
+        const task = brollTaskRef.current;
+        if (!task || u.taskId !== task.id) return;
+        if (!u.done) {
+          setBrollTask({ ...task, label: u.label ?? task.label, percent: u.label ? undefined : u.percent ?? task.percent });
+          return;
+        }
+        setBrollTask(null);
+        if (u.result) placeBroll(u.result, task.target);
+        else if (!u.cancelled) setToast(u.error ?? "No B-roll was found or made.");
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const startBroll = async (request: Omit<BrollRequest, "projectPath">, target: BrollTarget) => {
+    if (brollTaskRef.current) return;
+    const id = await api.startBroll({ ...request, projectPath: path });
+    setBrollTask({ id, label: "Finding B-roll", target });
+  };
+
+  const askBroll = (ask: BrollAsk) =>
+    void startBroll({ ...ask, exclude: project ? brollExclusions(project) : [], newVersion: false }, { kind: "new", at: playhead, duration: ask.duration, position: ask.position });
+
+  const againBroll = (clipId: string, mode: "another" | "ai", quality: "draft" | "final" = "final") => {
+    if (!project) return;
+    const f = findClip(project, clipId);
+    if (!f) return;
+    const meta: BrollMeta = f.clip.broll ?? { source: "file" };
+    void startBroll(
+      {
+        kind: meta.kind ?? (f.clip.type === "video" ? "video" : "image"), prompt: meta.prompt ?? "", search: meta.search ?? "", style: meta.style ?? "realistic",
+        source: mode === "ai" ? "ai" : "auto", duration: f.clip.duration, position: meta.position ?? "full", quality,
+        exclude: [...new Set([...brollExclusions(project, clipId), ...(brollTried.current.get(clipId) ?? [])])], newVersion: true,
+      },
+      { kind: "clip", clipId },
+    );
+  };
+
+  /** A picture/video you chose: as a new B-roll clip, or in place of a B-roll clip's file. */
+  const brollFromFile = async (file: string, target: BrollTarget, source: "library" | "file") => {
+    const r = await api.mediaInfo([file]);
+    const media: Media | undefined = r.media[0];
+    if (!media) return setToast(r.errors[0]?.message ?? `Could not read ${baseName(file)}.`);
+    if (media.kind === "audio") return setToast("That is a sound file. Choose a picture or a video.");
+    const old = target.kind === "clip" && project ? findClip(project, target.clipId)?.clip.broll : undefined;
+    const words = (media.name ?? baseName(file)).replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+    const meta: BrollMeta = { source, kind: media.kind === "video" ? "video" : "image", prompt: old?.prompt ?? words, search: old?.search ?? words, style: old?.style ?? "realistic", ai_generated: false };
+    if (target.kind === "new") target = { ...target, duration: media.kind === "video" ? Math.min(media.duration, target.duration) : target.duration };
+    placeBroll({ file, media, broll: meta, notes: [] }, target);
+  };
+
+  const chooseBrollFolder = async () => {
+    const folder = await api.pickFolder("Your B-roll folder");
+    if (!folder) return;
+    await api.setSettings({ brollFolder: folder });
+    setFolders((f) => ({ ...f, broll: folder }));
+  };
+
   const retranscribe = async (id: string) => {
     if (!project) return;
     const f = findClip(project, id);
@@ -424,6 +515,15 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
         onAddLibrary={(file, kind) => void addSoundFile(file, kind)}
         folders={folders}
         onChooseFolder={chooseFolder}
+        broll={{
+          folder: folders.broll,
+          stockKeys,
+          task: brollTask?.target.kind === "new" ? brollTask : null,
+          onAsk: askBroll,
+          onCancel: () => brollTask && void api.cancelBroll(brollTask.id),
+          onAddFile: (file) => void brollFromFile(file, { kind: "new", at: playhead, duration: 3, position: "full" }, "library"),
+          onChooseFolder: () => void chooseBrollFolder(),
+        }}
         effects={{
           onFx: (fx) => withNewClip((p) => addFx(p, fx, playhead)),
           onTransition: (fx) => withNewClip((p) => addTransition(p, fx, playhead)),
@@ -450,6 +550,17 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
           onSpeed={(id, sp) => apply((p) => setSpeed(p, id, sp), `speed:${id}`)}
           onRamp={(id, ramp) => apply((p) => speedRamp(p, id, ramp as never))}
           onDelete={remove}
+          broll={{
+            task: brollTask?.target.kind === "clip" ? brollTask : null,
+            onCancel: () => brollTask && void api.cancelBroll(brollTask.id),
+            onFindAnother: (id) => againBroll(id, "another"),
+            onRegenerate: (id, quality) => againBroll(id, "ai", quality),
+            onReplaceFile: async (id) => {
+              const files = await api.pickMedia();
+              if (files.length) await brollFromFile(files[0], { kind: "clip", clipId: id }, "file");
+            },
+            onDescribe: (id, patch, key) => apply((p) => setBrollRequest(p, id, patch), key),
+          }}
           captions={{
             busy: retranscribing,
             onWords: (id, words, key) => apply((p) => setCaptionWords(p, id, words), `${key}:${id}`),
@@ -510,7 +621,7 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
         </div>
       )}
       {showExport && (
-        <ExportDialog projectPath={path} defaultOutput={exportPathFor(path)} fps={fps} beforeExport={saveNow} onClose={() => setShowExport(false)} />
+        <ExportDialog projectPath={path} defaultOutput={exportPathFor(path)} fps={fps} beforeExport={saveNow} onClose={() => setShowExport(false)} broll={brollCredits(project)} />
       )}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
       {showRecorder && (

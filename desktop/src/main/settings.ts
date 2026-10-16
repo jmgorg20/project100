@@ -16,6 +16,8 @@ export function defaultSettings(platform: string, engineDir: string): Settings {
     consentAccepted: false,
     musicFolder: "",
     sfxFolder: "",
+    brollFolder: "",
+    useStock: true,
   };
 }
 

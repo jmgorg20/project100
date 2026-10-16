@@ -87,7 +87,8 @@ describe("main process with the real engine", () => {
       "jobs:add", "jobs:list", "jobs:cancel", "jobs:dismiss", "plan:apply", "history:get", "history:undo", "history:redo",
       "engine:estimate", "engine:frame", "engine:check", "gen:status", "gen:setWangp", "gen:setTier", "gen:benchmark",
       "gen:compare", "gen:cancel", "app:openPath", "app:showInFolder", "project:open", "project:save", "dialog:project",
-      "dialog:media", "dialog:exportPath", "media:info", "media:peaks", "media:thumbs", "export:start", "export:cancel"]) {
+      "dialog:media", "dialog:exportPath", "media:info", "media:peaks", "media:thumbs", "export:start", "export:cancel",
+      "vocab:get", "vocab:set", "library:list", "dialog:folder", "media:saveRecording", "project:retranscribe", "broll:start", "broll:cancel"]) {
       expect(handlers.has(channel), channel).toBe(true);
     }
   });
@@ -264,7 +265,7 @@ print(json.dumps(p))`], { cwd: repo, encoding: "utf-8" }));
     await vi.waitFor(() => expect(["done", "failed"]).toContain(lastJob().status), { timeout: 150_000, interval: 200 });
     const job = lastJob();
     expect(job.error).toBeUndefined();
-    expect(job.stagesDone).toEqual(["transcript", "plan", "ai_final", "cuts", "zooms", "captions", "photos", "render"]);
+    expect(job.stagesDone).toEqual(["transcript", "plan", "broll", "ai_final", "cuts", "zooms", "captions", "photos", "render"]);
     const details = job.summary!.details.join("\n");
     expect(details).toContain("AI picture at 0:01: Mid tier");
     expect(details).toContain("Not done: 1 AI picture(s)/clip(s) over this video's limit of 1.");
@@ -396,4 +397,65 @@ save_project(p, sys.argv[2])`, path.join(tmp, "talk.mp4"), file], { cwd: repo })
     }
     expect(fs.readFileSync(file, "utf-8")).toBe(before); // nothing changed
   }, 120_000);
+
+  // ---------------------------------------------------------------- B-roll
+
+  const brollUpdates = (taskId: string) =>
+    sent.filter(([c, u]) => c === "broll:task" && (u as { taskId: string }).taskId === taskId).map(([, u]) => u as {
+      done?: boolean; label?: string; error?: string; cancelled?: boolean;
+      result?: { file: string; media: { kind: string; path: string }; broll: { source: string; ai_generated?: boolean; tier?: string } };
+    });
+  const brollDone = async (taskId: string) => {
+    await vi.waitFor(() => expect(brollUpdates(taskId).some((u) => u.done)).toBe(true), { timeout: 120_000, interval: 200 });
+    return brollUpdates(taskId).at(-1)!;
+  };
+  const ask = (extra: Record<string, unknown>) => ({
+    projectPath: path.join(tmp, "edit me.project.json"), kind: "image", prompt: "", search: "coffee", style: "realistic", source: "auto",
+    duration: 2, position: "full", quality: "draft", exclude: [], newVersion: false, ...extra,
+  });
+
+  it("B-roll: your folder first, then another one, then AI (the fake WanGP); stock keys never leave Settings", async () => {
+    const env = { ...process.env };
+    process.env.PEXELS_API_KEY = ""; // never your real .env keys in the tests
+    process.env.PIXABAY_API_KEY = "";
+    const folder = path.join(tmp, "My B-roll");
+    try {
+      execFileSync(python, ["-c", `
+import sys; sys.path.insert(0, ".")
+from pathlib import Path
+from tests import synthetic
+d = Path(sys.argv[1]); (d / "coffee").mkdir(parents=True)
+synthetic.make_image(d / "coffee" / "cup.png"); synthetic.make_image(d / "coffee" / "beans.png", color="black")
+`, folder], { cwd: repo });
+      fs.writeFileSync(path.join(folder, "notes.txt"), "x");
+      await call("settings:set", { brollFolder: folder });
+      const listed = (await call("library:list", "broll")) as { files: { name: string; group: string }[] };
+      expect(listed.files.map((f) => [f.name, f.group])).toEqual([["beans.png", "coffee"], ["cup.png", "coffee"]]);
+
+      const first = await brollDone((await call("broll:start", ask({}))) as string);
+      expect(first.error).toBeUndefined();
+      expect(first.result!.broll.source).toBe("library");
+      expect(first.result!.media.kind).toBe("image");
+      const second = await brollDone((await call("broll:start", ask({ exclude: [first.result!.file] }))) as string);
+      expect(second.result!.broll.source).toBe("library");
+      expect(second.result!.file).not.toBe(first.result!.file);
+
+      const none = await brollDone((await call("broll:start", ask({ search: "-spaceship (typed text may start with a dash)", source: "library" }))) as string);
+      expect(none.error).toMatch(/No B-roll found/);
+
+      // AI: the fake WanGP set up above makes the picture (draft tier), one GPU job at a time.
+      const madeId = (await call("broll:start", ask({ prompt: "a robot waving", search: "", style: "cartoon", source: "ai" }))) as string;
+      const made = await brollDone(madeId);
+      expect(made.error).toBeUndefined();
+      expect(made.result!.broll).toMatchObject({ source: "ai", ai_generated: true });
+      expect(fs.existsSync(made.result!.file)).toBe(true);
+      expect(brollUpdates(madeId).map((u) => u.label).filter(Boolean)).toEqual(expect.arrayContaining(["Finding B-roll", "Making AI clips (draft)"]));
+    } finally {
+      process.env.PEXELS_API_KEY = env.PEXELS_API_KEY ?? "";
+      process.env.PIXABAY_API_KEY = env.PIXABAY_API_KEY ?? "";
+      if (env.PEXELS_API_KEY === undefined) delete process.env.PEXELS_API_KEY;
+      if (env.PIXABAY_API_KEY === undefined) delete process.env.PIXABAY_API_KEY;
+      await call("settings:set", { brollFolder: "" });
+    }
+  }, 300_000);
 });

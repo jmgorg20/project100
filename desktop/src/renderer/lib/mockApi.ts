@@ -1,7 +1,7 @@
 // A stand-in for the Electron bridge, used only by the UI tests (?mock=1). It replays an
 // AI edit that the real engine made (fixtures written by tests/ui/make_fixtures.py), with the
 // same events in the same order, so the window can be tested without Electron or API keys.
-import type { AppApi, EstimateResult, ExportUpdate } from "../../shared/api";
+import type { AppApi, BrollFound, BrollRequest, BrollUpdate, EstimateResult, ExportUpdate, LibraryFile } from "../../shared/api";
 import { addVersion, emptyHistory, redo, undo } from "../../shared/history";
 import { applyEvent, finishJob, newJob, versionFromJob } from "../../shared/jobs";
 import type {
@@ -25,8 +25,12 @@ export function createMockApi(): AppApi {
     pythonPath: "python", engineDir: "C:/AutoEditor", outputDir: "C:/AutoEditor/output", provider: "groq",
     groqModel: "openai/gpt-oss-120b", anthropicModel: "claude-opus-5-5", transcribeWith: "groq", autoMode: true,
     consentAccepted: params.has("consent"), musicFolder: params.has("music") ? "C:/Users/me/Music" : "", sfxFolder: "",
+    brollFolder: params.has("broll") ? "C:/Users/me/B-roll" : "", useStock: true,
   };
-  let keys: KeysStatus = { encryptionAvailable: true, groq: { set: true, hint: "••••a1b2" }, anthropic: { set: false, hint: "" } };
+  let keys: KeysStatus = {
+    encryptionAvailable: true, groq: { set: true, hint: "••••a1b2" }, anthropic: { set: false, hint: "" },
+    pexels: { set: false, hint: "" }, pixabay: { set: false, hint: "" },
+  };
   const jobs = new Map<string, Job>();
   const histories = new Map<string, VideoHistory>();
   const jobListeners = new Set<(job: Job) => void>();
@@ -45,9 +49,33 @@ export function createMockApi(): AppApi {
     exports: unknown[];
     vocabulary: { words: string[]; corrections: { from: string; to: string }[] };
     recordings: number[];
+    brollRequests: BrollRequest[];
   };
   w.vocabulary = { words: ["GCash", "Shopee"], corrections: [{ from: "g cash", to: "GCash" }] };
   w.recordings = [];
+  w.brollRequests = [];
+  // B-roll the real engine found or made (tests/ui/make_fixtures.py): library, stock, AI.
+  type BrollFixture = { found: (BrollFound & { tag: string })[]; library: LibraryFile[]; media: Record<string, Media> };
+  let brollFixture: Promise<BrollFixture> | null = null;
+  const loadBroll = () => (brollFixture ??= fetch("/fixtures/broll.json").then((r) => r.json()));
+  const brollListeners = new Set<(u: BrollUpdate) => void>();
+  const stoppedBroll = new Set<string>();
+  /** Like the engine: library first, then stock (with a key), then AI; or only the chosen source. */
+  const pickBroll = (f: BrollFixture, r: BrollRequest): BrollFound | null => {
+    const free = (x: BrollFound) => !r.exclude.includes(x.file) && !(x.broll.stock_id && r.exclude.includes(x.broll.stock_id));
+    const of = (tag: string) => f.found.filter((x) => x.tag.startsWith(tag) && free(x));
+    const stockKey = settings.useStock && (keys.pexels.set || keys.pixabay.set);
+    const order = r.source === "ai" ? ["ai"] : r.source === "library" ? ["library"] : r.source === "stock" ? (stockKey ? ["stock"] : []) : ["library", ...(stockKey ? ["stock"] : []), "ai"];
+    for (const tag of order) {
+      if (tag === "library" && !settings.brollFolder) continue;
+      const hit = of(tag)[0];
+      if (hit) {
+        const { tag: _tag, ...found } = hit;
+        return { ...found, broll: { ...found.broll, kind: found.media.kind === "video" ? "video" : "image", prompt: r.prompt || found.broll.prompt, search: r.search || found.broll.search, style: r.style } };
+      }
+    }
+    return null;
+  };
   w.savedProjects = [];
   w.shownInFolder = [];
   w.exports = [];
@@ -118,7 +146,7 @@ export function createMockApi(): AppApi {
     const fail = job.instruction.includes("FAIL");
     // "AI CLIP" in the instructions: the plan asks for one AI video clip (made with WanGP).
     const wantsAi = job.instruction.includes("AI CLIP");
-    const clip = { kind: "video" as const, prompt: "Slow push towards a cup of coffee", at: 3, duration: 2, position: "full" as const, reason: "b-roll while you talk" };
+    const clip = { kind: "video" as const, prompt: "Slow push towards a cup of coffee", search: "coffee cup", style: "realistic" as const, source: "ai" as const, at: 3, duration: 2, position: "full" as const, reason: "b-roll while you talk" };
     const plan: Plan = wantsAi ? { ...f.plan, ai_clips: [clip], voiceovers: [] } : f.plan;
     await emit({ type: "stage", stage: "transcript", label: "Listening to your video" });
     await emit({ type: "transcript", words: 13, cached: job.mode !== "new", text: "Kumusta kayo mga kaibigan!" });
@@ -129,6 +157,7 @@ export function createMockApi(): AppApi {
       model: "openai/gpt-oss-120b", cost: 0.0016, attempts: [],
     }, 400);
     if (wantsAi && !fail) {
+      await emit({ type: "stage", stage: "broll", label: "Finding B-roll" });
       const render = job.auto || job.mode === "apply";
       const passes = job.mode === "apply" ? ["final"] : render ? ["draft", "final"] : ["draft"];
       for (const pass of passes) {
@@ -308,8 +337,10 @@ export function createMockApi(): AppApi {
     pickExportPath: async () => "C:/Videos/my video export.mp4",
     mediaInfo: async (paths) => {
       const f = await loadMedia();
-      const media = paths.map((p) => f.info[base(p)]).filter(Boolean);
-      const errors = paths.filter((p) => !f.info[base(p)]).map((p) => ({ path: p, message: "FFmpeg cannot read 'broken.mp4'. It may be damaged or not a video/image file." }));
+      const b = await loadBroll();
+      const info = (p: string) => f.info[base(p)] ?? b.media[p] ?? b.found.find((x: BrollFound) => x.file === p)?.media;
+      const media = paths.map(info).filter(Boolean) as Media[];
+      const errors = paths.filter((p) => !info(p)).map((p: string) => ({ path: p, message: "FFmpeg cannot read 'broken.mp4'. It may be damaged or not a video/image file." }));
       return { media, errors };
     },
     peaks: async (path) => ((await loadMedia()).peaks[base(path)] as never) ?? { error: "no sound" },
@@ -337,8 +368,9 @@ export function createMockApi(): AppApi {
       return { ok: true };
     },
     listLibrary: async (kind) => {
-      const folder = kind === "music" ? settings.musicFolder : settings.sfxFolder;
+      const folder = kind === "music" ? settings.musicFolder : kind === "sfx" ? settings.sfxFolder : settings.brollFolder;
       if (!folder) return { folder: "", files: [] };
+      if (kind === "broll") return { folder, files: (await loadBroll()).library };
       return {
         folder,
         files: [
@@ -347,7 +379,39 @@ export function createMockApi(): AppApi {
         ],
       };
     },
-    pickFolder: async () => "C:/Users/me/Sounds",
+    pickFolder: async (title) => (title.includes("B-roll") ? "C:/Users/me/B-roll" : "C:/Users/me/Sounds"),
+    startBroll: async (request) => {
+      const taskId = `mockbroll${++counter}`;
+      w.brollRequests.push(structuredClone(request));
+      (async () => {
+        const f = await loadBroll();
+        const send = (u: Omit<BrollUpdate, "taskId">) => brollListeners.forEach((l) => l({ taskId, ...u }));
+        send({ label: "Finding B-roll" });
+        const found = pickBroll(f, request);
+        if (found?.broll.source === "ai") {
+          send({ label: request.quality === "draft" ? "Making AI clips (draft)" : "Making AI clips (final)" });
+          for (const percent of [0, 50]) {
+            await wait(250 / speed);
+            if (stoppedBroll.has(taskId)) return send({ done: true, cancelled: true });
+            send({ percent });
+          }
+        }
+        await wait(200 / speed);
+        if (stoppedBroll.has(taskId)) return send({ done: true, cancelled: true });
+        if (!found) return send({ done: true, error: "No B-roll found or made. Add a B-roll folder, a stock key, or set up WanGP." });
+        send({ done: true, result: found });
+      })();
+      return taskId;
+    },
+    cancelBroll: async (taskId) => {
+      stoppedBroll.add(taskId);
+    },
+    onBroll: (callback) => {
+      brollListeners.add(callback);
+      return () => {
+        brollListeners.delete(callback);
+      };
+    },
     saveRecording: async (_projectPath, data) => {
       w.recordings.push(data.length);
       // The stand-in has no disk: the "recording" becomes the demo tone (what the engine reads back).

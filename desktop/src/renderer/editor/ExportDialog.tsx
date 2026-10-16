@@ -18,14 +18,18 @@ export const SIZES: { height: ExportOptions["height"]; label: string }[] = [
   { height: 960, label: "540 × 960" },
 ];
 
-export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, onClose }: {
+export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, onClose, broll }: {
   projectPath: string;
   defaultOutput: string;
   fps: number;
   /** Save the latest changes first. Returns an error message, or null. */
   beforeExport: () => Promise<string | null>;
   onClose: () => void;
+  /** Stock credits to post with the video, and how many clips were made with AI. */
+  broll?: { credits: string[]; aiClips: number };
 }) {
+  const [copied, setCopied] = useState(false);
+  const creditText = broll?.credits.length ? `Credits: ${broll.credits.join("; ")}` : "";
   const [output, setOutput] = useState(defaultOutput);
   const [height, setHeight] = useState<ExportOptions["height"]>(1920);
   const [rate, setRate] = useState<ExportOptions["fps"]>(fps as ExportOptions["fps"]);
@@ -101,6 +105,35 @@ export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, on
             <button className="btn small" onClick={choose} disabled={Boolean(task)}>Change…</button>
           </div>
         </div>
+
+        {broll && broll.aiClips > 0 && (
+          <p className="notice small" data-testid="export-ai-label">
+            <strong>AI-made content:</strong> {broll.aiClips} B-roll clip{broll.aiClips === 1 ? " was" : "s were"} made with AI. When you post, turn on the
+            platform's "AI-generated" label (TikTok, Facebook and YouTube ask for it). · May AI-generated na bahagi: i-on ang AI label pag nag-post.
+          </p>
+        )}
+        {creditText && (
+          <div className="field" data-testid="export-credits">
+            <label htmlFor="export-credit-text">Stock credits (paste them in your caption)</label>
+            <textarea id="export-credit-text" readOnly rows={Math.min(4, broll!.credits.length + 1)} value={creditText} />
+            <div className="row">
+              <button
+                className="btn small"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(creditText);
+                    setCopied(true);
+                  } catch {
+                    setCopied(false);
+                  }
+                }}
+              >
+                {copied ? "Copied ✓" : "Copy credits"}
+              </button>
+              <span className="muted small">Pexels and Pixabay don't require credit, but it is kind and recommended.</span>
+            </div>
+          </div>
+        )}
 
         {task && (
           <div data-testid="export-progress">

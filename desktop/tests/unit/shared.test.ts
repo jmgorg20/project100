@@ -121,15 +121,16 @@ describe("plan review", () => {
     const withAi: Plan = {
       ...basePlan(),
       ai_clips: [
-        { kind: "video", prompt: "steam over coffee", at: 12, duration: 3, position: "full", reason: "b-roll" },
-        { kind: "image", prompt: "a sari-sari store", at: 30, duration: 2, position: "top", reason: "when you say tindahan" },
+        { kind: "video", prompt: "steam over coffee", search: "coffee steam", style: "realistic", source: "auto", at: 12, duration: 3, position: "full", reason: "b-roll" },
+        { kind: "image", prompt: "a sari-sari store", search: "store", style: "cartoon", source: "ai", at: 30, duration: 2, position: "top", reason: "when you say tindahan" },
       ],
       voiceovers: [{ text: "Salamat sa panonood!", at: 50, reason: "outro" }],
     };
     const items = planItems(withAi, basePlan());
     expect(items.map((i) => i.id)).toEqual(["ai_clips.0", "ai_clips.1", "voiceovers.0"]);
-    expect(items[0].label).toBe("AI video clip at 0:12: “steam over coffee”");
-    expect(items.every((i) => i.group === "AI clips")).toBe(true);
+    expect(items[0].label).toBe("B-roll video clip at 0:12: “steam over coffee”");
+    expect(items[1].label).toBe("AI picture at 0:30: “a sari-sari store” (cartoon)");
+    expect(items.every((i) => i.group === "B-roll & AI clips")).toBe(true);
     const kept = acceptedPlan(withAi, basePlan(), new Set(["ai_clips.1"]));
     expect(kept.ai_clips?.map((c) => c.prompt)).toEqual(["a sari-sari store"]);
     expect(kept.voiceovers).toEqual([]);

@@ -1,10 +1,10 @@
 // The AI plan as a list of changes the creator can accept or reject one by one
 // (used when Auto mode is off). Pure functions.
-import type { Plan } from "./types";
+import type { Plan, PlanAiClip } from "./types";
 
 export interface PlanItem {
   id: string;
-  group: "Look" | "Pacing" | "Cuts" | "Zooms" | "Colour" | "Photos" | "AI clips";
+  group: "Look" | "Pacing" | "Cuts" | "Zooms" | "Colour" | "Photos" | "B-roll & AI clips";
   label: string;
   detail?: string;
 }
@@ -41,10 +41,15 @@ export function planItems(plan: Plan, base: Plan): PlanItem[] {
   plan.grades.forEach((r, i) => items.push({ id: `grades.${i}`, group: "Colour", label: `${(r.grade ?? "").replace(/_/g, " ")} at ${mmss(r.start)}–${mmss(r.end)}` }));
   plan.photos.forEach((p, i) => items.push({ id: `photos.${i}`, group: "Photos", label: `${p.file} at ${mmss(p.at)}`, detail: p.reason }));
   (plan.ai_clips ?? []).forEach((c, i) =>
-    items.push({ id: `ai_clips.${i}`, group: "AI clips", label: `AI ${c.kind === "image" ? "picture" : "video clip"} at ${mmss(c.at)}: “${c.prompt}”`, detail: c.reason }),
+    items.push({
+      id: `ai_clips.${i}`,
+      group: "B-roll & AI clips",
+      label: `${brollWhere(c.source)} ${c.kind === "image" ? "picture" : "video clip"} at ${mmss(c.at)}: “${c.prompt}”${c.style && c.style !== "realistic" ? ` (${c.style.replace(/_/g, " ")})` : ""}`,
+      detail: c.reason,
+    }),
   );
   (plan.voiceovers ?? []).forEach((v, i) =>
-    items.push({ id: `voiceovers.${i}`, group: "AI clips", label: `AI voice-over at ${mmss(v.at)}: “${v.text}”`, detail: v.reason }),
+    items.push({ id: `voiceovers.${i}`, group: "B-roll & AI clips", label: `AI voice-over at ${mmss(v.at)}: “${v.text}”`, detail: v.reason }),
   );
   return items;
 }
@@ -81,4 +86,9 @@ export function formatCost(total: number | null | undefined): string {
   if (total === 0) return "$0";
   if (total < 0.01) return `$${total.toFixed(4)}`;
   return `$${total.toFixed(2)}`;
+}
+
+/** "B-roll" when it may come from your folder or stock first; "AI" when only AI makes it. */
+function brollWhere(source: PlanAiClip["source"]): string {
+  return source === "ai" ? "AI" : source === "library" ? "B-roll (your folder)" : source === "stock" ? "B-roll (free stock)" : "B-roll";
 }

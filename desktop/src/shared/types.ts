@@ -2,6 +2,31 @@
 // The Project shape mirrors autoedit/project.schema.json (only the parts the app reads).
 
 export type Provider = "groq" | "anthropic";
+/** Free stock sites for B-roll (your own free key). */
+export type StockProvider = "pexels" | "pixabay";
+export type KeyName = Provider | StockProvider;
+
+export type BrollStyle = "realistic" | "cartoon" | "drawing" | "low_poly" | "stylized_3d" | "anime";
+export type BrollSource = "library" | "pexels" | "pixabay" | "ai" | "file";
+
+/** Where a B-roll clip came from (autoedit/project.schema.json, $defs/broll). */
+export interface BrollMeta {
+  source: BrollSource;
+  kind?: "image" | "video";
+  prompt?: string;
+  search?: string;
+  style?: BrollStyle;
+  position?: "full" | "top" | "center";
+  /** Made with AI: label it where the platform asks. */
+  ai_generated?: boolean;
+  tier?: string;
+  stock_id?: string;
+  author?: string;
+  page?: string;
+  license?: string;
+  license_url?: string;
+  credit?: string;
+}
 
 export interface Word {
   text: string;
@@ -51,6 +76,8 @@ export interface Clip {
   highlight_keywords?: boolean;
   overrides?: Record<string, unknown>;
   words?: Word[];
+  /** B-roll: where it came from (library, stock, AI). */
+  broll?: BrollMeta;
 }
 
 export interface Track {
@@ -109,10 +136,13 @@ export interface PlanPhoto {
   reason: string;
 }
 
-/** A picture or video clip the AI asks WanGP to make (made on this PC, if set up). */
+/** B-roll the AI plans: from your library, free stock, or made with AI (WanGP). */
 export interface PlanAiClip {
   kind: "image" | "video";
   prompt: string;
+  search?: string;
+  style?: BrollStyle;
+  source?: "auto" | "library" | "stock" | "ai";
   at: number;
   duration: number;
   position: "full" | "top" | "center";
@@ -269,6 +299,10 @@ export interface Settings {
   /** Your own music and sound-effect folders (the app never ships music). */
   musicFolder: string;
   sfxFolder: string;
+  /** Your own B-roll clips and pictures (file and folder names say what they show). */
+  brollFolder: string;
+  /** Search Pexels/Pixabay for B-roll when a key is saved. */
+  useStock: boolean;
 }
 
 export interface KeyStatus {
@@ -280,6 +314,8 @@ export interface KeysStatus {
   encryptionAvailable: boolean;
   groq: KeyStatus;
   anthropic: KeyStatus;
+  pexels: KeyStatus;
+  pixabay: KeyStatus;
 }
 
 // ---------------------------------------------------------------- AI generation (WanGP)

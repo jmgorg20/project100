@@ -3,7 +3,7 @@
 // they are never logged, and the window only learns whether a key is set.
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { KeysStatus, Provider } from "../shared/types";
+import type { KeyName, KeysStatus } from "../shared/types";
 
 export interface Encryptor {
   isEncryptionAvailable(): boolean;
@@ -11,13 +11,18 @@ export interface Encryptor {
   decryptString(encrypted: Buffer): string;
 }
 
-const ENV_NAMES: Record<Provider, string> = { groq: "GROQ_API_KEY", anthropic: "ANTHROPIC_API_KEY" };
-const PROVIDERS: Provider[] = ["groq", "anthropic"];
+const ENV_NAMES: Record<KeyName, string> = {
+  groq: "GROQ_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  pexels: "PEXELS_API_KEY",
+  pixabay: "PIXABAY_API_KEY",
+};
+const PROVIDERS = Object.keys(ENV_NAMES) as KeyName[];
 
 export class KeyStore {
   constructor(private file: string, private crypto: Encryptor) {}
 
-  private read(): Partial<Record<Provider, string>> {
+  private read(): Partial<Record<KeyName, string>> {
     try {
       return JSON.parse(fs.readFileSync(this.file, "utf-8"));
     } catch {
@@ -25,14 +30,14 @@ export class KeyStore {
     }
   }
 
-  private write(data: Partial<Record<Provider, string>>): void {
+  private write(data: Partial<Record<KeyName, string>>): void {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(data), { encoding: "utf-8", mode: 0o600 });
     fs.renameSync(tmp, this.file);
   }
 
-  private decrypt(provider: Provider): string | null {
+  private decrypt(provider: KeyName): string | null {
     const stored = this.read()[provider];
     if (!stored || !this.crypto.isEncryptionAvailable()) return null;
     try {
@@ -42,7 +47,7 @@ export class KeyStore {
     }
   }
 
-  set(provider: Provider, key: string): void {
+  set(provider: KeyName, key: string): void {
     const clean = key.trim();
     if (!PROVIDERS.includes(provider)) throw new Error(`Unknown provider ${provider}`);
     if (!clean) throw new Error("The key is empty.");
@@ -55,18 +60,24 @@ export class KeyStore {
     this.write(data);
   }
 
-  clear(provider: Provider): void {
+  clear(provider: KeyName): void {
     const data = this.read();
     delete data[provider];
     this.write(data);
   }
 
   status(): KeysStatus {
-    const one = (provider: Provider) => {
+    const one = (provider: KeyName) => {
       const key = this.decrypt(provider);
       return { set: Boolean(key), hint: key ? `••••${key.slice(-4)}` : "" };
     };
-    return { encryptionAvailable: this.crypto.isEncryptionAvailable(), groq: one("groq"), anthropic: one("anthropic") };
+    return {
+      encryptionAvailable: this.crypto.isEncryptionAvailable(),
+      groq: one("groq"),
+      anthropic: one("anthropic"),
+      pexels: one("pexels"),
+      pixabay: one("pixabay"),
+    };
   }
 
   /** Environment variables for the engine process. */

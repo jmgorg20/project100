@@ -1,6 +1,7 @@
 // What the window can ask the main process (exposed as window.api by the preload script).
 import type {
-  ContentType, Cost, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Media, Plan, Project, Provider, Settings, VideoHistory,
+  BrollMeta, BrollStyle, ContentType, Cost, GenStatus, GenTaskUpdate, Job, JobRequest, KeyName, KeysStatus, Media, Plan, Project, Provider,
+  Settings, VideoHistory,
 } from "./types";
 
 export interface OpenedProject {
@@ -43,6 +44,42 @@ export interface LibraryFile {
   group: string;
 }
 
+/** Find or make one B-roll item: your library, then free stock, then AI (or only one source). */
+export interface BrollRequest {
+  projectPath: string;
+  kind: "image" | "video";
+  prompt: string;
+  search: string;
+  style: BrollStyle;
+  source: "auto" | "library" | "stock" | "ai";
+  duration: number;
+  position: "full" | "top" | "center";
+  /** AI generation: the quick draft tier, or the final tier. */
+  quality: "draft" | "final";
+  /** Files and stock ids (pexels-123) not to use again ("find another"). */
+  exclude: string[];
+  /** AI: a different version of the same prompt. */
+  newVersion: boolean;
+}
+
+export interface BrollFound {
+  file: string;
+  media: Media;
+  broll: BrollMeta;
+  notes: string[];
+}
+
+export interface BrollUpdate {
+  taskId: string;
+  /** What the engine is doing now, e.g. "Finding B-roll", "Making AI clips (draft)". */
+  label?: string;
+  percent?: number;
+  done?: boolean;
+  result?: BrollFound;
+  error?: string;
+  cancelled?: boolean;
+}
+
 export interface ExportUpdate {
   taskId: string;
   percent?: number;
@@ -70,8 +107,8 @@ export interface AppApi {
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   keysStatus(): Promise<KeysStatus>;
-  setKey(provider: Provider, key: string): Promise<KeysStatus>;
-  clearKey(provider: Provider): Promise<KeysStatus>;
+  setKey(provider: KeyName, key: string): Promise<KeysStatus>;
+  clearKey(provider: KeyName): Promise<KeysStatus>;
   pickVideos(): Promise<string[]>;
   pickPhotos(): Promise<string[]>;
   addJobs(requests: JobRequest[]): Promise<Job[]>;
@@ -116,8 +153,12 @@ export interface AppApi {
   /** Your words and corrections (vocabulary.json next to the editor engine). */
   getVocabulary(): Promise<{ words: string[]; corrections: { from: string; to: string }[] }>;
   setVocabulary(v: { words: string[]; corrections: { from: string; to: string }[] }): Promise<{ ok: boolean; error?: string }>;
-  /** Sound files in your music or sound-effect folder (Settings). */
-  listLibrary(kind: "music" | "sfx"): Promise<{ folder: string; files: LibraryFile[]; error?: string }>;
+  /** Sound files in your music or sound-effect folder, or pictures/videos in your B-roll folder. */
+  listLibrary(kind: "music" | "sfx" | "broll"): Promise<{ folder: string; files: LibraryFile[]; error?: string }>;
+  // ---- B-roll
+  startBroll(request: BrollRequest): Promise<string>;
+  cancelBroll(taskId: string): Promise<void>;
+  onBroll(callback: (update: BrollUpdate) => void): () => void;
   pickFolder(title: string): Promise<string | null>;
   /** Save a voice-over recorded in the app next to the project; returns its path. */
   saveRecording(projectPath: string, data: Uint8Array, extension: string): Promise<{ path?: string; error?: string }>;

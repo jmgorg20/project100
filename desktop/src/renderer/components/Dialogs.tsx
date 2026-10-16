@@ -1,7 +1,7 @@
 // Settings (API keys, provider, Python), the consent notice, and the exact-frame viewer.
 import { useEffect, useState } from "react";
 import type { EngineCheck } from "../../shared/api";
-import type { KeysStatus, Provider, Settings } from "../../shared/types";
+import type { KeyName, KeysStatus, Provider, Settings } from "../../shared/types";
 import { api } from "../lib/api";
 
 export function Dialog({ title, onClose, wide, children }: { title: string; onClose?: () => void; wide?: boolean; children: React.ReactNode }) {
@@ -20,7 +20,7 @@ export function Dialog({ title, onClose, wide, children }: { title: string; onCl
   );
 }
 
-function KeyField({ provider, label, status, onChange }: { provider: Provider; label: string; status: KeysStatus; onChange: (s: KeysStatus) => void }) {
+function KeyField({ provider, label, status, onChange }: { provider: KeyName; label: React.ReactNode; status: KeysStatus; onChange: (s: KeysStatus) => void }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const info = status[provider];
@@ -87,6 +87,26 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
             <option value="local">On this PC (offline, slower; needs faster-whisper)</option>
           </select>
         </div>
+        <h3 className="settings-head">B-roll · Dagdag na kuha</h3>
+        <div className="field">
+          <label htmlFor="broll-folder">Your B-roll folder (your own clips and pictures; name them after what they show)</label>
+          <div className="row">
+            <input id="broll-folder" type="text" value={draft.brollFolder} onChange={(e) => set("brollFolder", e.target.value)} placeholder="e.g. C:\Users\you\Videos\B-roll" />
+            <button className="btn small" onClick={async () => { const f = await api.pickFolder("Your B-roll folder"); if (f) set("brollFolder", f); }}>Choose…</button>
+          </div>
+        </div>
+        <label className="row">
+          <input type="checkbox" checked={draft.useStock} onChange={(e) => set("useStock", e.target.checked)} />
+          <span>Use free stock photos and videos (Pexels / Pixabay) when your folder has nothing that fits</span>
+        </label>
+        {keys && (
+          <KeyField provider="pexels" status={keys} onChange={setKeys}
+            label={<>Pexels API key (free: <a href="https://www.pexels.com/api/" target="_blank" rel="noreferrer">pexels.com/api</a>)</>} />
+        )}
+        {keys && (
+          <KeyField provider="pixabay" status={keys} onChange={setKeys}
+            label={<>Pixabay API key (free: <a href="https://pixabay.com/api/docs/" target="_blank" rel="noreferrer">pixabay.com/api/docs</a>; also has cartoons and drawings)</>} />
+        )}
         <div className="field">
           <label htmlFor="python">Python</label>
           <input id="python" type="text" value={draft.pythonPath} onChange={(e) => set("pythonPath", e.target.value)} />

@@ -11,8 +11,9 @@ const STEPS: [string, string][] = [
   ["render", "Render"],
 ];
 
-// Shown only when the plan asks for AI pictures, clips or voice-over (made with WanGP).
+// Shown only when the plan asks for B-roll (your folder, free stock, AI) or AI voice-over.
 const AI_STEPS: [string, string][] = [
+  ["broll", "B-roll"],
   ["ai_draft", "AI clips (draft)"],
   ["ai_final", "AI clips (final)"],
 ];
@@ -22,8 +23,9 @@ export function Stages({ job }: { job: Job }) {
   const seen = (key: string) => job.stage === key || job.stagesDone.includes(key);
   const wantsAi = Boolean(job.plan?.ai_clips?.length || job.plan?.voiceovers?.length);
   // Auto mode: draft then final. Review first: draft only. Applying a reviewed plan: final only.
+  const wantsBroll = Boolean(job.plan?.ai_clips?.length);
   const ai = AI_STEPS.filter(([key]) =>
-    seen(key) || (wantsAi && (key === "ai_draft" ? job.mode !== "apply" : render)),
+    seen(key) || (key === "broll" ? wantsBroll : wantsAi && (key === "ai_draft" ? job.mode !== "apply" : render)),
   );
   const steps = [...STEPS.slice(0, 2), ...ai, ...STEPS.slice(2, render ? undefined : -1)];
   return (
