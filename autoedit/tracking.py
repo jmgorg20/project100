@@ -30,6 +30,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import PROJECT_DIR
 from .errors import Cancelled, EditorError
 
 HANDS = ("left", "right")
@@ -308,6 +309,16 @@ def resolve(point, fps, start, times, smooth=0.5, params=None):
     return resolve_sequence([(prep, t) for t in times], dt, params)
 
 
+def point_names_for(clip):
+    """Every stored point name a tracked-effect clip could follow (both hands for "any")."""
+    point = clip.get("point", "palm")
+    if point in ("face", "body"):
+        return [point]
+    parts = FINGERTIPS if point == "fingertips" else (point,)
+    hands = HANDS if clip.get("hand", "any") == "any" else (clip["hand"],)
+    return [f"{h}_{part}" for h in hands for part in parts]
+
+
 def pick_hand(track, hand, part, t0, t1, min_confidence=DEFAULTS["min_confidence"]):
     """The point name for "left", "right" or "any" hand: for "any", the hand that is found
     most (by summed confidence) between source seconds t0 and t1."""
@@ -330,10 +341,25 @@ def pick_hand(track, hand, part, t0, t1, min_confidence=DEFAULTS["min_confidence
 
 # ---------------------------------------------------------------- detection (MediaPipe)
 
+MODEL_DIR = PROJECT_DIR / "models" / "tracking"
+MODEL_FILES = {"hand": "hand_landmarker.task", "face": "blaze_face_short_range.tflite",
+               "pose": "pose_landmarker_lite.task"}
+MODEL_SIZES = {"hand": "about 8 MB", "face": "under 1 MB", "pose": "about 6 MB"}
+
+
 def settings_of(cfg):
+    """The tracking settings: config.yaml's, with the models folder as the default place for
+    the model files (`models/tracking/`), so most people need no setting at all."""
     t = dict((cfg or {}).get("tracking") or {})
-    return {"hand_model": str(t.get("hand_model") or ""), "face_model": str(t.get("face_model") or ""),
-            "pose_model": str(t.get("pose_model") or ""), "fps": float(t.get("fps") or 30),
+
+    def model(kind):
+        given = str(t.get(f"{kind}_model") or "")
+        if given:
+            return given
+        default = MODEL_DIR / MODEL_FILES[kind]
+        return str(default) if default.is_file() else ""
+    return {"hand_model": model("hand"), "face_model": model("face"), "pose_model": model("pose"),
+            "fps": float(t.get("fps") or 30),
             "min_confidence": float(t.get("min_confidence", 0.5)),
             "swap_hands": bool(t.get("swap_hands", False))}
 
@@ -523,6 +549,11 @@ def detect_video(video, cfg, ranges=None, names=None, reporter=None, cancel=None
                         pt.s[idx] = size
                 if reporter and k % 15 == 0:
                     reporter.progress(min(0.99, (done + k / fps) / total))
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise EditorError(
+                f"MediaPipe could not start: {exc}. On Linux it may need `sudo apt install libegl1 "
+                "libgles2`; on Windows the Microsoft Visual C++ Redistributable. Also check that "
+                "the model files are the ones from docs/tracking.md. Nothing else was changed.")
         finally:
             for d in (hand, face, pose):
                 if d is not None:
@@ -550,3 +581,133 @@ def merge_ranges(ranges, gap=0.5):
         else:
             out.append((a, b))
     return out
+
+
+# ---------------------------------------------------------------- tracking for an AI plan
+
+def tracking_text(cfg):
+    """What the AI is told about tracked effects."""
+    st = status(cfg)
+    if not st["available"] and not st["face"]:
+        return ("TRACKED EFFECTS: NOT available (tracking is not set up on this PC). Leave "
+                "tracked_effects empty.")
+    what = " and ".join(k for k, ok in (("hands", st["hands"]), ("face and body", st["face"])) if ok)
+    return (f"TRACKED EFFECTS: available for {what}. Plan tracked_effects (a glow, sparks, an aura "
+            "or energy that follows them) only when the creator asks for such an effect; "
+            "otherwise leave it empty. Use only points marked available here"
+            + ("" if st["hands"] else "; hands are NOT available")
+            + ("" if st["face"] else "; face and body are NOT available") + ".")
+
+
+def coverage(track, names, t0, t1, min_confidence=DEFAULTS["min_confidence"]):
+    """The share (0-1) of source seconds t0..t1 in which the best of these points was found."""
+    best = 0.0
+    for name in names:
+        pt = track.points.get(name)
+        if pt is None:
+            continue
+        a = max(0, int((t0 - track.start) * track.fps))
+        b = min(len(pt), int(math.ceil((t1 - track.start) * track.fps)))
+        if b > a:
+            best = max(best, sum(1 for c in pt.c[a:b] if c >= min_confidence) / (b - a))
+    return best
+
+
+def track_for_plan(plan, video, cfg, cache=None, reporter=None, cancel=None):
+    """Find the points the plan's tracked effects need. Returns
+    {"track": Track or None, "notes": [...]}: notes say what could not be done and how well the
+    points were found. Never raises for a missing MediaPipe/model: the edit goes on without."""
+    items = plan.get("tracked_effects") or []
+    out = {"track": None, "notes": []}
+    if not items:
+        return out
+    st = status(cfg)
+    usable = []
+    for e in items:
+        face = e["point"] in ("face", "body")
+        ok = st["face"] if face else st["hands"]
+        if ok:
+            usable.append(e)
+        else:
+            out["notes"].append(
+                f"Not done: tracked {e['effect']} at {_mmss(e['at'])} ("
+                + ("; ".join(st["problems"]) if st["problems"] else
+                   f"no {'face' if face else 'hand'} model is set up") + ")")
+    if not usable:
+        return out
+    names = sorted({n for e in usable for n in point_names_for(e)})
+    ranges = merge_ranges([(max(0.0, e["at"] - 0.5), e["at"] + e["duration"] + 0.5) for e in usable])
+    key = None
+    track = None
+    if cache is not None:
+        from .cache import key_for
+        key = key_for({"k": track_cache_key(cache, video, cfg), "ranges": ranges, "names": names})
+        data = cache.get("tracks", key)
+        if data:
+            track = Track.from_json(data)
+    if track is None:
+        if reporter:
+            reporter.stage("tracking", "Following your hands and face")
+        track = detect_video(video, cfg, ranges=ranges, names=names, reporter=reporter, cancel=cancel)
+        if cache is not None:
+            cache.put("tracks", key, track.to_json())
+    out["track"] = track
+    for e in usable:
+        c = coverage(track, point_names_for(e), e["at"], e["at"] + e["duration"])
+        if c < 0.25:
+            out["notes"].append(
+                f"Tracked {e['effect']} at {_mmss(e['at'])}: the {'hand' if e['point'] not in ('face', 'body') else e['point']} "
+                f"was found in only {c * 100:.0f}% of that moment, so the effect will mostly not "
+                "show. Good light and an open, visible hand help.")
+    return out
+
+
+def _mmss(seconds):
+    seconds = max(0, int(round(seconds)))
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+# ---------------------------------------------------------------- model files (you choose)
+
+def model_info():
+    """What each model is, where it comes from and where it would be saved."""
+    return [{"kind": k, "file": MODEL_FILES[k], "url": MODEL_URLS[k], "page": MODEL_PAGES[k],
+             "size": MODEL_SIZES[k], "path": str(MODEL_DIR / MODEL_FILES[k]),
+             "present": (MODEL_DIR / MODEL_FILES[k]).is_file()} for k in MODEL_FILES]
+
+
+def download_models(kinds, folder=None, cancel=None, log=print):
+    """Download the chosen models. Only ever called because YOU asked (the command line
+    `track-models --download ... --yes`, or the confirm button in the app); the app never
+    fetches a model by itself."""
+    import os
+    import requests
+    folder = Path(folder or MODEL_DIR)
+    folder.mkdir(parents=True, exist_ok=True)
+    paths = {}
+    for kind in kinds:
+        if kind not in MODEL_URLS:
+            raise EditorError(f"Unknown model '{kind}'. Choose: {', '.join(MODEL_URLS)}")
+        path = folder / MODEL_FILES[kind]
+        part = path.with_name(path.name + ".part")
+        log(f"Downloading the {kind} model from {MODEL_URLS[kind]} ...")
+        try:
+            with requests.get(MODEL_URLS[kind], stream=True, timeout=60) as r:
+                if r.status_code != 200:
+                    raise EditorError(f"The {kind} model could not be downloaded ({r.status_code}). "
+                                      f"Download it by hand from {MODEL_PAGES[kind]}")
+                with open(part, "wb") as f:
+                    for chunk in r.iter_content(1 << 16):
+                        if cancel is not None and cancel.is_set():
+                            raise Cancelled("Cancelled.")
+                        f.write(chunk)
+            if part.stat().st_size < 1000:
+                raise EditorError(f"The downloaded {kind} model looks wrong (too small).")
+            os.replace(part, path)
+        except requests.RequestException as exc:
+            raise EditorError(f"Could not download the {kind} model (check your internet): {exc}")
+        finally:
+            if part.exists():
+                part.unlink()
+        paths[kind] = str(path)
+    return paths

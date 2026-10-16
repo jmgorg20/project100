@@ -18,6 +18,7 @@ from pathlib import Path
 from .ai_gen import availability
 from .ai_plan import apply_plan, load_plan_schema, preset_plan, upgrade_plan, validate_plan
 from .broll import resolve_plan, sources_text
+from .tracking import track_for_plan, tracking_text
 from .cache import Cache, key_for
 from .config import project_path
 from .costs import estimate_tokens, format_usd, plan_cost, total, transcription_cost
@@ -31,7 +32,7 @@ from .project_render import render_project
 from .transcribe import transcribe
 from .words import save_transcript, words_from_data
 
-PROMPT_VERSION = 3
+PROMPT_VERSION = 4
 MAX_ATTEMPTS = 2
 
 SYSTEM_PROMPT = """You plan edits for short vertical videos (TikTok / Facebook Reels) of a \
@@ -63,6 +64,13 @@ Transitions (flash, whip, dip) go between topics with on_cut true; shake or glit
 punchline word. At most one every 3 seconds; 0.2 to 0.5 seconds each.
 - If the instruction asks for something the program cannot do (music, face filters, \
 changing what someone said), do not fake it: add a short note to notes.
+- tracked_effects: an effect that follows the speaker's hand, face or body, only if TRACKED \
+EFFECTS says tracking is available AND the creator asks for it ("glow sa kamay pag sinabi \
+kong ...", "aura around me", "sparks on my palm"). `at` is when the matching word starts; \
+1.5 to 4 seconds. glow / spark / energy follow a hand (palm, index_tip, fingertips...), aura \
+follows face or body. The effect fades out by itself when the point is not visible, so it \
+may be a little longer than the moment. If tracking is not available, leave it empty and say \
+so in notes.
 - ai_clips are B-roll (pictures or short clips over the speaker), when the creator asks \
 for B-roll / visuals, or it clearly helps. Follow B-ROLL SOURCES below: plan none if no \
 source is available. Put each one where the speaker mentions what it shows. prompt: \
@@ -219,7 +227,7 @@ def staged_projects(project):
         yield name, view
 
 
-def describe(project, plan, result, raw_duration, photo_names, generation=None):
+def describe(project, plan, result, raw_duration, photo_names, generation=None, tracking=None):
     """Plain-language summary of what was actually done (from the finished project)."""
     tracks = project["tracks"]
     main = next(t for t in tracks if t["kind"] == "video")["clips"]
@@ -276,6 +284,16 @@ def describe(project, plan, result, raw_duration, photo_names, generation=None):
     unused = sorted(set(photo_names) - {p["file"] for p in plan["photos"]})
     if unused:
         details.append("Photos not used: " + ", ".join(unused) + ".")
+    for t in tracks:
+        for c in t["clips"]:
+            if c["type"] == "trackfx":
+                follows = {"fingertips": "the fingertips", "face": "the face", "body": "the body"}.get(
+                    c["point"], f"the {c['point'].replace('_', ' ')}")
+                hand = "" if c["point"] in ("face", "body") or c.get("hand", "any") == "any" \
+                    else f" ({c['hand']} hand)"
+                details.append(f"Tracked {c['effect']} on {follows}{hand} at {mmss(c['start'])}.")
+    if tracking:
+        details += tracking["notes"]
     if generation:
         details += generation.get("sourced", [])
         for item in generation["done"]:
@@ -366,8 +384,10 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         reporter.stage("plan", "Planning the edit")
         built = {}
 
+        extra = {}                        # e.g. the tracked points, once found
+
         def build(candidate, generated=None):
-            new_cfg, pipeline_plan = apply_plan(cfg, candidate, photos, generated)
+            new_cfg, pipeline_plan = apply_plan(cfg, candidate, photos, {**(generated or {}), **extra})
             return build_edit_project(video, new_cfg, plan=pipeline_plan, job_dir=job_dir,
                                       words=words)
 
@@ -392,7 +412,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                 print(f"  ! could not check AI generation: {exc}")
                 gen_ok, generation_text = {}, None
             generation_text = (generation_text or "AI GENERATION: NOT available. Leave "
-                               "voiceovers empty.") + "\n" + sources_text(cfg, gen_ok)
+                               "voiceovers empty.") + "\n" + sources_text(cfg, gen_ok) \
+                + "\n" + tracking_text(cfg)
             result = request_plan(cfg, provider, model, instruction, words, duration,
                                   list(photos), cache, upgrade_plan(previous_plan), check,
                                   cancel, generation_text)
@@ -402,6 +423,13 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         if built.get("plan") is not result.plan:
             built["project"] = build(result.plan)
         project = built["project"]
+        tracking = None
+        if result.plan.get("tracked_effects"):
+            tracking = track_for_plan(result.plan, video, cfg, cache, reporter, cancel)
+            if tracking["track"] is not None:
+                extra["track"] = tracking["track"]
+                project = build(result.plan)
+            check_cancel()
         generation = None
         if result.plan.get("ai_clips") or result.plan.get("voiceovers"):
             if plan is not None and render:
@@ -430,7 +458,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                                    "photos": "Placing photos"}[stage])
             reporter.event("project", stage=stage, project=view)
 
-        summary = describe(project, result.plan, result, duration, list(photos), generation)
+        summary = describe(project, result.plan, result, duration, list(photos), generation, tracking)
         # Token counts are the provider's own; the prices are from config.yaml (ai.prices).
         cost = {"transcription": transcript_cost, "plan": result.cost,
                 "total": total(transcript_cost, result.cost), "currency": "USD",

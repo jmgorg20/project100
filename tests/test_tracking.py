@@ -227,6 +227,7 @@ def test_a_pose_model_gives_the_body():
 class FakeLandmarker:
     """Returns a hand moving left to right, lost for a while, and records its use."""
     log = []
+    lose_hands = False
 
     def __init__(self, kind, options):
         self.kind, self.options, self.n = kind, options, 0
@@ -239,7 +240,7 @@ class FakeLandmarker:
         FakeLandmarker.log.append((self.kind, ts, image.shape))
         i = ts / 1000                                                  # 0.1 per second
         if self.kind == "hand":
-            if 1.0 <= ts / 1000 < 1.5:
+            if FakeLandmarker.lose_hands or 1.0 <= ts / 1000 < 1.5:
                 return NS(hand_landmarks=[], handedness=[])
             return NS(hand_landmarks=[hand_marks(0.1 + 0.1 * i, 0.5)],
                       handedness=[[NS(category_name="Right", score=0.9)]])
