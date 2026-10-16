@@ -343,3 +343,80 @@ def test_cli_cancel_from_the_app(media, how):
     if os.name != "nt":
         left = subprocess.run(["pgrep", "-f", str(tmp / "c.part.mp4")], capture_output=True)
         assert left.returncode == 1, "ffmpeg is still running"
+
+
+# ---------------------------------------------------------------- version 2: speed, crop, fades
+
+def two_halves_video(path, width=720, height=1280, seconds=2):
+    """Left half red, right half blue (to see which part a crop keeps)."""
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-filter_complex",
+         f"color=c=red:s={width}x{height}:r=30:d={seconds}[l];"
+         f"color=c=blue:s={width // 2}x{height}:r=30:d={seconds}[r];"
+         f"[l][r]overlay=x={width // 2}:y=0[v]",
+         "-map", "[v]", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+         str(path)], check=True)
+    return Path(path)
+
+
+def test_speed_changes_how_fast_the_source_plays(media):
+    tmp, p = media
+    t = tracks(p)
+    t["main"]["clips"] = [
+        vclip("fast", 0.0, 0.0, duration=1.0, speed=2.0, out=2.0),   # red + green in 1 s
+        vclip("slow", 1.0, 2.0, duration=1.0, speed=0.5, out=2.5),   # half a second of blue
+    ]
+    out = render_project(p, tmp / "speed.mp4", base_dir=tmp, export=FAST)
+    v, a, _d = ffprobe(out)
+    assert int(v["nb_frames"]) == 60
+    assert float(a[0]["duration"]) == pytest.approx(2.0, abs=0.025)
+    expected = {0: "red", 13: "red", 16: "green", 29: "green", 30: "blue", 59: "blue"}
+    for (n, name), rgb in zip(sorted(expected.items()),
+                              synthetic.pixels(out, sorted(expected), 100, 100)):
+        assert is_color(rgb, name), f"frame {n}: expected {name}, got {rgb}"
+    samples = synthetic.pcm(out)
+    assert max(abs(x) for x in samples[2000:6000]) > 1500        # sound kept (atempo)
+    assert max(abs(x) for x in samples[10000:14000]) > 1500
+
+
+def test_crop_reframes_the_picture(media):
+    tmp, p = media
+    p["media"].append(media_from_file(two_halves_video(tmp / "halves.mp4"), "halves"))
+    t = tracks(p)
+
+    def clip(cid, start, crop=None):
+        c = {"id": cid, "type": "video", "media": "halves", "start": start, "duration": 0.5,
+             "in": 0.0, "out": 0.5}
+        return {**c, "crop": crop} if crop else c
+    t["main"]["clips"] = [clip("plain", 0.0), clip("left", 0.5, {"zoom": 2, "x": 0, "y": 0}),
+                          clip("right", 1.0, {"zoom": 2, "x": 1, "y": 1})]
+    out = render_project(p, tmp / "crop.mp4", base_dir=tmp, export=FAST)
+    left_edge = synthetic.pixels(out, [5, 20, 35], 60, 960)
+    right_edge = synthetic.pixels(out, [5, 20, 35], 1020, 960)
+    assert is_color(left_edge[0], "red") and is_color(right_edge[0], "blue")      # whole frame
+    assert is_color(left_edge[1], "red") and is_color(right_edge[1], "red")       # zoomed left
+    assert is_color(left_edge[2], "blue") and is_color(right_edge[2], "blue")     # zoomed right
+
+
+def test_video_clip_sound_fades_and_speed_on_overlay_and_audio(media):
+    tmp, p = media
+    t = tracks(p)
+    t["main"]["clips"] = [vclip("v1", 0.0, 0.0, duration=2.0, fade_in=1.0)]
+    t["photos"]["clips"] = [{"id": "o1", "type": "video", "media": "vid", "start": 0.0,
+                             "duration": 1.0, "in": 0.0, "out": 2.0, "speed": 2.0,
+                             "x": 540, "y": 960, "width": 400, "height": 400}]
+    out = render_project(p, tmp / "fade.mp4", base_dir=tmp, export=FAST)
+    samples = synthetic.pcm(out)
+    assert max(abs(x) for x in samples[0:800]) < max(abs(x) for x in samples[12000:16000]) / 3
+    centre = synthetic.pixels(out, [5, 25], 540, 960)
+    assert is_color(centre[0], "red") and is_color(centre[1], "green")   # 2x: green by 0.5 s
+
+    # A sound effect at double speed lasts half as long.
+    t["main"]["clips"] = [vclip("v1", 0.0, 0.0, duration=2.0, volume=0)]
+    t["photos"]["clips"] = []
+    t["sfx"]["clips"] = [{"id": "a1", "type": "audio", "media": "tone", "start": 0.0,
+                          "duration": 1.0, "in": 0.0, "out": 2.0, "speed": 2.0}]
+    out = render_project(p, tmp / "sfx.mp4", base_dir=tmp, export=FAST)
+    samples = synthetic.pcm(out)
+    assert max(abs(x) for x in samples[2000:6000]) > 3000
+    assert max(abs(x) for x in samples[10000:16000]) < 300

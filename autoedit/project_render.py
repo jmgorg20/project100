@@ -26,13 +26,54 @@ from .grades import grade_filter
 from .previews import copy_fonts
 from .project import (check_project, clip_end, media_by_id, resolve_media_path,
                       timeline_duration)
-from .render import AUDIO_RATE, H, W, layout_chain, pop_scale_expression
+from .render import AUDIO_RATE, H, W, fill, layout_chain, pop_scale_expression
 from .styles import get_style
 from .words import Word
 
 DEFAULT_EXPORT = {"crf": 20, "encoder_speed": "medium", "audio_bitrate": "192k", "height": H}
 DEFAULT_ANCHOR_Y = 0.4
 DIALOG_ROLES = ("original", "voiceover")
+DEFAULT_CROP = {"zoom": 1.0, "x": 0.5, "y": 0.5}
+
+
+def crop_of(clip):
+    """The clip's reframe as (zoom, x, y); (1, 0.5, 0.5) = fill the frame, centred."""
+    c = {**DEFAULT_CROP, **(clip.get("crop") or {})}
+    return (float(c["zoom"]), float(c["x"]), float(c["y"]))
+
+
+def fill_chain(src, out, fps, crop):
+    """Fill the 1080x1920 frame from `src`, zoomed and positioned by `crop` (zoom, x, y)."""
+    if crop == (1.0, 0.5, 0.5):
+        return [f"[{src}]{fill(fps)}[{out}]"]
+    zoom, x, y = crop
+    return [f"[{src}]setpts=PTS-STARTPTS,fps={fps},scale={math.ceil(W * zoom / 2) * 2}:"
+            f"{math.ceil(H * zoom / 2) * 2}:force_original_aspect_ratio=increase,"
+            f"crop={W}:{H}:(iw-ow)*{x:g}:(ih-oh)*{y:g},setsar=1[{out}]"]
+
+
+def atempo_chain(speed):
+    """atempo filters for a speed of 0.25-4 (each atempo stage handles 0.5-2)."""
+    parts, s = [], float(speed)
+    while s > 2.0 + 1e-9:
+        parts.append("atempo=2")
+        s /= 2.0
+    while s < 0.5 - 1e-9:
+        parts.append("atempo=0.5")
+        s /= 0.5
+    if abs(s - 1.0) > 1e-9:
+        parts.append(f"atempo={s:.6g}")
+    return ",".join(parts)
+
+
+def fades_chain(fade_in, fade_out, length):
+    """afade filters for a piece of sound `length` seconds long (empty if no fades)."""
+    chain = ""
+    if fade_in:
+        chain += f",afade=t=in:st=0:d={fade_in:g}"
+    if fade_out:
+        chain += f",afade=t=out:st={max(0.0, length - fade_out):.4f}:d={fade_out:g}"
+    return chain
 
 
 def frame_index(seconds, fps):
@@ -62,6 +103,9 @@ class Segment:
     volume: float = 1.0
     sources: list = field(default_factory=list)   # [(source start s, frame count)]
     end_frame: int = 0             # timeline frame where the segment ends
+    speed: float = 1.0
+    crop: tuple = (1.0, 0.5, 0.5)
+    fades: tuple = (0.0, 0.0)      # sound fade in / out (seconds)
 
     def source_end(self, fps):
         s, n = self.sources[-1]
@@ -101,22 +145,31 @@ def main_segments(project, media, fps, total_frames):
         n = f1 - f0
         m = media[clip["media"]]
         fit = clip.get("fit", "fill")
+        crop = crop_of(clip)
         if clip["type"] == "image":
-            segments.append(Segment("image", frames=n, media=m, fit=fit, end_frame=f1))
+            segments.append(Segment("image", frames=n, media=m, fit=fit, end_frame=f1,
+                                    crop=crop))
         else:
-            source = frame_index(clip["in"], fps) / fps
+            speed = float(clip.get("speed", 1.0))
+            fades = (float(clip.get("fade_in", 0.0)), float(clip.get("fade_out", 0.0)))
+            # A sped-up/slowed clip seeks to its exact 'in' (no frame snapping needed).
+            source = clip["in"] if speed != 1 else frame_index(clip["in"], fps) / fps
             volume = 0.0 if muted else float(clip.get("volume", 1.0))
             layout = clip.get("layout")
             last = segments[-1] if segments else None
-            if (last is not None and last.kind == "run" and last.media is m
+            plain = speed == 1 and fades == (0.0, 0.0)
+            if (plain and last is not None and last.kind == "run" and last.media is m
+                    and last.speed == 1 and last.fades == (0.0, 0.0)
                     and last.fit == fit and last.layout == layout and last.volume == volume
+                    and last.crop == crop
                     and last.end_frame == f0 and source >= last.source_end(fps) - 1e-6):
                 last.sources.append((source, n))
                 last.frames += n
                 last.end_frame = f1
             else:
                 segments.append(Segment("run", frames=n, media=m, fit=fit, layout=layout,
-                                        volume=volume, sources=[(source, n)], end_frame=f1))
+                                        volume=volume, sources=[(source, n)], end_frame=f1,
+                                        speed=speed, crop=crop, fades=fades))
         cursor = f1
     if cursor < total_frames:
         segments.append(Segment("gap", frames=total_frames - cursor, end_frame=total_frames))
@@ -140,9 +193,40 @@ def add_main_track(graph, project, media, base_dir, fps, total_frames, with_audi
         elif seg.kind == "image":
             idx = graph.add_input(["-loop", "1", "-framerate", fps, "-t", f"{(n + 1) / fps:.4f}",
                                    "-i", resolve_media_path(seg.media, base_dir)])
-            mode = "screen" if seg.fit == "blur" else "face"
-            graph.add(*layout_chain(mode, f"{idx}:v", None, f"m{k}pic", fps, f"m{k}"))
+            if seg.fit == "blur":
+                graph.add(*layout_chain("screen", f"{idx}:v", None, f"m{k}pic", fps, f"m{k}"))
+            else:
+                graph.add(*fill_chain(f"{idx}:v", f"m{k}pic", fps, seg.crop))
             graph.add(f"[m{k}pic]{exact}[{v}]")
+        elif seg.speed != 1:
+            # Sped up or slowed down: seek to 'in', stretch the timestamps, then resample to
+            # the project's frame rate. Sound: atempo keeps the pitch.
+            source, _n = seg.sources[0]
+            length = n / fps * seg.speed + 2 / fps        # a little extra, trimmed below
+            seek = ["-ss", f"{source:.4f}", "-t", f"{length:.4f}"]
+            idx = graph.add_input([*seek, "-i", resolve_media_path(seg.media, base_dir)])
+            graph.add(f"[{idx}:v]setpts=(PTS-STARTPTS)/{seg.speed:g}[m{k}spd]")
+            screen = None
+            if seg.layout:
+                mode = seg.layout["type"]
+                sidx = graph.add_input([*seek, "-i", resolve_media_path(
+                    media[seg.layout["screen"]], base_dir)])
+                graph.add(f"[{sidx}:v]setpts=(PTS-STARTPTS)/{seg.speed:g}[m{k}sspd]")
+                screen = f"m{k}sspd"
+                graph.add(*layout_chain(mode, f"m{k}spd", screen, f"m{k}pic", fps, f"m{k}"))
+            elif seg.fit == "blur":
+                graph.add(*layout_chain("screen", f"m{k}spd", None, f"m{k}pic", fps, f"m{k}"))
+            else:
+                graph.add(*fill_chain(f"m{k}spd", f"m{k}pic", fps, seg.crop))
+            graph.add(f"[m{k}pic]{exact}[{v}]")
+            if with_audio and seg.media.get("has_audio", True) and seg.volume > 0:
+                has_sound = True
+                volume = f",volume={seg.volume:g}" if seg.volume != 1 else ""
+                graph.add(
+                    f"[{idx}:a]asetpts=PTS-STARTPTS,aresample={AUDIO_RATE},"
+                    f"aformat=sample_fmts=fltp:channel_layouts=stereo,{atempo_chain(seg.speed)}"
+                    f"{volume},apad=whole_len={samples},atrim=end_sample={samples}"
+                    f"{fades_chain(*seg.fades, n / fps)}[{a}]")
         else:
             idx = graph.add_input(["-i", resolve_media_path(seg.media, base_dir)])
             screen = None
@@ -155,7 +239,10 @@ def add_main_track(graph, project, media, base_dir, fps, total_frames, with_audi
                 mode = "screen" if seg.fit == "blur" else "face"
             keep = "+".join(f"gte(t,{s - half:.4f})*lt(t,{s + c / fps - half:.4f})"
                             for s, c in seg.sources)
-            graph.add(*layout_chain(mode, f"{idx}:v", screen, f"m{k}pic", fps, f"m{k}"))
+            if mode == "face":
+                graph.add(*fill_chain(f"{idx}:v", f"m{k}pic", fps, seg.crop))
+            else:
+                graph.add(*layout_chain(mode, f"{idx}:v", screen, f"m{k}pic", fps, f"m{k}"))
             graph.add(f"[m{k}pic]select='{keep}',setpts='round(N/{fps}/TB)',{exact}[{v}]")
             if with_audio and seg.media.get("has_audio", True) and seg.volume > 0:
                 has_sound = True
@@ -164,7 +251,8 @@ def add_main_track(graph, project, media, base_dir, fps, total_frames, with_audi
                     f"[{idx}:a]asetpts=PTS-STARTPTS,aresample={AUDIO_RATE},"
                     f"aformat=sample_fmts=fltp:channel_layouts=stereo,"
                     f"asetnsamples=n={block}:p=1,aselect='{keep}',asetpts='round(N/SR/TB)'{volume},"
-                    f"apad=whole_len={samples},atrim=end_sample={samples}[{a}]")
+                    f"apad=whole_len={samples},atrim=end_sample={samples}"
+                    f"{fades_chain(*seg.fades, n / fps)}[{a}]")
         if with_audio and not has_sound:
             graph.add(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=end_sample={samples},"
                       f"aformat=sample_fmts=fltp:channel_layouts=stereo[{a}]")
@@ -263,8 +351,12 @@ def add_overlays(graph, current, project, media, base_dir, fps):
                 idx = graph.add_input(["-loop", "1", "-framerate", fps, "-t", f"{d:.4f}",
                                        "-i", path])
             else:
-                idx = graph.add_input(["-ss", f"{clip['in']:.4f}", "-t", f"{d:.4f}", "-i", path])
-            chain = (f"[{idx}:v]setpts=PTS-STARTPTS,fps={fps},trim=duration={d:.4f},"
+                speed = float(clip.get("speed", 1.0))
+                idx = graph.add_input(["-ss", f"{clip['in']:.4f}", "-t", f"{d * speed:.4f}",
+                                       "-i", path])
+            speed = float(clip.get("speed", 1.0)) if clip["type"] == "video" else 1.0
+            pts = "PTS-STARTPTS" if speed == 1 else f"(PTS-STARTPTS)/{speed:g}"
+            chain = (f"[{idx}:v]setpts={pts},fps={fps},trim=duration={d:.4f},"
                      f"scale=w={round(clip['width'])}:h={round(clip['height'])}:"
                      f"force_original_aspect_ratio=decrease,format=rgba")
             if clip.get("animation", "none") == "pop":
@@ -353,8 +445,11 @@ def add_audio_tracks(graph, project, media, base_dir, fps, dialog):
 
     def clip_chain(clip, j):
         d = clip["duration"]
-        chain = (f"[{branch[clip['id']]}]atrim=start={clip['in']:.4f}:end={clip['in'] + d:.4f},"
-                 f"asetpts=PTS-STARTPTS")
+        speed = float(clip.get("speed", 1.0))
+        chain = (f"[{branch[clip['id']]}]atrim=start={clip['in']:.4f}:"
+                 f"end={clip['in'] + d * speed:.4f},asetpts=PTS-STARTPTS")
+        if speed != 1:
+            chain += f",{atempo_chain(speed)},atrim=end={d:.4f}"
         if float(clip.get("volume", 1.0)) != 1:
             chain += f",volume={float(clip['volume']):g}"
         if clip.get("fade_in"):

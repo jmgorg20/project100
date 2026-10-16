@@ -87,7 +87,12 @@ def test_schema_lists_match_the_engine():
 
 @pytest.mark.parametrize("change, message", [
     (lambda p: p.update(format="something"), "not a project file"),
-    (lambda p: p.update(version=2), "newer version"),
+    (lambda p: p.update(version=3), "newer version"),
+    (lambda p: track(p, "main")["clips"][0].update(speed=2), "times the speed"),
+    (lambda p: track(p, "main")["clips"][0].update(speed=8), "speed"),
+    (lambda p: track(p, "main")["clips"][0].update(crop={"zoom": 0.5}), "zoom"),
+    (lambda p: track(p, "main")["clips"][0].update(crop={"x": 2}), "crop.x"),
+    (lambda p: track(p, "main")["clips"][0].update(fade_out=3), "fade in + fade out"),
     (lambda p: p.pop("tracks"), "'tracks' is a required property"),
     (lambda p: p.update(extra=1), "Additional properties"),
     (lambda p: p["settings"].update(fps=29.97), "settings.fps"),
@@ -125,6 +130,20 @@ def test_validation_finds_problems(change, message):
     problems = problems_for(change)
     assert problems, "expected a problem"
     assert any(message in prob for prob in problems), problems
+
+
+def test_version_1_files_still_load_and_version_2_features_validate():
+    p = sample_project()
+    p["version"] = 1
+    assert validate_project(p) == []
+    p = sample_project()
+    v1 = track(p, "main")["clips"][0]
+    v1.update(speed=2, out=v1["in"] + 4, fade_in=0.5, fade_out=0.5,
+              crop={"zoom": 1.5, "x": 0.2, "y": 0.8})
+    track(p, "photos")["clips"][0].update(type="image")
+    track(p, "music")["clips"][0].update(speed=0.5, out=1.75)
+    assert validate_project(p) == []
+    assert new_project()["version"] == 2
 
 
 def test_check_project_raises_with_every_problem():

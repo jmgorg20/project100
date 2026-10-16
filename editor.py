@@ -78,6 +78,8 @@ def build_parser():
     render.add_argument("--speed", dest="encoder_speed",
                         choices=["ultrafast", "veryfast", "fast", "medium", "slow"],
                         help="encoder speed")
+    render.add_argument("--fps", type=int, choices=[24, 25, 30, 50, 60],
+                        help="export frame rate (default: the project's)")
     render.add_argument("--keep-work", action="store_true", help="keep temporary files")
 
     frame = sub.add_parser("frame", help="render the exact frame at a time to a PNG")
@@ -112,6 +114,16 @@ def build_parser():
                                                   "(default: generation.json)")
 
     sub.add_parser("ui-data", help="print caption styles and layout facts for the desktop app")
+
+    info = sub.add_parser("media-info", help="read length, size and sound of media files "
+                                             "(for adding them to a project)")
+    info.add_argument("files", nargs="+")
+    pk = sub.add_parser("peaks", help="waveform outline of a file's sound (cached)")
+    pk.add_argument("file")
+    pk.add_argument("--per-second", type=int, default=50)
+    th = sub.add_parser("thumbs", help="small pictures along a video for the timeline (cached)")
+    th.add_argument("file")
+    th.add_argument("--height", type=int, default=120)
 
     gen_common = argparse.ArgumentParser(add_help=False)
     gen_common.add_argument("--generation-settings",
@@ -242,6 +254,8 @@ def cmd_render(args, reporter, cancel):
         unique_file(project_file.parent, project_base_name(project_file) + "_render", ".mp4")
     output = safe_output(project, project_file, output)
     o = cfg["output"]
+    if args.fps and args.fps != project["settings"]["fps"]:
+        project = {**project, "settings": {**project["settings"], "fps": args.fps}}
     export = {"crf": args.crf if args.crf is not None else o["crf"],
               "encoder_speed": args.encoder_speed or o["encoder_speed"],
               "audio_bitrate": o["audio_bitrate"], "height": args.height or 1920}
@@ -256,6 +270,40 @@ def cmd_render(args, reporter, cancel):
             shutil.rmtree(work, ignore_errors=True)
     print(f"Done -> {output}")
     reporter.result(output=str(output))
+
+
+def cmd_media_info(args, reporter):
+    """Media entries (ids m1, m2, ... in order; the app gives them its own ids)."""
+    from autoedit.errors import EditorError
+    from autoedit.project import media_from_file
+    media, errors = [], []
+    for i, f in enumerate(args.files, start=1):
+        try:
+            entry = media_from_file(f, f"m{i}")
+            media.append(entry)
+            print(f"{entry['name']}: {entry['kind']}, {entry['duration']:.2f}s")
+        except EditorError as exc:
+            errors.append({"path": f, "message": str(exc)})
+            print(f"{f}: {exc}")
+    reporter.result(media=media, errors=errors)
+
+
+def cmd_peaks(args, reporter):
+    from autoedit.media_tools import peaks
+    cfg = load_config(args.config)
+    data = peaks(args.file, project_path(cfg["work_folder"]) / "cache" / "peaks",
+                 per_second=args.per_second)
+    print(f"{len(data['peaks'])} values, {data['per_second']} per second")
+    reporter.result(**data)
+
+
+def cmd_thumbs(args, reporter):
+    from autoedit.media_tools import thumbs
+    cfg = load_config(args.config)
+    data = thumbs(args.file, project_path(cfg["work_folder"]) / "cache" / "thumbs",
+                  height=args.height)
+    print(f"{len(data['files'])} pictures, one every {data['every']:g}s")
+    reporter.result(**data)
 
 
 def cmd_frame(args, reporter, cancel):
@@ -548,6 +596,12 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_gen_config(args, reporter)
         elif args.command == "set-tier":
             cmd_set_tier(args, reporter)
+        elif args.command == "media-info":
+            cmd_media_info(args, reporter)
+        elif args.command == "peaks":
+            cmd_peaks(args, reporter)
+        elif args.command == "thumbs":
+            cmd_thumbs(args, reporter)
         elif args.command == "ui-data":
             import json
             from autoedit.ui_data import ui_data

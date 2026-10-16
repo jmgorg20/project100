@@ -4,7 +4,7 @@ The Project is the single source of truth. The AI writes it, the desktop app edi
 `project_render.render_project()` turns it into the final MP4 with FFmpeg.
 
     {
-      "format": "autoedit-project", "version": 1, "name": "My video",
+      "format": "autoedit-project", "version": 2, "name": "My video",
       "settings": {"width": 1080, "height": 1920, "fps": 30, ...},
       "media":  [{"id": "m1", "kind": "video", "path": "C:/Videos/talk.mp4", "duration": 62.4}],
       "tracks": [{"id": "main", "kind": "video", "clips": [
@@ -29,7 +29,7 @@ from pathlib import Path
 from .errors import EditorError
 
 FORMAT = "autoedit-project"
-VERSION = 1
+VERSION = 2                   # 2 adds speed, video-clip fades and crop; 1 still loads
 SCHEMA_FILE = Path(__file__).with_name("project.schema.json")
 
 TRACK_KINDS = ("video", "overlay", "effect", "caption", "audio")
@@ -153,11 +153,16 @@ def _clip_problems(track, clip, media, frame, where):
 
     if "in" in clip and "out" in clip:
         length = clip["out"] - clip["in"]
+        speed = float(clip.get("speed", 1.0))
         if length <= 0:
             problems.append(f"{where}: 'out' ({clip['out']}) must be after 'in' ({clip['in']})")
-        elif abs(length - clip["duration"]) > TIME_TOLERANCE:
-            problems.append(f"{where}: out - in ({length:.3f}s) must equal the duration "
-                            f"({clip['duration']:.3f}s)")
+        elif abs(length - clip["duration"] * speed) > TIME_TOLERANCE * max(1.0, speed):
+            if speed == 1:
+                problems.append(f"{where}: out - in ({length:.3f}s) must equal the duration "
+                                f"({clip['duration']:.3f}s)")
+            else:
+                problems.append(f"{where}: out - in ({length:.3f}s) must equal the duration "
+                                f"times the speed ({clip['duration']:.3f}s x {speed:g})")
         if m is not None and m["kind"] != "image" and m["duration"] > 0 \
                 and clip["out"] > m["duration"] + frame + TIME_TOLERANCE:
             problems.append(f"{where}: 'out' ({clip['out']:.3f}s) is past the end of the media "
@@ -171,7 +176,7 @@ def _clip_problems(track, clip, media, frame, where):
         elif screen["kind"] != "video":
             problems.append(f"{where}: the screen recording '{layout['screen']}' is not a video")
 
-    if ctype == "audio":
+    if ctype in ("audio", "video"):
         if clip.get("fade_in", 0) + clip.get("fade_out", 0) > clip["duration"] + TIME_TOLERANCE:
             problems.append(f"{where}: fade in + fade out are longer than the clip")
 

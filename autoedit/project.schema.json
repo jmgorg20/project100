@@ -17,7 +17,11 @@
       "const": "autoedit-project"
     },
     "version": {
-      "const": 1
+      "enum": [
+        1,
+        2
+      ],
+      "description": "1 or 2. Version 2 adds speed, fades on video clips and crop (reframe); version 1 files load unchanged."
     },
     "name": {
       "type": "string",
@@ -478,6 +482,18 @@
               "$ref": "#/$defs/id"
             }
           }
+        },
+        "speed": {
+          "$ref": "#/$defs/speed"
+        },
+        "fade_in": {
+          "$ref": "#/$defs/fade"
+        },
+        "fade_out": {
+          "$ref": "#/$defs/fade"
+        },
+        "crop": {
+          "$ref": "#/$defs/crop"
         }
       }
     },
@@ -518,6 +534,9 @@
             "fill",
             "blur"
           ]
+        },
+        "crop": {
+          "$ref": "#/$defs/crop"
         }
       }
     },
@@ -595,6 +614,9 @@
             "none",
             "pop"
           ]
+        },
+        "speed": {
+          "$ref": "#/$defs/speed"
         }
       },
       "if": {
@@ -910,6 +932,42 @@
         "fade_out": {
           "type": "number",
           "minimum": 0
+        },
+        "speed": {
+          "$ref": "#/$defs/speed"
+        }
+      }
+    },
+    "speed": {
+      "type": "number",
+      "minimum": 0.25,
+      "maximum": 4,
+      "description": "Playback speed: 2 = twice as fast. The clip plays (out - in) / speed seconds."
+    },
+    "fade": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Sound fade length in seconds."
+    },
+    "crop": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reframe for 'fill': zoom in (1 = just fill the frame) and choose which part stays in view (x, y: 0 = left/top, 0.5 = centre, 1 = right/bottom).",
+      "properties": {
+        "zoom": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         }
       }
     }
