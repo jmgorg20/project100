@@ -1,11 +1,11 @@
 // A stand-in for the Electron bridge, used only by the UI tests (?mock=1). It replays an
 // AI edit that the real engine made (fixtures written by tests/ui/make_fixtures.py), with the
 // same events in the same order, so the window can be tested without Electron or API keys.
-import type { AppApi, EstimateResult } from "../../shared/api";
+import type { AppApi, EstimateResult, ExportUpdate } from "../../shared/api";
 import { addVersion, emptyHistory, redo, undo } from "../../shared/history";
 import { applyEvent, finishJob, newJob, versionFromJob } from "../../shared/jobs";
 import type {
-  CompareResult, EngineEvent, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Plan, Project, Settings, Summary, Track, VideoHistory,
+  CompareResult, EngineEvent, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Media, Plan, Project, Settings, Summary, Track, VideoHistory,
 } from "../../shared/types";
 import { CONTENT_TYPES } from "../../shared/types";
 
@@ -38,6 +38,17 @@ export function createMockApi(): AppApi {
   const genListeners = new Set<(u: GenTaskUpdate) => void>();
   const stoppedTasks = new Set<string>();
   const opened: string[] = [];
+  // The timeline editor: the AI edit's project, and what the engine said about the demo files.
+  const w = window as unknown as { savedProjects: { path: string; project: Project }[]; shownInFolder: string[]; exports: unknown[] };
+  w.savedProjects = [];
+  w.shownInFolder = [];
+  w.exports = [];
+  type MediaFixture = { info: Record<string, Media>; peaks: Record<string, unknown>; thumbs: Record<string, unknown> };
+  let mediaFixture: Promise<MediaFixture> | null = null;
+  const loadMedia = () => (mediaFixture ??= fetch("/fixtures/editor.media.json").then((r) => r.json()));
+  const base = (p: string) => p.split(/[\\/]/).pop() ?? p;
+  const exportListeners = new Set<(u: ExportUpdate) => void>();
+  const stoppedExports = new Set<string>();
   (window as unknown as { openedPaths: string[] }).openedPaths = opened;
   const loadGen = async (): Promise<GenStatus> => {
     if (!gen) {
@@ -269,6 +280,57 @@ export function createMockApi(): AppApi {
     },
     openPath: async (target) => {
       opened.push(target);
+    },
+    showInFolder: async (target) => {
+      w.shownInFolder.push(target);
+    },
+    openProject: async (path) => {
+      if (params.get("project") === "broken") return { path, error: "The project file has problems:\n  - project.tracks[0] clip 'v1': unknown media 'nope'" };
+      const saved = [...w.savedProjects].reverse().find((x) => x.path === path);
+      const project = saved?.project ?? ((await fetch("/fixtures/demo.project.json").then((r) => r.json())) as Project);
+      return { path, project, backup: path.replace(/\.project\.json$/, ".before-editing.project.json") };
+    },
+    saveProject: async (path, project) => {
+      if (params.has("saveFail")) return { ok: false, error: "Could not save: the disk is full." };
+      w.savedProjects.push({ path, project: structuredClone(project) });
+      return { ok: true };
+    },
+    pickProject: async () => "C:/Videos/demo_talk_ai.project.json",
+    pickMedia: async () => ["C:/Videos/demo_talk_2.mp4", "C:/Videos/tone.wav", "C:/Videos/broken.mp4"],
+    pickExportPath: async () => "C:/Videos/my video export.mp4",
+    mediaInfo: async (paths) => {
+      const f = await loadMedia();
+      const media = paths.map((p) => f.info[base(p)]).filter(Boolean);
+      const errors = paths.filter((p) => !f.info[base(p)]).map((p) => ({ path: p, message: "FFmpeg cannot read 'broken.mp4'. It may be damaged or not a video/image file." }));
+      return { media, errors };
+    },
+    peaks: async (path) => ((await loadMedia()).peaks[base(path)] as never) ?? { error: "no sound" },
+    thumbs: async (path) => ((await loadMedia()).thumbs[base(path)] as never) ?? { error: "no pictures" },
+    startExport: async (projectPath, options) => {
+      const taskId = `mockexport${++counter}`;
+      w.exports.push({ projectPath, ...options });
+      (async () => {
+        for (const percent of [5, 20, 45, 70, 90]) {
+          await wait(200 / speed);
+          if (stoppedExports.has(taskId)) {
+            exportListeners.forEach((l) => l({ taskId, done: true, cancelled: true }));
+            return;
+          }
+          exportListeners.forEach((l) => l({ taskId, percent }));
+        }
+        await wait(150 / speed);
+        exportListeners.forEach((l) => l({ taskId, done: true, percent: 100, output: options.output }));
+      })();
+      return taskId;
+    },
+    cancelExport: async (taskId) => {
+      stoppedExports.add(taskId);
+    },
+    onExport: (callback) => {
+      exportListeners.add(callback);
+      return () => {
+        exportListeners.delete(callback);
+      };
     },
     onJobChanged: (callback) => {
       jobListeners.add(callback);

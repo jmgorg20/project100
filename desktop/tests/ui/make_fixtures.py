@@ -9,6 +9,9 @@ Writes tests/ui/fixtures/:
   demo.project.json / demo.plan.json   that edit's project, plan, preset plan and summary
   demo_frame.png                   an exact frame
   parity.project.json, parity.json captions/photo on black + where the engine drew them
+  editor.media.json, thumbs_*.jpg, tone.wav
+                                   the timeline editor: media info, waveform peaks and filmstrip
+                                   pictures made by the engine (media-info / peaks / thumbs)
   gen.status.json, gen.compare.json, gen_*.png
                                    the "AI pictures, clips & voice" screen: the engine's status,
                                    test results and a Compare run, made with the fake WanGP in
@@ -63,6 +66,29 @@ if "--query-gpu=memory.used" in sys.argv:   # rises while a job runs, like real 
 else:
     print("NVIDIA GeForce RTX 3060, 12288, 555.85")
 """
+
+
+def editor_fixtures(work):
+    """What the engine says about the demo files, for the timeline editor's stand-in bridge."""
+    from autoedit.media_tools import peaks, thumbs
+    from autoedit.project import media_from_file
+    tone = synthetic.make_tone(OUT / "tone.wav", frequency=440, duration=6.0)
+    data = {"info": {}, "peaks": {}, "thumbs": {}}
+    for i, f in enumerate([OUT / "demo_talk.mp4", OUT / "demo_talk_2.mp4", OUT / "github_logo.png", tone]):
+        entry = media_from_file(f, f"m{i + 1}")
+        entry["path"] = f"C:/Videos/{f.name}"
+        data["info"][f.name] = entry
+        if entry["kind"] != "image":
+            data["peaks"][f.name] = peaks(f, work / "peaks")
+        if entry["kind"] != "audio":
+            th = thumbs(f, work / "thumbs", height=96)
+            names = []
+            for n, src in enumerate(th["files"], start=1):
+                name = f"thumbs_{f.stem}_{n:03d}.jpg"
+                shutil.copy(src, OUT / name)
+                names.append(f"C:/cache/{name}")
+            data["thumbs"][f.name] = {**th, "files": names}
+    (OUT / "editor.media.json").write_text(json.dumps(data), encoding="utf-8")
 
 
 def generation_fixtures(work):
@@ -200,6 +226,7 @@ def main():
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(mp4), "-c:v", "libvpx-vp9",
                         "-b:v", "1M", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus",
                         str(mp4.with_suffix(".webm"))], check=True)
+    editor_fixtures(work)
     generation_fixtures(work)
     shutil.rmtree(work, ignore_errors=True)
     print(f"fixtures written to {OUT}")

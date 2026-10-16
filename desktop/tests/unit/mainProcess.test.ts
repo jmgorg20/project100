@@ -85,7 +85,8 @@ describe("main process with the real engine", () => {
     for (const channel of ["settings:get", "settings:set", "keys:status", "keys:set", "keys:clear", "dialog:videos", "dialog:photos",
       "jobs:add", "jobs:list", "jobs:cancel", "jobs:dismiss", "plan:apply", "history:get", "history:undo", "history:redo",
       "engine:estimate", "engine:frame", "engine:check", "gen:status", "gen:setWangp", "gen:setTier", "gen:benchmark",
-      "gen:compare", "gen:cancel", "app:openPath"]) {
+      "gen:compare", "gen:cancel", "app:openPath", "app:showInFolder", "project:open", "project:save", "dialog:project",
+      "dialog:media", "dialog:exportPath", "media:info", "media:peaks", "media:thumbs", "export:start", "export:cancel"]) {
       expect(handlers.has(channel), channel).toBe(true);
     }
   });
@@ -267,5 +268,70 @@ print(json.dumps(p))`], { cwd: repo, encoding: "utf-8" }));
     expect(details).toContain("AI picture at 0:01: Mid tier");
     expect(details).toContain("Not done: 1 AI picture(s)/clip(s) over this video's limit of 1.");
     expect(fs.existsSync(job.output!)).toBe(true);
+  }, 200_000);
+
+  // ---------------------------------------------------------------- timeline editor
+
+  type ExportMsg = { taskId: string; percent?: number; done?: boolean; output?: string; error?: string; cancelled?: boolean };
+  const exportUpdates = (taskId: string) => sent.filter(([c, u]) => c === "export:task" && (u as ExportMsg).taskId === taskId).map(([, u]) => u as ExportMsg);
+
+  it("opens a project (checked by the engine, backed up once) and saves it atomically", async () => {
+    const file = path.join(tmp, "edit me.project.json");
+    execFileSync(python, ["-c", `
+import sys
+from autoedit.project import new_project, media_from_file, save_project
+p = new_project("edit me")
+p["media"] = [media_from_file(sys.argv[1], "m1")]
+p["tracks"][0]["clips"] = [{"id": "v1", "type": "video", "media": "m1", "start": 0, "duration": 3, "in": 1, "out": 4}]
+save_project(p, sys.argv[2])`, path.join(tmp, "talk.mp4"), file], { cwd: repo });
+    const opened = (await call("project:open", file)) as { project: { tracks: { clips: unknown[] }[] }; backup: string; error?: string };
+    expect(opened.error).toBeUndefined();
+    expect(opened.project.tracks[0].clips).toHaveLength(1);
+    expect(opened.backup).toBe(path.join(tmp, "edit me.before-editing.project.json"));
+    expect(fs.existsSync(opened.backup)).toBe(true);
+
+    const edited = { ...opened.project, name: "changed" };
+    expect(await call("project:save", file, edited)).toEqual({ ok: true });
+    expect(JSON.parse(fs.readFileSync(file, "utf-8")).name).toBe("changed");
+    expect(fs.existsSync(`${file}.tmp`)).toBe(false);
+    expect(JSON.parse(fs.readFileSync(opened.backup, "utf-8")).name).toBe("edit me"); // the backup is kept as it was
+    await call("project:open", file);
+    expect(JSON.parse(fs.readFileSync(opened.backup, "utf-8")).name).toBe("edit me"); // and not replaced on reopening
+    expect(((await call("project:save", path.join(tmp, "x.txt"), edited)) as { ok: boolean }).ok).toBe(false);
+
+    const bad = path.join(tmp, "bad.project.json");
+    fs.writeFileSync(bad, JSON.stringify({ ...edited, tracks: [{ id: "main", kind: "video", clips: [{ id: "v1", type: "video", media: "nope", start: 0, duration: 1, in: 0, out: 1 }] }] }));
+    expect(((await call("project:open", bad)) as { error: string }).error).toContain("unknown media 'nope'");
+  }, 120_000);
+
+  it("reads media info, waveforms and filmstrips with the engine", async () => {
+    const info = (await call("media:info", [path.join(tmp, "talk.mp4"), path.join(tmp, "missing.mp4")])) as { media: { kind: string }[]; errors: { path: string }[] };
+    expect(info.media.map((m) => m.kind)).toEqual(["video"]);
+    expect(info.errors[0].path).toContain("missing.mp4");
+    const peaks = (await call("media:peaks", path.join(tmp, "talk.mp4"))) as { peaks: number[]; per_second: number };
+    expect(peaks.per_second).toBe(50);
+    expect(peaks.peaks.length).toBeGreaterThan(100);
+    const thumbs = (await call("media:thumbs", path.join(tmp, "talk.mp4"))) as { files: string[] };
+    expect(thumbs.files.length).toBeGreaterThan(2);
+    expect(thumbs.files.every((f) => fs.existsSync(f))).toBe(true);
+  }, 120_000);
+
+  it("exports with the chosen size and frame rate, with progress; and can cancel", async () => {
+    const file = path.join(tmp, "edit me.project.json");
+    const output = path.join(tmp, "my export.mp4");
+    const taskId = (await call("export:start", file, { output, height: 1280, fps: 25, crf: 28, speed: "veryfast" })) as string;
+    await vi.waitFor(() => expect(exportUpdates(taskId).some((u) => u.done)).toBe(true), { timeout: 120_000, interval: 200 });
+    const got = exportUpdates(taskId);
+    expect(got.at(-1)).toMatchObject({ done: true, output });
+    expect(got.some((u) => (u.percent ?? 0) > 0 && !u.done)).toBe(true);
+    const probe = execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries", "stream=width,height,r_frame_rate,nb_read_frames", "-of", "json", output], { encoding: "utf-8" });
+    expect(JSON.parse(probe).streams[0]).toMatchObject({ width: 720, height: 1280, r_frame_rate: "25/1", nb_read_frames: "75" });
+
+    const cancelled = (await call("export:start", file, { output: path.join(tmp, "never.mp4"), height: 1920, fps: 30, crf: 18, speed: "slow" })) as string;
+    await call("export:cancel", cancelled);
+    await vi.waitFor(() => expect(exportUpdates(cancelled).some((u) => u.done)).toBe(true), { timeout: 60_000, interval: 200 });
+    expect(exportUpdates(cancelled).at(-1)).toMatchObject({ done: true, cancelled: true });
+    expect(fs.existsSync(path.join(tmp, "never.mp4"))).toBe(false);
+    expect(fs.existsSync(path.join(tmp, "never.part.mp4"))).toBe(false);
   }, 200_000);
 });
