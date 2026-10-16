@@ -50,7 +50,16 @@ function Media({ path }: { path: string }) {
   return <video src={url} controls className="compare-media" />;
 }
 
-export function GenerationDialog({ onClose, onStatus }: { onClose: () => void; onStatus?: (s: GenStatus) => void }) {
+/**
+ * Stays mounted once opened (hidden when `open` is false), so a test or Compare that is
+ * still running keeps its log, Stop button and results when the window is closed and reopened.
+ */
+export function GenerationDialog({ open, onClose, onStatus, onRunning }: {
+  open: boolean;
+  onClose: () => void;
+  onStatus?: (s: GenStatus) => void;
+  onRunning?: (running: boolean) => void;
+}) {
   const [status, setStatus] = useState<GenStatus | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -78,8 +87,8 @@ export function GenerationDialog({ onClose, onStatus }: { onClose: () => void; o
   }, [onStatus]);
 
   useEffect(() => {
-    load(false);
-  }, [load]);
+    if (open) load(false);
+  }, [open, load]);
 
   useEffect(
     () =>
@@ -118,10 +127,12 @@ export function GenerationDialog({ onClose, onStatus }: { onClose: () => void; o
   };
 
   const running = Boolean(task && !task.lines.some((l) => l === "Finished." || l === "Stopped." || l.startsWith("Error: ")));
+  useEffect(() => onRunning?.(running), [running, onRunning]);
   const rows = status?.tiers[type] ?? [];
   const installed = rows.filter((r) => r.installed);
   const rec = status?.recommendations[type];
 
+  if (!open) return null;
   return (
     <Dialog title="AI pictures, clips & voice" onClose={onClose} wide>
       <div className="stack gen-dialog" data-testid="generation">

@@ -41,7 +41,7 @@ anything by hand. See [Project files](#project-files).
 Be aware of what has and has not been checked:
 
 **Tested (automatically, on Linux with FFmpeg 6.1, Python 3.13):**
-- 224 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
+- 226 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
   keyword rules, settings, edit plans, watch mode, and all 13 caption styles. Each style
   is turned into a subtitle file and drawn by FFmpeg/libass to check that text appears.
 - **Project files:** the schema and ~30 kinds of mistakes (each with a clear message);
@@ -61,8 +61,8 @@ Be aware of what has and has not been checked:
   two bad plans or when the AI cannot be reached, saved transcripts and plans, cost
   estimates, and the whole flow to a rendered video, including review mode, follow-up
   changes and batches. See [docs/ai-edit.md](docs/ai-edit.md).
-- **Desktop app:** 43 unit tests (including the app's main process driving the real
-  engine from start to finished video, undo/redo, exact frame) and 14 browser tests of the
+- **Desktop app:** 49 unit tests (including the app's main process driving the real
+  engine from start to finished video, undo/redo, exact frame) and 15 browser tests of the
   window (Playwright, at 1280x800 and 1920x1080, with screenshots checked by eye): Auto mode
   on by default and rendering with no extra clicks, live progress, the summary and cost,
   undo/redo, review with Auto mode off, the fallback warning, keys never shown, the

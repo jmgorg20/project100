@@ -131,6 +131,30 @@ def test_hardware_change_is_noticed(tmp_path, fake_smi):
     assert changed and new["key"] != first["key"] and previous["key"] == first["key"]
 
 
+def test_hardware_change_stays_pointed_out_until_tested_again(setup, fake_smi):
+    paths, _ = setup
+    assert not status(paths, check=False)["hardware_changed"]
+    data = json.loads(fake_smi.read_text())
+    data["vram"] = 24576                                     # a new GPU
+    fake_smi.write_text(json.dumps(data))
+    for _ in range(2):                                       # not only on the first check
+        info = status(paths, check=False)
+        assert info["hardware_changed"]
+        assert info["previous_hardware"].startswith("NVIDIA GeForce RTX 3060 (12 GB VRAM)")
+    info = status(paths)
+    settings, _ = generation.load_settings(paths)
+    generation.benchmark(paths, settings, info["hardware"]["key"], info["tiers"], ["voice"],
+                         log=lambda *_: None)
+    assert not status(paths, check=False)["hardware_changed"]
+
+
+def test_generation_home_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOEDIT_GENERATION_HOME", str(tmp_path / "gh"))
+    paths = generation.Paths()
+    assert paths.settings == tmp_path / "gh" / "generation.json"
+    assert paths.data == tmp_path / "gh" / "data"
+
+
 def test_hardware_never_blocks_without_nvidia_smi(tmp_path, monkeypatch, fake_smi):
     data = json.loads(fake_smi.read_text())
     data["fail"] = True

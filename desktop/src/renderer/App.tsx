@@ -50,6 +50,8 @@ export function App() {
   const [dragOver, setDragOver] = useState(false);
   const [gen, setGen] = useState<GenStatus | null>(null);
   const [showGen, setShowGen] = useState(false);
+  const [genMounted, setGenMounted] = useState(false);
+  const [genRunning, setGenRunning] = useState(false);
   // Per video (sent with each edit); start from the limits in the generation settings file.
   const [limits, setLimits] = useState<{ minutes: number; clips: number } | null>(null);
   const instructionRef = useRef<HTMLTextAreaElement>(null);
@@ -73,6 +75,12 @@ export function App() {
     setGen(s);
     setLimits((l) => l ?? { minutes: s.limits.max_generation_minutes, clips: s.limits.max_ai_clips });
   }, []);
+
+  const openGen = () => {
+    setGenMounted(true);
+    setShowGen(true);
+  };
+  const closeGen = useCallback(() => setShowGen(false), []);
 
   const addVideos = useCallback(async (paths: string[]) => {
     const fresh = paths.filter((p) => p);
@@ -159,7 +167,7 @@ export function App() {
         <h1>Auto Video Editor</h1>
         <span className="muted small">AI first edit · you stay in control</span>
         <span className="spacer" />
-        <button className="btn small" onClick={() => setShowGen(true)}>AI models</button>
+        <button className="btn small" onClick={() => openGen()}>{genRunning ? "AI models · testing…" : "AI models"}</button>
         <button className="btn small" onClick={() => setShowSettings(true)}>Settings</button>
       </header>
 
@@ -305,7 +313,7 @@ export function App() {
             <p className="muted small" style={{ margin: "8px 0 0" }}>
               Only when your instructions ask for them (e.g. “add a short clip of coffee here”). Made on this PC with WanGP; Auto mode shows a quick draft first, then the final version.
             </p>
-            <button className="btn small" style={{ marginTop: 8 }} onClick={() => setShowGen(true)}>AI models…</button>
+            <button className="btn small" style={{ marginTop: 8 }} onClick={() => openGen()}>AI models…</button>
           </details>
           {estimate && !estimate.error && (
             <p className="muted small" style={{ margin: 0 }} data-testid="estimate">
@@ -365,7 +373,7 @@ export function App() {
         </div>
       </aside>
 
-      {showGen && <GenerationDialog onClose={() => setShowGen(false)} onStatus={onGenStatus} />}
+      {genMounted && <GenerationDialog open={showGen} onClose={closeGen} onStatus={onGenStatus} onRunning={setGenRunning} />}
       {showSettings && <SettingsDialog settings={settings} onClose={() => setShowSettings(false)} onSave={async (patch) => { await saveSettings(patch); setShowSettings(false); }} />}
       {!settings.consentAccepted && <ConsentDialog onAccept={() => saveSettings({ consentAccepted: true })} />}
       {frame && (

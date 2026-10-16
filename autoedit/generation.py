@@ -14,6 +14,7 @@ This product uses WanGP (https://github.com/deepbeepmeep/Wan2GP), subject to its
 import copy
 import hashlib
 import json
+import os
 import shutil
 import time
 from pathlib import Path
@@ -33,7 +34,14 @@ AUDIO_EXT = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
 
 
 class Paths:
+    """Where the settings and measurements live. AUTOEDIT_GENERATION_HOME (if set) holds
+    both generation.json and the data folder (used by the desktop app's tests)."""
+
     def __init__(self, settings_file=None, data_dir=None):
+        home = os.environ.get("AUTOEDIT_GENERATION_HOME")
+        if home:
+            settings_file = settings_file or Path(home) / "generation.json"
+            data_dir = Path(home) / "data"
         self.settings = Path(settings_file or PROJECT_DIR / "generation.json")
         self.data = Path(data_dir or PROJECT_DIR / "work" / "generation")
         self.hardware = self.data / "hardware.json"
@@ -509,7 +517,7 @@ def status(paths, refresh_hardware=False, check_wangp=False, log=print):
     settings, problems = load_settings(paths)
     setup = check_setup(settings)
     w = settings["wangp"]
-    profile, changed, previous = load_profile(paths.hardware,
+    profile, _, _ = load_profile(paths.hardware,
                                               [w.get("folder"), str(PROJECT_DIR)])
     models_info = cached_models(paths)
     wangp_error = None
@@ -519,6 +527,9 @@ def status(paths, refresh_hardware=False, check_wangp=False, log=print):
         except (WanGPError, EditorError) as exc:
             wangp_error = str(exc)
     table = tier_table(paths, settings, profile["key"], models_info)
+    tested_here = any(k.startswith(profile["key"] + "|")
+                      for k in (read_json(paths.benchmarks, {}) or {}))
+    changed_from = None if tested_here else profile.get("changed_from")
     choices = {c: dict(zip(("preview", "order"), choose(table[c], settings, c)))
                for c in CONTENT_TYPES}
     return {
@@ -531,8 +542,9 @@ def status(paths, refresh_hardware=False, check_wangp=False, log=print):
                   "checked_at": (models_info or {}).get("checked_at"),
                   "error": wangp_error},
         "hardware": profile, "hardware_summary": describe(profile),
-        "hardware_changed": changed,
-        "previous_hardware": describe(previous) if changed and previous else None,
+        # Pointed out until a test has run on this hardware (old results are kept, per PC).
+        "hardware_changed": bool(changed_from),
+        "previous_hardware": changed_from,
         "tiers": table, "choices": choices,
         "recommendations": recommendations(table, models_info),
         "default_tier": settings["default_tier"], "pinned_tier": settings["pinned_tier"],

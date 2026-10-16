@@ -113,7 +113,8 @@ the one you like. That choice is saved per kind (pictures, clips, voice-over) in
    `job_timeout_minutes`, the next tier down is tried. The summary says so, e.g. *"AI video
    clip at 0:12: the High tier out of GPU memory, so the Mid tier was used instead."*
 4. **Per-video limits:** these are set in the AI panel ("AI pictures & clips") and default
-   to the `limits` in `generation.json`.
+   to the `limits` in `generation.json`. If the app cannot read the generation settings,
+   the boxes are not shown and the limits in `generation.json` apply.
    - **Max generation time:** all generation for one video stops after this many minutes.
      Unfinished items keep their draft, or are left out, and the summary says which.
    - **Max AI clips:** extra pictures or clips are not made, and the summary says how many.
@@ -130,7 +131,8 @@ figure is shown only when it can be trusted. System RAM and free disk space are 
 too.
 
 Detection runs when the app starts and when you click **Detect again**. If the hardware
-changed since last time, the app says so and asks you to test again. If detection fails,
+changed since last time, the app says so and asks you to test again. The notice stays until
+a test has run on the new hardware. If detection fails,
 the app still works, and the window shows what could not be detected.
 
 ## Files
@@ -149,7 +151,7 @@ work/generation/gpu.lock       makes sure only one GPU job runs at a time
 
 **Verified** (in the cloud test machine, with no GPU and without real WanGP):
 
-- **Python tests:** 22 tests in `tests/test_generation.py`, run against a stand-in for
+- **Python tests:** 24 tests in `tests/test_generation.py`, run against a stand-in for
   WanGP (`tests/fake_wangp`) that copies WanGP's documented Python API (`shared/api.py`:
   `init`, `list_model_metadata`, `get_model_availability`, `submit_task`, events,
   `result`, `cancel`), and a fake `nvidia-smi`. They cover:
@@ -165,13 +167,22 @@ work/generation/gpu.lock       makes sure only one GPU job runs at a time
   - Compare, and the AI edit with draft then final passes, fallbacks, the per-video limits
     and the summary lines;
   - that the edit still finishes when WanGP is not set up.
+- **The desktop app's main process with the real engine** (Vitest, fake WanGP):
+  - reading the tiers and WanGP's installed check;
+  - saving the WanGP folder, the default and the pinned tier;
+  - a test run with its live events, Compare with the same prompt and seed, and Stop;
+  - after Stop, no WanGP process is left behind;
+  - a whole edit through the app's job queue that makes an AI picture with the per-video
+    limits (the second clip is not made, and the summary says so).
 - **Desktop UI tests** (Playwright, using the engine's real output against the fake WanGP):
   - the AI models window: hardware, tier statuses, disabled tiers with reasons and license
     notes;
   - Compare side by side with times, "Use as default", pinning, and the test run with Stop;
   - the per-video limits being sent;
   - the draft and final steps;
-  - the hardware-change notice;
+  - the hardware-change notice, in the main window and in AI models;
+  - a test that keeps running (with its log and Stop) when AI models is closed and reopened;
+  - an AI video clip shown in the live preview;
   - that the window never uses the words "better" or "best".
 
 **NOT verified:**
@@ -185,7 +196,9 @@ work/generation/gpu.lock       makes sure only one GPU job runs at a time
 - **GPU detection on real hardware:** `nvidia-smi` and the Windows video adapter list were
   only tested with fake output.
 - **Windows:** stopping WanGP's process tree (`taskkill /T`) and the GPU lock file on
-  Windows.
+  Windows. Note: if the engine itself does not stop within 90 seconds of Stop, the app
+  kills it. On Windows that also closes WanGP. On macOS/Linux only the engine is killed.
+  This was not seen in tests, because the engine closes WanGP itself within 60 seconds.
 - **The voice-over models:** whether a given WanGP audio model accepts the
   `duration_seconds` setting, and how its output sounds.
 - **A real AI provider** asking for clips: the plan format was tested with faked AI answers.

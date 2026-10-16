@@ -28,8 +28,13 @@ const takenOutputs = new Set<string>();
 const genTasks = new Map<string, RunHandle>();
 let genCounter = 0;
 
+// After "cancel", the engine gets this long to stop by itself before it is killed. It must be
+// longer than the engine's own wait for WanGP to stop a job (Bridge.STOP_GRACE, 60 s), so the
+// engine always closes WanGP itself: a killed engine could leave WanGP running on the GPU.
+const ENGINE_STOP_GRACE_MS = 90_000;
+
 function engineConfig(): EngineConfig {
-  return { python: settings.pythonPath, engineDir: settings.engineDir, env: keys.env() };
+  return { python: settings.pythonPath, engineDir: settings.engineDir, env: keys.env(), graceMs: ENGINE_STOP_GRACE_MS };
 }
 
 function send(channel: string, payload: unknown): void {

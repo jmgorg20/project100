@@ -353,9 +353,17 @@ test("AI models: the test runs one tier at a time and can be stopped", async ({ 
   const log = dialog.getByTestId("task-log");
   await expect(log).toContainText("Running image Draft");
   await expect(dialog.getByRole("button", { name: "Compare" })).toBeDisabled(); // one GPU job at a time
+  // Closing the window does not lose the running test: it shows in the top bar, and the
+  // log and Stop are still there when the window is opened again.
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "AI models · testing…" })).toBeVisible();
+  await page.getByRole("button", { name: "AI models · testing…" }).click();
+  await expect(log).toContainText("Running image Draft");
   await log.getByRole("button", { name: "Stop" }).click();
   await expect(log).toContainText("Stopped.");
   await expect(dialog.getByRole("button", { name: "Test everything" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "AI models", exact: true })).toBeVisible();
 });
 
 test("per-video AI limits are sent with each edit; the AI clip steps show draft then final", async ({ page }) => {
@@ -385,4 +393,27 @@ test("per-video AI limits are sent with each edit; the AI clip steps show draft 
 test("a hardware change is pointed out", async ({ page }) => {
   await open(page, "mock=1&consent=1&hwchanged=1");
   await expect(page.getByRole("status").filter({ hasText: "hardware changed" })).toContainText("GTX 1660");
+  await page.getByRole("button", { name: "AI models", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "AI pictures, clips & voice" });
+  await expect(dialog).toContainText("The hardware changed since last time (was: NVIDIA GeForce GTX 1660");
 });
+
+test("the preview shows an AI video clip on the overlay track", async ({ page }) => {
+  await open(page, "mock=1&consent=1&speed=4");
+  await page.getByRole("switch", { name: "Auto mode" }).uncheck();
+  await page.getByRole("button", { name: "Add videos" }).click();
+  await page.getByTestId("video-item").first().click();
+  await page.getByLabel("Instructions for the AI").fill("AI CLIP of coffee at the start");
+  await page.getByTestId("run").click();
+  // Review mode makes only the draft; the preview shows the planned edit with the clip.
+  await expect(page.locator('[data-step="ai_draft"][data-state="done"]')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('[data-step="ai_final"]')).toHaveCount(0);
+  const clip = page.locator('video[data-testid="overlay"]');
+  await expect(clip).toBeVisible({ timeout: 20_000 });
+  await expect(clip).toHaveAttribute("src", /demo_talk_2\.webm/);
+  await expect.poll(() => clip.evaluate((v: HTMLVideoElement) => v.readyState)).toBeGreaterThanOrEqual(2); // a frame is decoded
+  const review = page.getByTestId("review");
+  await expect(review).toContainText("AI clips");
+  await expect(review).toContainText("AI video clip at 0:03: “Slow push towards a cup of coffee”");
+});
+

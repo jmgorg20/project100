@@ -162,7 +162,9 @@ def describe(profile):
 def load_profile(store, paths=()):
     """Detect the hardware now and save it. Returns (profile, changed, previous).
 
-    `changed` is True when the hardware differs from the last saved profile.
+    `changed` is True when the hardware differs from the last saved profile. The saved
+    profile keeps "changed_from" (the old hardware, in words) after that, so the change
+    can still be pointed out later.
     """
     store = Path(store)
     try:
@@ -171,6 +173,11 @@ def load_profile(store, paths=()):
         previous = None
     current = detect(paths)
     changed = bool(previous) and previous.get("key") != current["key"]
+    # Remember what it changed from (until the tiers are tested again on this hardware).
+    if changed:
+        current["changed_from"] = describe(previous)
+    elif previous and previous.get("changed_from"):
+        current["changed_from"] = previous["changed_from"]
     try:
         store.parent.mkdir(parents=True, exist_ok=True)
         store.write_text(json.dumps(current, indent=1), encoding="utf-8")

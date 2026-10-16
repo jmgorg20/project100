@@ -119,7 +119,19 @@ export function createMockApi(): AppApi {
     }
     for (const stage of ["cuts", "zooms", "captions", "photos"]) {
       const kinds: Record<string, string[]> = { cuts: ["video"], zooms: ["video", "effect"], captions: ["video", "effect", "caption"], photos: ["video", "effect", "caption", "overlay", "audio"] };
-      const view: Project = { ...f.project, tracks: f.project.tracks.map((t: Track) => (kinds[stage].includes(t.kind) ? t : { ...t, clips: [] })) };
+      // With an AI clip: the clip WanGP made, as a full-screen video overlay for the first 2 s.
+      const base: Project = wantsAi && !fail
+        ? {
+            ...f.project,
+            media: [...f.project.media, { ...f.project.media[0], id: "ai1", path: "C:/AutoEditor/work/generation/outputs/demo_talk_2.mp4", name: "demo_talk_2.mp4", has_audio: false }],
+            tracks: f.project.tracks.map((t: Track) =>
+              t.id === "photos"
+                ? { ...t, clips: [{ id: "ai-o1", type: "video" as const, media: "ai1", start: 0, duration: 2, in: 0, out: 2, x: 540, y: 960, width: 1080, height: 1920, animation: "none" as const }, ...t.clips] }
+                : t,
+            ),
+          }
+        : f.project;
+      const view: Project = { ...base, tracks: base.tracks.map((t: Track) => (kinds[stage].includes(t.kind) ? t : { ...t, clips: [] })) };
       await emit({ type: "stage", stage, label: stage });
       await emit({ type: "project", stage, project: view }, 250);
     }
