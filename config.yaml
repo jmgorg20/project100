@@ -99,6 +99,7 @@ output:
   encoder_speed: medium       # faster = quicker export, slightly bigger file: veryfast, fast, medium
   audio_bitrate: 192k
   save_transcript: true       # save <name>.transcript.json next to the video (edit it and re-run with --transcript)
+  save_project: true          # save <name>_edited.project.json (the timeline; open it in the app or re-render it)
 
 work_folder: work
 keep_work_files: false        # true = keep temporary files in work/ for troubleshooting

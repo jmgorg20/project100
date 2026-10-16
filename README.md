@@ -22,16 +22,36 @@ What it does, in order:
 8. Optional **intro/outro**, **logo watermark**, **pop-in images** when you say a keyword,
    **sound effects**, and **screen recording** layouts.
 
+Every edit is also saved as a **project file** (`output\myvideo_edited.project.json`): the
+whole timeline (cuts, zooms, captions, overlays, sounds) as tracks and clips. You can
+re-render it, and the desktop editor that is being built will open it so you can change
+anything by hand. See [Project files](#project-files).
+
+> **Desktop app status:** this is Phase 0 of turning the editor into a CapCut-style desktop
+> app (live preview, multi-track timeline, AI first edit). Phase 0 adds the project file and
+> its renderer. The app itself is not built yet; everything below is the command line.
+
 ---
 
 ## What was tested, and what was not
 
 Be aware of what has and has not been checked:
 
-**Tested (automatically, on Linux with FFmpeg 6.1):**
-- 93 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
+**Tested (automatically, on Linux with FFmpeg 6.1, Python 3.13):**
+- 164 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
   keyword rules, settings, edit plans, watch mode, and all 13 caption styles. Each style
   is turned into a subtitle file and drawn by FFmpeg/libass to check that text appears.
+- **Project files:** the schema and ~30 kinds of mistakes (each with a clear message);
+  saving and loading; and rendering synthetic projects checked **frame by frame** by
+  colour: clip edges land on the exact frame, reordered clips, gaps, stills, pop-in
+  photos, colour grade ranges, export sizes, volume/mute/fades and sound placement.
+- **The auto edit through a project gives the same video as before.** Rendering the
+  synthetic edit through its project and through the original renderer gives the same
+  frames and the same sound (checked in the tests; without an intro/outro the decoded
+  frames and audio samples were identical). All 13 caption styles produce exactly the same
+  subtitle file as before.
+- `render`, `frame`, `validate`, JSON progress, and **cancel** (FFmpeg is stopped, no
+  half-written file is left).
 - Full edits of a **synthetic test video** (colour bars + beeps standing in for speech, with a
   fake transcript): output is 1080x1920, 30 fps, H.264, with an AAC audio track, and sound
   and picture have the same length. Layouts tested: face, split screen, picture-in-picture,
@@ -52,6 +72,11 @@ Be aware of what has and has not been checked:
   Expect the export to take roughly as long as the video, or longer on older laptops.
 - FFmpeg 7/8 (Windows builds are usually newer than the 6.1 used for testing). The editor
   switches to the newer way of passing the filter file automatically.
+- The **desktop app** does not exist yet (later phases), so nothing about the app, its
+  preview, the installer, the AI timeline (Groq/Anthropic LLM calls) or preview-vs-render
+  matching has been tested.
+- Cancelling on **Windows** (the app stops FFmpeg through the editor) was only tested on
+  Linux.
 
 If something breaks, the error message says what went wrong. The temporary files are
 kept in `work\` so you can see what happened.
@@ -97,7 +122,7 @@ python -m pip install -r requirements.txt
 ```
 
 (This also installs the offline transcriber `faster-whisper`, which is a big download. If
-you will only use Groq, you can skip it: `python -m pip install PyYAML requests Pillow pytest`.)
+you will only use Groq, you can skip it: `python -m pip install PyYAML requests Pillow jsonschema pytest`.)
 
 ### 6. Add your Groq API key (for online transcription)
 
@@ -152,6 +177,20 @@ The finished video goes to `output\myvideo_edited.mp4`.
 | `--no-captions` | no captions |
 | `--output path.mp4` | save somewhere else |
 | `--keep-work` | keep the temporary files in `work\` |
+
+### Re-render or check a project file
+
+```
+python editor.py render output\myvideo_edited.project.json
+python editor.py render output\myvideo_edited.project.json --height 1280 --crf 23
+python editor.py frame output\myvideo_edited.project.json --time 12.5
+python editor.py validate output\myvideo_edited.project.json
+python editor.py edit inbox\myvideo.mp4 --project-only
+```
+
+`render` saves `myvideo_edited_render.mp4` next to the project (`--height 1280` = 720x1280,
+`960` = 540x960). `frame` saves the exact picture at 12.5 s as a PNG. `--project-only`
+makes the project without rendering. See [Project files](#project-files).
 
 ### Fix the transcript and re-run (no new transcription)
 
@@ -339,6 +378,18 @@ Open `config.yaml` in Notepad. Every line has a note. The main ones:
 
 ---
 
+## Project files
+
+`python editor.py edit` saves the edit as `output\<name>_edited.project.json` (turn this off
+with `save_project: false` under `output:` in `config.yaml`). It is plain JSON: the media
+files, then **tracks** (main video, photos, effects, captions, voice-over, music, sound
+effects) holding **clips** with a start time and length. The desktop app will edit this
+file, and `python editor.py render` turns any project into the final MP4.
+
+The full description, timing rules and known limits are in
+[`docs/project-format.md`](docs/project-format.md); an example is
+[`examples/project.json`](examples/project.json).
+
 ## Troubleshooting
 
 | Message | Fix |
@@ -352,6 +403,8 @@ Open `config.yaml` in Notepad. Every line has a note. The main ones:
 | Words get clipped | Raise `silence: padding:` to `0.12`, or `silence_threshold` to `0.4`. |
 | Pauses not cut in a noisy room | Set `noise_db: -30`. |
 | Captions in the wrong font | Check the font names in `config.yaml`; run `python editor.py styles`. |
+| `These media files are missing` | A file used by the project was moved or deleted. Put it back, or fix its `path` in the project file. |
+| `The project file has problems` | Run `python editor.py validate <file>`: each problem says which clip and what is wrong. |
 
 ## For the curious: project layout
 
@@ -365,14 +418,18 @@ autoedit/
   captions.py        builds the .ass caption file
   styles.py          the 13 caption styles (add yours here)
   highlight.py       keyword rules
-  render.py          builds the single FFmpeg command
+  project.py         the project file: checks, loading, saving
+  project.schema.json  the project file rules (shared with the desktop app)
+  project_render.py  renders a project with one FFmpeg command
+  render.py          FFmpeg building blocks (and the original renderer, used by the tests)
+  progress.py        progress messages (text, or JSON lines for the app)
   transcribe.py      Groq and faster-whisper
   overlays.py, plan.py, grades.py, watch.py, previews.py ...
 tests/               automated tests (run: python -m pytest)
 inbox/ output/ work/ your videos (never uploaded to Git)
 ```
 
-Running the tests: `python -m pytest` (needs FFmpeg; takes about half a minute).
+Running the tests: `python -m pytest` (needs FFmpeg; takes about two minutes).
 
 The Inter font is © The Inter Project Authors, SIL Open Font License 1.1
 (`assets/fonts/LICENSE-Inter.txt`).

@@ -2,6 +2,7 @@
 PyYAML>=6.0
 requests>=2.31
 Pillow>=10.0
+jsonschema>=4.18         # checks project files against autoedit/project.schema.json
 
 # Local (offline) transcription. Large download; only needed if provider: local
 faster-whisper>=1.0

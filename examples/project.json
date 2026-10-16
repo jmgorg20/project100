@@ -1,0 +1,178 @@
+{
+ "format": "autoedit-project",
+ "version": 1,
+ "name": "Example",
+ "settings": {
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "background": "#000000",
+  "audio": {
+   "normalize": true,
+   "loudness": -14,
+   "true_peak": -1.5
+  },
+  "fonts": {
+   "regular": "Inter",
+   "bold": "Inter",
+   "heavy": "Inter Black"
+  }
+ },
+ "media": [
+  {
+   "id": "m1",
+   "kind": "video",
+   "path": "../inbox/myvideo.mp4",
+   "duration": 10.0,
+   "width": 720,
+   "height": 1280,
+   "has_audio": true,
+   "name": "myvideo.mp4"
+  },
+  {
+   "id": "m2",
+   "kind": "image",
+   "path": "../assets/overlays/receipt.png",
+   "duration": 0,
+   "width": 600,
+   "height": 400,
+   "name": "receipt.png"
+  },
+  {
+   "id": "m3",
+   "kind": "audio",
+   "path": "../assets/music/my_music.mp3",
+   "duration": 30.0,
+   "name": "my_music.mp3"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "main",
+   "kind": "video",
+   "name": "Video",
+   "clips": [
+    {
+     "id": "v1",
+     "type": "video",
+     "media": "m1",
+     "start": 0,
+     "duration": 2,
+     "in": 1,
+     "out": 3
+    },
+    {
+     "id": "v2",
+     "type": "video",
+     "media": "m1",
+     "start": 2,
+     "duration": 1.5,
+     "in": 4,
+     "out": 5.5,
+     "volume": 0.8
+    }
+   ]
+  },
+  {
+   "id": "photos",
+   "kind": "overlay",
+   "name": "Photos",
+   "clips": [
+    {
+     "id": "o1",
+     "type": "image",
+     "media": "m2",
+     "start": 0.5,
+     "duration": 1,
+     "x": 500,
+     "y": 520,
+     "width": 820,
+     "height": 560,
+     "animation": "pop"
+    }
+   ]
+  },
+  {
+   "id": "effects",
+   "kind": "effect",
+   "name": "Effects",
+   "clips": [
+    {
+     "id": "z1",
+     "type": "zoom",
+     "start": 1,
+     "duration": 1,
+     "amount": 1.2
+    },
+    {
+     "id": "g1",
+     "type": "grade",
+     "start": 2,
+     "duration": 1,
+     "grade": "warm"
+    }
+   ]
+  },
+  {
+   "id": "captions",
+   "kind": "caption",
+   "name": "Captions",
+   "clips": [
+    {
+     "id": "t1",
+     "type": "caption",
+     "start": 0,
+     "duration": 1.2,
+     "style": "yellow_pop",
+     "words": [
+      {
+       "text": "Kumusta",
+       "start": 0,
+       "end": 0.5
+      },
+      {
+       "text": "GitHub",
+       "start": 0.6,
+       "end": 1.0,
+       "highlight": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "voiceover",
+   "kind": "audio",
+   "role": "voiceover",
+   "name": "Voice-over",
+   "clips": []
+  },
+  {
+   "id": "music",
+   "kind": "audio",
+   "role": "music",
+   "name": "Music",
+   "clips": [
+    {
+     "id": "a1",
+     "type": "audio",
+     "media": "m3",
+     "start": 0,
+     "duration": 3.5,
+     "in": 0,
+     "out": 3.5,
+     "volume": 0.3,
+     "fade_in": 0.5,
+     "fade_out": 1
+    }
+   ]
+  },
+  {
+   "id": "sfx",
+   "kind": "audio",
+   "role": "sfx",
+   "name": "Sound effects",
+   "clips": []
+  }
+ ]
+}

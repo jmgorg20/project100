@@ -41,3 +41,46 @@ def make_image(path, color="orange", size="600x400"):
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
                     f"color={color}:s={size}:d=1", "-frames:v", "1", str(path)], check=True)
     return Path(path)
+
+
+COLOR_SECONDS = ["red", "green", "blue", "white"]   # colour of each second of make_color_video
+
+
+def make_color_video(path, width=720, height=1280):
+    """4 s video: red, green, blue, white (one second each), with a steady 440 Hz tone."""
+    sources = "".join(f"color=c={c}:s={width}x{height}:r=30:d=1[c{i}];"
+                      for i, c in enumerate(COLOR_SECONDS))
+    joined = "".join(f"[c{i}]" for i in range(len(COLOR_SECONDS)))
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-filter_complex",
+         f"{sources}{joined}concat=n={len(COLOR_SECONDS)}:v=1:a=0[v];"
+         f"sine=f=440:r=48000:d={len(COLOR_SECONDS)}[a]",
+         "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "ultrafast",
+         "-pix_fmt", "yuv420p", "-c:a", "aac", str(path)],
+        check=True,
+    )
+    return Path(path)
+
+
+def make_tone(path, frequency=880, duration=2.0):
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                    f"sine=f={frequency}:r=48000:d={duration}", str(path)], check=True)
+    return Path(path)
+
+
+def pixels(video, frames, x, y):
+    """RGB colour of pixel (x, y) in each of the given frame numbers."""
+    pick = "+".join(f"eq(n,{n})" for n in frames)
+    out = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(video), "-vf",
+         f"select='{pick}',format=rgb24,crop=1:1:{x}:{y}", "-vsync", "0",
+         "-f", "rawvideo", "-"], capture_output=True, check=True).stdout
+    return [tuple(out[i:i + 3]) for i in range(0, len(out), 3)]
+
+
+def pcm(media, rate=8000):
+    """Mono 16-bit samples of the media's sound."""
+    import array
+    out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(media), "-ac", "1", "-ar", str(rate),
+                          "-f", "s16le", "-"], capture_output=True, check=True).stdout
+    return array.array("h", out)

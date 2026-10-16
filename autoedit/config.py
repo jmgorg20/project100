@@ -94,6 +94,7 @@ DEFAULTS = {
         "encoder_speed": "medium",
         "audio_bitrate": "192k",
         "save_transcript": True,
+        "save_project": True,
     },
     "work_folder": "work",
     "keep_work_files": False,

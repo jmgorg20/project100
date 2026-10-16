@@ -167,21 +167,40 @@ def word_boxes(lines, style, zone, measurer):
     return boxes
 
 
-def build_events(words, style, zone=None, measurer=None):
-    """Return a list of (layer, start_cs, end_cs, style_name, text)."""
+def group_end_times(groups, last_end=None):
+    """When each caption group leaves the screen (seconds).
+
+    A group stays a moment after its last word, or until the next group starts.
+    `last_end` fixes the end of the final group (a caption clip's end on the timeline).
+    """
+    ends = []
+    for gi, lines in enumerate(groups):
+        last_word = lines[-1][-1]
+        end = last_word.end + HOLD_AFTER_LAST_WORD
+        if gi + 1 < len(groups):
+            next_start = groups[gi + 1][0][0].start
+            if next_start - last_word.end < MERGE_GAP:
+                end = next_start
+            end = min(end, next_start)
+        elif last_end is not None:
+            end = last_end
+        ends.append(end)
+    return ends
+
+
+def build_events(words, style, zone=None, measurer=None, names=("Main", "Box"), last_end=None):
+    """Return a list of (layer, start_cs, end_cs, style_name, text).
+
+    `names` are the ASS style names for the text and the word box; `last_end` (seconds)
+    fixes when the final group disappears (see group_end_times).
+    """
     zone = zone or style.zone
     align, x, y = placement(style, zone)
     prefix = rf"{{\an{align}\pos({x},{y})}}"
     groups = chunk_words(words, style)
     events = []
-    for gi, lines in enumerate(groups):
+    for lines, end in zip(groups, group_end_times(groups, last_end)):
         flat = [w for line in lines for w in line]
-        end = flat[-1].end + HOLD_AFTER_LAST_WORD
-        if gi + 1 < len(groups):
-            next_start = groups[gi + 1][0][0].start
-            if next_start - flat[-1].end < MERGE_GAP:
-                end = next_start
-            end = min(end, next_start)
         # Each word gets its own event, from when it is spoken until the next word.
         edges = [flat[0].start] + [w.start for w in flat[1:]] + [end]
         cs = []
@@ -191,16 +210,16 @@ def build_events(words, style, zone=None, measurer=None):
             if cs[i + 1] <= cs[i]:
                 continue
             text = prefix + render_group(lines, i, style)
-            events.append((1, cs[i], cs[i + 1], "Main", text))
+            events.append((1, cs[i], cs[i + 1], names[0], text))
             if style.active_box and measurer:
                 x0, y0, x1, y1 = word_boxes(lines, style, zone, measurer)[i]
                 shape = rounded_box(x0, y0, x1, y1, style.size * 0.18)
                 box_text = rf"{{\an7\pos(0,0)\bord0\shad0\p1}}{shape}"
-                events.append((0, cs[i], cs[i + 1], "Box", box_text))
+                events.append((0, cs[i], cs[i + 1], names[1], box_text))
             elif style.active_box:
                 # Font file not found for measuring: let libass draw the box per letter.
                 box_text = prefix + render_group(lines, i, style, box_layer=True)
-                events.append((0, cs[i], cs[i + 1], "Box", box_text))
+                events.append((0, cs[i], cs[i + 1], names[1], box_text))
     return events
 
 
@@ -222,13 +241,10 @@ def style_line(name, style: CaptionStyle, fonts, box=False, box_color=None, padd
     )
 
 
-def build_ass(words, style, fonts, zone=None, fonts_folder=None):
-    """Return the full text of an .ass subtitle file.
-
-    `fonts` maps "regular"/"bold"/"heavy" to (font family name, bold flag).
-    """
-    styles = [style_line("Main", style, fonts, box=style.box,
-                         box_color=style.box_color, padding=style.box_padding)]
+def style_lines(style, fonts, fonts_folder=None, names=("Main", "Box")):
+    """ASS [V4+ Styles] lines for one caption style, plus the text measurer for word boxes."""
+    lines = [style_line(names[0], style, fonts, box=style.box,
+                        box_color=style.box_color, padding=style.box_padding)]
     measurer = None
     if style.active_box:
         family, bold = fonts[style.font]
@@ -236,10 +252,15 @@ def build_ass(words, style, fonts, zone=None, fonts_folder=None):
         if font_file:
             measurer = TextMeasurer(font_file, style.size)
             box_style = CaptionStyle(0, "box", "", color=style.active_box, outline=0)
-            styles.append(style_line("Box", box_style, fonts))
+            lines.append(style_line(names[1], box_style, fonts))
         else:
-            styles.append(style_line("Box", style, fonts, box=True,
-                                     box_color=style.active_box, padding=style.box_padding))
+            lines.append(style_line(names[1], style, fonts, box=True,
+                                    box_color=style.active_box, padding=style.box_padding))
+    return lines, measurer
+
+
+def ass_document(styles, events):
+    """Full .ass file text from style lines and (layer, start_cs, end_cs, style, text) events."""
     header = "\n".join([
         "[Script Info]",
         "; Made by the auto video editor",
@@ -261,9 +282,18 @@ def build_ass(words, style, fonts, zone=None, fonts_folder=None):
     ])
     lines = [
         f"Dialogue: {layer},{ass_time(s)},{ass_time(e)},{name},,0,0,0,,{text}"
-        for layer, s, e, name, text in build_events(words, style, zone, measurer)
+        for layer, s, e, name, text in events
     ]
     return header + "\n" + "\n".join(lines) + "\n"
+
+
+def build_ass(words, style, fonts, zone=None, fonts_folder=None):
+    """Return the full text of an .ass subtitle file.
+
+    `fonts` maps "regular"/"bold"/"heavy" to (font family name, bold flag).
+    """
+    styles, measurer = style_lines(style, fonts, fonts_folder)
+    return ass_document(styles, build_events(words, style, zone, measurer))
 
 
 def fonts_from_config(captions_cfg):

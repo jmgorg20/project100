@@ -147,3 +147,58 @@ def detect_silences(path, noise_db, min_duration):
             end = probe(path)["duration"]
         silences.append((max(0.0, start), end))
     return silences
+
+
+def run_ffmpeg_progress(args, description, total_seconds, on_progress=None, cwd=None,
+                        cancel=None):
+    """Run ffmpeg, calling on_progress(fraction 0..1) as it goes.
+
+    `cancel` is a threading.Event: when it is set, ffmpeg is stopped and Cancelled is raised.
+    Raises EditorError (with FFmpeg's own error lines) if ffmpeg fails.
+    """
+    import threading
+
+    from .errors import Cancelled
+
+    cmd = [find_tool("ffmpeg"), "-hide_banner", "-y", "-loglevel", "error", "-nostats",
+           "-progress", "pipe:1"] + [str(a) for a in args]
+    proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    tail = []
+
+    def read_errors():
+        for raw in proc.stderr:
+            tail.append(raw.decode("utf-8", errors="replace").rstrip())
+            del tail[:-40]
+
+    def watch_cancel():
+        while proc.poll() is None:
+            if cancel.wait(0.2):
+                proc.terminate()
+                return
+
+    threads = [threading.Thread(target=read_errors, daemon=True)]
+    if cancel is not None:
+        threads.append(threading.Thread(target=watch_cancel, daemon=True))
+    for t in threads:
+        t.start()
+    try:
+        for raw in proc.stdout:
+            key, _, value = raw.decode("utf-8", errors="replace").strip().partition("=")
+            # out_time_us is microseconds (out_time_ms is too, despite its name).
+            if key in ("out_time_us", "out_time_ms") and value.lstrip("-").isdigit() \
+                    and on_progress and total_seconds > 0:
+                on_progress(min(1.0, max(0.0, int(value) / 1e6 / total_seconds)))
+        proc.wait()
+    finally:
+        if proc.poll() is None:          # interrupted (Ctrl+C, error in a callback)
+            proc.kill()
+            proc.wait()
+        threads[0].join(timeout=5)
+    if cancel is not None and cancel.is_set():
+        raise Cancelled(f"Cancelled while {description}.")
+    if proc.returncode != 0:
+        lines = [l for l in tail if l.strip()]
+        raise EditorError(f"FFmpeg failed while: {description}\n" + "\n".join(lines[-12:]))
+    if on_progress:
+        on_progress(1.0)
