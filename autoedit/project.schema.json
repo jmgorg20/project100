@@ -644,6 +644,9 @@
         },
         "speed": {
           "$ref": "#/$defs/speed"
+        },
+        "broll": {
+          "$ref": "#/$defs/broll"
         }
       },
       "if": {
@@ -1054,6 +1057,89 @@
         },
         "intensity": {
           "$ref": "#/$defs/intensity"
+        }
+      }
+    },
+    "broll": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ],
+      "description": "Where a B-roll clip came from, so it can be found again, regenerated or credited.",
+      "properties": {
+        "source": {
+          "enum": [
+            "library",
+            "pexels",
+            "pixabay",
+            "ai",
+            "file"
+          ],
+          "description": "library = your B-roll folder; pexels/pixabay = free stock; ai = generated (WanGP); file = chosen by hand."
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "prompt": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "search": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "style": {
+          "enum": [
+            "realistic",
+            "cartoon",
+            "drawing",
+            "low_poly",
+            "stylized_3d",
+            "anime"
+          ]
+        },
+        "position": {
+          "enum": [
+            "full",
+            "top",
+            "center"
+          ]
+        },
+        "ai_generated": {
+          "type": "boolean",
+          "description": "Made with AI: label it where the platform asks (TikTok, Facebook, YouTube)."
+        },
+        "tier": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "stock_id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "page": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "license": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "license_url": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "credit": {
+          "type": "string",
+          "maxLength": 600
         }
       }
     }

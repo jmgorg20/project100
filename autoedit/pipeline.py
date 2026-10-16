@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 from . import PROJECT_DIR
+from .broll import broll_label
 from .captions import chunk_words, group_end_times
 from .config import project_path
 from .cuts import (alternate_zoom, find_removals, keep_segments, remap_range, remap_time,
@@ -194,7 +195,7 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
         at = remap_time(item["at"], segments, side="next")
         if at is not None:
             overlay_events.append(OverlayEvent(Path(item["file"]), at, item["duration"],
-                                               item["position"]))
+                                               item["position"], item.get("broll")))
     overlay_events = schedule(overlay_events, new_length, caption_zone,
                               top_blocked=layout == "pip")
     for ev in overlay_events:
@@ -292,6 +293,9 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
                 "animation": "none" if ev.position == "full" else "pop"}
         if not ev.is_image:
             clip.update({"in": 0.0, "out": round(duration, 6)})
+        if ev.broll:
+            clip["broll"] = dict(ev.broll, position=ev.position)
+            clip["label"] = broll_label(ev.broll)
         photos.append(clip)
     if branding.get("watermark"):
         wm_file = project_path(branding["watermark"])

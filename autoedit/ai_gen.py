@@ -41,9 +41,9 @@ def availability(paths):
     words = {True: "available", False: "NOT available"}
     limit = settings["limits"]["max_ai_clips"]
     text = (f"AI GENERATION: pictures {words[ok['image']]}; video clips {words[ok['video']]}; "
-            f"voice-over {words[ok['voice']]}. At most {limit} AI pictures/clips in total. "
-            f"Only plan ai_clips or voiceovers of an available kind, and only when the creator "
-            f"asks for them or they clearly help; otherwise leave them empty.")
+            f"voice-over {words[ok['voice']]}. At most {limit} AI-generated pictures/clips in "
+            f"total. Only plan voiceovers if voice-over is available and the creator asks for "
+            f"them; ai_clips (B-roll) follow B-ROLL SOURCES.")
     return ok, text
 
 
@@ -77,15 +77,17 @@ def empty(plan):
 
 
 def generate_for_plan(plan, passes, gen_paths=None, max_minutes=None, max_clips=None,
-                      reporter=None, cancel=None, log=print):
+                      reporter=None, cancel=None, log=print, seed_salt=""):
     """Run the requested passes ("draft", "final"). Returns a dict:
 
     {"draft": {...}, "final": {...}, "notes": [...], "done": [...]}, where draft/final map
     "ai_clips"/"voiceovers" to lists of file paths (None = not made).
+    `seed_salt` changes the seeds (to make a different version of the same prompt).
     """
     paths = gen_paths or Paths()
     items = items_of(plan)
-    outcome = {"draft": empty(plan), "final": empty(plan), "notes": [], "done": []}
+    outcome = {"draft": empty(plan), "final": empty(plan), "notes": [], "done": [],
+               "tiers": {}}
     if not items:
         return outcome
     settings, _ = load_settings(paths)
@@ -145,7 +147,8 @@ def generate_for_plan(plan, passes, gen_paths=None, max_minutes=None, max_clips=
                             break
                         row = next(r for r in table[it["type"]] if r["name"] == tier)
                         result, output = gen.run(it["type"], row, it["prompt"],
-                                                 seed_for(it["prompt"]), f"edit-{pass_name}",
+                                                 seed_for(it["prompt"] + seed_salt),
+                                                 f"edit-{pass_name}",
                                                  it["extra"], timeout=min(job_limit, remaining))
                         event = {"item": what, "tier": tier, "pass": pass_name,
                                  "success": result.success, "reason": result.reason,
@@ -154,8 +157,10 @@ def generate_for_plan(plan, passes, gen_paths=None, max_minutes=None, max_clips=
                             reporter.event("generation", **event)
                         if result.success:
                             outcome[pass_name][it["list"]][it["index"]] = output
+                            outcome["tiers"][f"{it['list']}.{it['index']}"] = tier
                             if pass_name == "final":
-                                outcome["done"].append({**event, "reason_text": it["reason"]})
+                                outcome["done"].append({**event, "reason_text": it["reason"],
+                                                        "list": it["list"], "index": it["index"]})
                             break
                         nxt = tiers[k + 1] if k + 1 < len(tiers) else None
                         notes.append(f"{what}: the {tier} tier {result.reason}"

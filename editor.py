@@ -112,6 +112,10 @@ def build_parser():
     ai.add_argument("--max-ai-clips", type=int, help="at most this many AI pictures/clips")
     ai.add_argument("--generation-settings", help="generation settings file "
                                                   "(default: generation.json)")
+    ai.add_argument("--broll-library", help="folder with your own B-roll clips/pictures "
+                                            "(default from config.yaml, broll:)")
+    ai.add_argument("--no-stock", action="store_true",
+                    help="do not search Pexels/Pixabay for B-roll")
 
     sub.add_parser("ui-data", help="print caption styles and layout facts for the desktop app")
 
@@ -126,6 +130,31 @@ def build_parser():
     rt.add_argument("project")
     rt.add_argument("--start", type=float, required=True, help="timeline seconds")
     rt.add_argument("--end", type=float, required=True, help="timeline seconds")
+    br = sub.add_parser("broll", help="find or make one B-roll item: from your library, free "
+                                      "stock, or AI. With a project: --clip ID gives that clip "
+                                      "another one; --new adds a clip (saves the project)")
+    br.add_argument("project", nargs="?", help="a .project.json (optional)")
+    br.add_argument("--clip", help="the B-roll clip to find another for / regenerate")
+    br.add_argument("--new", action="store_true", help="add a new B-roll clip")
+    br.add_argument("--at", type=float, default=0.0, help="--new: timeline seconds")
+    br.add_argument("--duration", type=float, help="seconds on screen (default 3)")
+    br.add_argument("--kind", choices=["image", "video"])
+    br.add_argument("--position", choices=["full", "top", "center"])
+    br.add_argument("--prompt", help="what to show, in English")
+    br.add_argument("--search", help="2-4 keywords for your library and stock sites")
+    br.add_argument("--style", choices=["realistic", "cartoon", "drawing", "low_poly",
+                                        "stylized_3d", "anime"])
+    br.add_argument("--source", choices=["auto", "library", "stock", "ai"])
+    br.add_argument("--quality", choices=["draft", "final"], default="final",
+                    help="AI generation: quick draft tier, or the final tier")
+    br.add_argument("--exclude", action="append", default=[],
+                    help="a file or stock id (pexels-123) not to use")
+    br.add_argument("--new-version", action="store_true",
+                    help="AI: a different version of the same prompt")
+    br.add_argument("--library", help="your B-roll folder (default from config.yaml)")
+    br.add_argument("--download-folder", help="where stock downloads are kept")
+    br.add_argument("--generation-settings", help="generation settings file "
+                                                  "(default: generation.json)")
     th = sub.add_parser("thumbs", help="small pictures along a video for the timeline (cached)")
     th.add_argument("file")
     th.add_argument("--height", type=int, default=120)
@@ -322,6 +351,63 @@ def cmd_retranscribe(args, reporter):
     reporter.result(project=str(project_file), words=count)
 
 
+def cmd_broll(args, reporter, cancel):
+    from autoedit import broll
+    from autoedit.project import load_project, media_from_file, save_project
+    cfg = load_config(args.config)
+    if args.library is not None:
+        cfg["broll"]["library_folder"] = args.library
+    project = clip = None
+    project_file = Path(args.project).resolve() if args.project else None
+    item, exclude = {}, list(args.exclude)
+    if project_file:
+        project = load_project(project_file)
+    if args.clip:
+        if project is None:
+            raise EditorError("--clip needs the project file.")
+        _track, clip = broll.find_overlay_clip(project, args.clip)
+        meta = clip.get("broll") or {}
+        media = next(m for m in project["media"] if m["id"] == clip["media"])
+        item = {k: meta[k] for k in ("prompt", "search", "style", "position") if meta.get(k)}
+        item.update(kind=clip["type"], duration=clip["duration"],
+                    prompt=item.get("prompt") or clip.get("label") or Path(media["path"]).stem)
+        exclude += [media["path"]] + ([meta["stock_id"]] if meta.get("stock_id") else [])
+        if meta.get("source") == "ai" and not args.source:
+            item["source"] = "ai"              # regenerate an AI item with AI
+    elif args.new and project is None:
+        raise EditorError("--new needs the project file.")
+    for key in ("kind", "position", "prompt", "search", "style", "source", "duration"):
+        value = getattr(args, key)
+        if value is not None:
+            item[key] = value
+    folder = Path(args.download_folder) if args.download_folder else (
+        (project_file.parent if project_file else project_path(cfg["output"]["folder"]))
+        / "broll")
+    new_version = args.new_version or bool(args.clip)
+    file, meta, notes = broll.find_one(item, cfg, args.quality, generation_paths(args), reporter,
+                                       cancel, folder, exclude, new_version)
+    for note in notes:
+        print(f"  ! {note}")
+    if file is None:
+        raise EditorError("No B-roll found or made. " + (" ".join(notes) or
+                          "Add a B-roll folder, a stock key, or set up WanGP."))
+    print(f"B-roll: {broll.describe_source(meta, file)}")
+    if project is None:
+        entry = media_from_file(file, "broll")
+        reporter.result(file=str(file), media=entry, broll=meta, notes=notes)
+        return
+    entry = media_from_file(file, broll._new_id(project, "m"))
+    if clip is not None:
+        clip = broll.replace_clip_media(project, args.clip, entry, meta)
+    else:
+        clip = broll.add_clip(project, entry, meta, args.at, item.get("duration", 3.0),
+                              item.get("position", "full"))
+    save_project(project, project_file)
+    print(f"Saved {project_file.name} (clip {clip['id']})")
+    reporter.result(project=str(project_file), clip=clip["id"], file=str(file), broll=meta,
+                    notes=notes)
+
+
 def cmd_thumbs(args, reporter):
     from autoedit.media_tools import thumbs
     cfg = load_config(args.config)
@@ -371,6 +457,10 @@ def cmd_ai_edit(args, reporter, cancel):
     cfg = load_config(args.config)
     if args.transcribe_with:
         cfg["transcription"]["provider"] = args.transcribe_with
+    if args.broll_library is not None:
+        cfg["broll"]["library_folder"] = args.broll_library
+    if args.no_stock:
+        cfg["broll"]["use_stock"] = False
     if args.output and len(args.videos) > 1:
         raise EditorError("--output works with one video only.")
     instruction = args.instruction
@@ -629,6 +719,8 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_thumbs(args, reporter)
         elif args.command == "retranscribe":
             cmd_retranscribe(args, reporter)
+        elif args.command == "broll":
+            cmd_broll(args, reporter, cancel)
         elif args.command == "ui-data":
             import json
             from autoedit.ui_data import ui_data

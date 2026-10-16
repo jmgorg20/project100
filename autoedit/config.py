@@ -72,6 +72,10 @@ DEFAULTS = {
         "triggers_file": "triggers.yaml",
         "folder": "assets/overlays",
     },
+    "broll": {
+        "library_folder": "",
+        "use_stock": True,
+    },
     "sfx": {
         "enabled": False,
         "volume": 0.4,
