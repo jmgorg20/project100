@@ -72,6 +72,7 @@ export async function renderJobs(jobs, { ffmpeg = process.env.AUTOEDIT_FFMPEG ||
   const browser = await launchBrowser(chromium);
   const total = jobs.reduce((n, j) => n + (j.frames || 0) + (j.stills ? j.stills.length : 0), 0);
   let done = 0;
+  let imageCount = 0;
   const results = [];
   try {
     const context = await browser.newContext({ viewport: { width: 1400, height: 2300 }, deviceScaleFactor: 1 });
@@ -81,7 +82,12 @@ export async function renderJobs(jobs, { ffmpeg = process.env.AUTOEDIT_FFMPEG ||
     await page.waitForFunction("window.gfxReady === true", null, { timeout: 15000 });
     for (const job of jobs) {
       if (signal && signal.aborted) throw new Error("cancelled");
-      const info = await page.evaluate((j) => window.gfx.prepare({ id: j.template, params: j.params, duration: j.duration, quality: j.quality }), job);
+      // a picture on this PC is served by the local server (a page from http:// cannot open file://)
+      const params = { ...(job.params || {}) };
+      if (params.image && !/^(https?:|data:)/i.test(params.image)) {
+        params.image = server.serveFile(`img-${imageCount++}${extname(params.image).toLowerCase()}`, params.image);
+      }
+      const info = await page.evaluate((j) => window.gfx.prepare({ id: j.template, params: j.params, duration: j.duration, quality: j.quality }), { ...job, params });
       const clip = { x: 0, y: 0, width: info.tileW, height: info.tileH };
       const shot = async (t) => { await page.evaluate((x) => window.gfx.seek(x), t); return page.screenshot({ type: "png", omitBackground: true, clip }); };
       if (job.frames > 0 && job.out) {
