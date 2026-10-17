@@ -139,6 +139,22 @@ def build_parser():
     sub.add_parser("formats", help="list the video formats (Reaction, Listicle, Clone, ...)")
     sub.add_parser("presets", help="list the presets (Viral TikTok, Cinematic Storytelling, ...)")
 
+    sb = sub.add_parser("storyboard", help="show a project as scenes (purpose, length, source, "
+                                           "words, transition, music/sounds, colour)")
+    sb.add_argument("project", help="a .project.json")
+    se = sub.add_parser("storyboard-edit", help="change one scene: lock / unlock it, change its "
+                                                "words, or give its graphics another look")
+    se.add_argument("project", help="a .project.json (saved in place)")
+    se.add_argument("--scene", required=True, help="the scene: s3 or 3")
+    act = se.add_mutually_exclusive_group(required=True)
+    act.add_argument("--lock", action="store_true", help="lock the scene (the AI and edits leave it)")
+    act.add_argument("--unlock", action="store_true", help="unlock the scene")
+    act.add_argument("--text", help="the scene's new words")
+    act.add_argument("--regenerate", action="store_true", help="another look for the scene's graphics")
+    se.add_argument("--provider", choices=["groq", "anthropic"], help="--regenerate: ask this AI "
+                                                                     "(default: simple rules, no AI call)")
+    se.add_argument("--model", help="AI model")
+
     gx = sub.add_parser("graphics", help="add motion graphics (pop-up words, cards, counters, "
                                          "arrows, emoji) to a project with the Director")
     gx.add_argument("project", help="a .project.json (saved in place unless --output)")
@@ -673,6 +689,53 @@ def cmd_presets(args, reporter):
     reporter.result(presets=items)
 
 
+def print_storyboard(scenes):
+    for s in scenes:
+        lock = " 🔒" if s["locked"] else ""
+        extras = ", ".join(x for x in (
+            f"graphics: {', '.join(g['template'] for g in s['graphics'])}" if s["graphics"] else "",
+            f"B-roll: {', '.join(s['broll'])}" if s["broll"] else "",
+            f"music: {', '.join(s['music'])}" if s["music"] else "",
+            f"{s['sfx']} sound(s)" if s["sfx"] else "",
+            f"colour: {s['mood']}" if s["mood"] != "none" else "") if x)
+        print(f"{s['id']:>4} {s['start']:6.2f}-{s['end']:6.2f}s  {s['purpose_label']:<15} "
+              f"[{s['transition']}]{lock}  {s['text'][:70]}")
+        if extras:
+            print(f"{'':>6}{extras}")
+
+
+def cmd_storyboard(args, reporter):
+    from autoedit import storyboard
+    from autoedit.project import load_project
+    scenes = storyboard.scenes(load_project(args.project))
+    print_storyboard(scenes)
+    reporter.result(scenes=scenes)
+
+
+def cmd_storyboard_edit(args, reporter, cancel):
+    from autoedit import storyboard
+    from autoedit.ai_edit import provider_settings
+    from autoedit.project import load_project, save_project
+    path = Path(args.project).resolve()
+    project = load_project(path)
+    notes, changed = [], []
+    if args.lock or args.unlock:
+        project = storyboard.set_locked(project, args.scene, bool(args.lock))
+    elif args.text is not None:
+        project = storyboard.set_text(project, args.scene, args.text)
+    else:
+        cfg = load_config(args.config)
+        provider, model = provider_settings(cfg, args.provider, args.model) if args.provider else (None, None)
+        r = storyboard.regenerate(project, args.scene, cfg, provider, model, cancel=cancel)
+        project, notes, changed = r["project"], r["notes"], r["changed"]
+    save_project(project, path)
+    scenes = storyboard.scenes(project)
+    print_storyboard(scenes)
+    for n in notes:
+        print(f"  > {n}")
+    reporter.result(project=str(path), scenes=scenes, changed=changed, notes=notes)
+
+
 def cmd_ai_edit(args, reporter, cancel):
     from autoedit.ai_edit import ai_edit_video
     from autoedit.errors import Cancelled, EditorError
@@ -1035,6 +1098,10 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_formats(args, reporter)
         elif args.command == "presets":
             cmd_presets(args, reporter)
+        elif args.command == "storyboard":
+            cmd_storyboard(args, reporter)
+        elif args.command == "storyboard-edit":
+            cmd_storyboard_edit(args, reporter, cancel)
         elif args.command == "graphics":
             cmd_graphics(args, reporter, cancel)
         elif args.command == "graphics-regenerate":

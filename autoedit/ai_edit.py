@@ -15,7 +15,7 @@ import shutil
 import time
 from pathlib import Path
 
-from . import director
+from . import director, storyboard
 from .ai_gen import availability
 from .ai_plan import apply_plan, load_plan_schema, preset_plan, upgrade_plan, validate_plan
 from .broll import resolve_plan, sources_text
@@ -566,6 +566,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         summary["cost_text"] = format_usd(cost["total"])
         reporter.event("summary", **summary)
 
+        storyboard.freeze(project)
         project_file = save_project(project, output.with_suffix(".project.json"))
         plan_file = output.with_suffix(".plan.json")
         plan_file.write_text(json.dumps({
@@ -681,6 +682,7 @@ def voiceover_edit(audio, broll, cfg, instruction="", provider=None, model=None,
                    "duration_before": duration, "duration_after": duration, "format": "voiceover_broll",
                    "cost": {"total": cost, "currency": "USD"}, "cost_text": format_usd(cost)}
         reporter.event("summary", **summary)
+        storyboard.freeze(project)
         project_file = save_project(project, output.with_suffix(".project.json"))
         rendered = None
         if render:
