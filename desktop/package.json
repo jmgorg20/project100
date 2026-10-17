@@ -13,7 +13,8 @@
     "typecheck": "tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:ui": "vite build && playwright test",
-    "engine-data": "python ../editor.py ui-data > src/shared/engine-data.json"
+    "engine-data": "python ../editor.py ui-data > src/shared/engine-data.json",
+    "graphics-catalog": "node graphics/build-catalog.mjs"
   },
   "dependencies": {
     "react": "19.3.0",

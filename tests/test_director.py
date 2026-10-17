@@ -10,7 +10,7 @@ from autoedit import director, graphics, zones
 from autoedit.graphics_check import check_project, contrast
 from autoedit.llm import LLMError
 from autoedit.project import validate_project
-from tests.director_helpers import SCRIPT, cfg, face_tracking, make_project, make_words
+from tests.director_helpers import cfg, face_tracking, make_project, make_words
 
 CAT = graphics.catalog()
 
@@ -50,7 +50,8 @@ def good_plan(project):
     return {"summary": "ok", "items": [
         item("pop-heavy", "Grabe ang bilis", s("Grabe"), text="*GRABE* ang bilis", mood="hype", importance=0.9,
              emphasis="flash"),
-        item("counter-number", "500 pesos", s("500"), number=500, prefix="₱", text="simula", mood="money", importance=0.95),
+        item("counter-number", "500 pesos", s("500"), number=500, prefix="₱", text="simula", mood="money",
+             importance=0.95),
         item("warning-banner", "Mag-ingat sa mga scam", s("Mag-ingat"), text="Mag-ingat sa scam", mood="warning",
              importance=0.8),
         item("prompt-card", "gamitin ang AI para sa edit", s("gamitin"), text="gamitin ang AI para sa edit",
@@ -164,7 +165,8 @@ def test_graphics_start_on_the_frame_of_their_word(project, monkeypatch):
         first = director.norm(c["director"]["words"].split()[0])
         starts = [w["start"] for w in words if director.norm(w["text"]) == first]
         assert min(abs(c["start"] - s) for s in starts) <= 1 / fps + 1e-6, c
-        assert abs(c["start"] * fps - round(c["start"] * fps)) < 0.01           # on the frame grid (times kept to 0.1 ms)
+        # on the frame grid (times are kept to 0.1 ms)
+        assert abs(c["start"] * fps - round(c["start"] * fps)) < 0.01
         assert abs((c["start"] + c["duration"]) * fps - round((c["start"] + c["duration"]) * fps)) < 0.01
 
 

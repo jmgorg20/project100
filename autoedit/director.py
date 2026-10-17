@@ -27,7 +27,6 @@ from .director_styles import (CTA_WORDS, DEFAULT_STYLE, EMOJI_FOR_MOOD, GRAPHICS
                               ICON_FOR_MOOD, MOOD_WORDS, STOPWORDS, STYLE_KEYWORDS, STYLES)
 from .errors import Cancelled, EditorError
 from .llm import LLMError, ask_json
-from .project import timeline_duration
 
 PROMPT_VERSION = 1
 MAX_ATTEMPTS = 2
@@ -590,7 +589,8 @@ def place_items(ctx, items):
                      "captions clear.")
             continue
         x, y, size, angle, box = found
-        it["x"], it["y"], it["size_final"], it["angle"], it["box"] = round(x, 4), round(y, 4), round(size, 3), angle, box
+        it["x"], it["y"], it["size_final"] = round(x, 4), round(y, 4), round(size, 3)
+        it["angle"], it["box"] = angle, box
         placed.append({"box": box, "start": t0, "end": t1})
         result.append(it)
     return sorted(result, key=lambda x: x["start"])
@@ -825,7 +825,8 @@ def plan_schema():
         "type": "object", "additionalProperties": False, "required": ["template", "words", "start"],
         "properties": {
             "template": {"enum": [t["id"] for t in cat["templates"]]},
-            "words": {"type": "string", "description": "The spoken words this graphic belongs to, exactly as in the transcript."},
+            "words": {"type": "string",
+                      "description": "The spoken words it belongs to, exactly as in the transcript."},
             "start": {"type": "number", "minimum": 0},
             "end": {"type": "number", "minimum": 0},
             "text": {"type": "string", "maxLength": 90},
@@ -1109,7 +1110,8 @@ def fallback_items(ctx):
                 k = next((k for k in si if norm(words[k]["text"]) in MOOD_WORDS[mood]), si[0])
                 add(k, k, template="emoji-pop", emoji=EMOJI_FOR_MOOD[mood][0], importance=0.45, mood=mood)
     for i, w in enumerate(words):
-        if norm(w["text"]) in ("look", "tingnan", "dito", "here", "ito", "this") and ctx.style["categories"].get("pointer", 0) > 0.5:
+        pointing = norm(w["text"]) in ("look", "tingnan", "dito", "here", "ito", "this")
+        if pointing and ctx.style["categories"].get("pointer", 0) > 0.5:
             add(i, i, template="arrow-point", text="", target="none", importance=0.5, mood="playful", zone="lower")
             break
     return items
@@ -1174,14 +1176,17 @@ def generate(project, cfg, instruction="", style=None, provider=None, model=None
     project = copy.deepcopy(project)
     removed = clear_director_clips(project)
     for track in project["tracks"]:
-        track["clips"] = [c for c in track["clips"] if not (c.get("type") == "wipe" and str(c.get("id", "")).startswith("dw"))]
+        # the Director's own earlier wipe ("dw" ids) is redone too, unless it was locked
+        track["clips"] = [c for c in track["clips"] if not (c.get("type") == "wipe" and not c.get("locked")
+                                                            and str(c.get("id", "")).startswith("dw"))]
     if reporter:
         reporter.stage("graphics", "Planning the motion graphics")
     face_for(project, video, cfg, cache, reporter, cancel)
     ctx = Ctx(project, cfg, name, instruction, fixed=fixed_graphics(project))
     if not ctx.words:
         return {"project": project, "count": 0, "style": name, "notes": ["No spoken words, so no graphics."],
-                "fallback": False, "reason": "", "cost": None, "usage": {}, "plan": [], "wipe": None, "removed": removed}
+                "fallback": False, "reason": "", "cost": None, "usage": {}, "plan": [], "wipe": None,
+                "removed": removed}
     if use_ai and provider:
         result = request_plan(ctx, provider, model, cache, cancel)
     else:                       # no AI wanted: the rule-based plan is the plan, not a failure

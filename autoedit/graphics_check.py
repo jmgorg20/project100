@@ -45,7 +45,6 @@ def check_project(project, base_dir=".", cfg=None):
     media = media_by_id(project)
     min_font = float(((cfg or {}).get("graphics") or {}).get("min_font") or MIN_FONT)
     face = zones.FaceMap(project)
-    from .project_render import frame_index
     end_of_video = max((c["start"] + c["duration"] for t in project["tracks"] if t["kind"] == "video"
                         for c in t["clips"]), default=0.0)
     issues = []

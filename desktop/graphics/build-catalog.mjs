@@ -19,7 +19,11 @@ export function catalog() {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const out = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "autoedit", "graphics_catalog.json");
-  writeFileSync(out, JSON.stringify(catalog(), null, 1) + "\n");
-  console.log(`wrote ${out}`);
+  // one copy for the engine, one the app bundles (src/shared); a test checks they are the same
+  const here = dirname(fileURLToPath(import.meta.url));
+  const text = JSON.stringify(catalog(), null, 1) + "\n";
+  for (const out of [join(here, "..", "..", "autoedit", "graphics_catalog.json"), join(here, "..", "src", "shared", "graphics-catalog.json")]) {
+    writeFileSync(out, text);
+    console.log(`wrote ${out}`);
+  }
 }

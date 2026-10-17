@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 
 from autoedit import PROJECT_DIR
-from autoedit.project import new_project
 
 CLI = PROJECT_DIR / "desktop" / "graphics" / "render-cli.mjs"
 

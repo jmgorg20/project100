@@ -16,6 +16,7 @@ import { addFx, addGrade, addTransition, addZoom, setAudioSettings, speedRamp } 
 import { addBroll, replaceBroll, setBrollRequest } from "../../src/shared/brollEdit";
 import type { BrollMeta } from "../../src/shared/types";
 import { addTrackFx } from "../../src/shared/trackEdit";
+import { CATALOG, addGraphic, addWipe, anotherLook, setClipLocked, setGraphic, setWipe } from "../../src/shared/graphicsEdit";
 
 const python = process.platform === "win32" ? "python" : "python3";
 const repo = path.resolve(__dirname, "..", "..", "..");
@@ -33,7 +34,8 @@ function randomEdit(p: Project, r: () => number): Project {
   if (!clips.length) return insertMedia(p, "m1", 0).project;
   const { t, c } = clips[Math.floor(r() * clips.length)];
   const at = r() * (projectDuration(p) + 1);
-  const pick = Math.floor(r() * 25);
+  const pick = Math.floor(r() * 29);
+  if (pick >= 25) return graphicsEdit(p, r, c, at);
   if (pick >= 22) return trackEdit(p, r, t, c, at);
   if (pick >= 19) return brollEdit(p, r, t, c, at);
   if (pick >= 11) return phase2Edit(p, r, pick, t, c, at);
@@ -61,6 +63,24 @@ function randomEdit(p: Project, r: () => number): Project {
     default:
       return moveClip(p, clips.find((x) => x.t.kind !== "video")?.c.id ?? c.id, at).project;
   }
+}
+
+function graphicsEdit(p: Project, r: () => number, c: Project["tracks"][number]["clips"][number], at: number): Project {
+  const pick = Math.floor(r() * 7);
+  const tpl = CATALOG.templates[Math.floor(r() * CATALOG.templates.length)];
+  if (c.type === "graphic" && pick < 4) {
+    if (pick === 0) return anotherLook(p, c.id);
+    if (pick === 1) return setClipLocked(p, c.id, r() < 0.5);
+    if (pick === 2) return setGraphic(p, c.id, { template: tpl.id });
+    return setGraphic(p, c.id, {
+      params: { text: r() < 0.5 ? "Grabe *ANG* galing ñ 🔥" : "", size: r() * 4, intensity: r() * 2 - 0.5, color: r() < 0.5 ? "#ABCDEF" : "red", number: r() * 1e6, font: r() < 0.5 ? "impact" : "nope" },
+      x: r() * 3 - 1, y: r() * 3 - 1,
+      attach: r() < 0.3 ? null : { kind: (["flash", "whip", "punch"] as const)[Math.floor(r() * 3)], intensity: r() * 2 },
+    });
+  }
+  if (c.type === "wipe" && pick < 4) return setWipe(p, c.id, { sweep: r() * 5, stop: r() * 1.2, direction: "up", intensity: r() * 2, divider: r() < 0.5 });
+  if (pick === 6) return addWipe(p, at, "black_and_white", r() * 5).project;
+  return addGraphic(p, tpl.id, at).project;
 }
 
 function trackEdit(p: Project, r: () => number, _t: Project["tracks"][number], c: Project["tracks"][number]["clips"][number], at: number): Project {

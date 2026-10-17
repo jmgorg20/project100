@@ -10,6 +10,7 @@ import type { BrollMeta, BrollStyle, Clip, FxEffect, Media, Project, TrackEffect
 import { mmss } from "../components/Player";
 import { TaskStatus, type BrollTask } from "./BrollPanel";
 import { CaptionEditor } from "./CaptionEditor";
+import { GraphicInspector, type GraphicActions } from "./GraphicInspector";
 
 export interface TrackClipActions {
   /** Following (tracking) is available / running. */
@@ -51,6 +52,7 @@ interface InspectorProps {
   captions: CaptionActions;
   broll: BrollClipActions;
   tracked: TrackClipActions;
+  graphics: GraphicActions;
   /** Shown when nothing is selected (the project's own settings). */
   empty?: ReactNode;
 }
@@ -90,7 +92,7 @@ const SPEEDS = [0.5, 1, 1.5, 2, 3];
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(1)} s`;
 
-export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, broll, tracked, empty }: InspectorProps) {
+export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, broll, tracked, graphics, empty }: InspectorProps) {
   if (selection.length > 1) {
     return (
       <div className="inspector" data-testid="inspector">
@@ -121,6 +123,7 @@ export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDele
     );
   }
   const { track, clip } = found;
+  if (clip.type === "graphic" || clip.type === "wipe") return <GraphicInspector project={project} clip={clip} actions={graphics} onDelete={onDelete} />;
   const allowed = allowedProps(track, clip);
   const m = project.media.find((x) => x.id === clip.media);
   const set = (patch: ClipPatch, key: string) => onProps(clip.id, patch, `${key}:${clip.id}`);

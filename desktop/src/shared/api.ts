@@ -4,6 +4,16 @@ import type {
   Settings, VideoHistory,
 } from "./types";
 
+/** A warning from the engine's graphics check. */
+export interface GraphicsIssue {
+  clip: string;
+  kind: string;
+  severity: string;
+  time: number;
+  message: string;
+  tl: string;
+}
+
 export interface OpenedProject {
   path: string;
   project?: Project;
@@ -194,6 +204,10 @@ export interface AppApi {
   saveRecording(projectPath: string, data: Uint8Array, extension: string): Promise<{ path?: string; error?: string }>;
   /** Transcribe start-end (timeline seconds) again and replace the captions there (saves the project). */
   retranscribe(projectPath: string, start: number, end: number): Promise<{ project?: Project; words?: number; error?: string }>;
+  /** Another look for one graphic (the engine saves the project): by rules, or asking the AI. */
+  graphicsRegenerate(projectPath: string, clipId: string, useAi: boolean, provider: Provider): Promise<{ project?: Project; error?: string }>;
+  /** Graphics on the face, off the screen, on the captions, hard to read (before export). */
+  graphicsCheck(projectPath: string): Promise<{ issues: GraphicsIssue[]; error?: string }>;
   onJobChanged(callback: (job: Job) => void): () => void;
   onHistoryChanged(callback: (history: VideoHistory) => void): () => void;
 }

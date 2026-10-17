@@ -221,7 +221,8 @@ def draw_via_server(url, token, jobs, reporter=None, cancel=None):
         reporter.stage("graphics", "drawing the graphics")
     stop = threading.Event()
     try:
-        response = requests.post(url.rstrip("/") + "/draw", json={"jobs": jobs}, stream=True,
+        response = requests.post(url.rstrip("/") + "/draw", stream=True,
+                                 json={"jobs": jobs, "ffmpeg": find_tool("ffmpeg")},
                                  headers={"x-graphics-token": token or ""}, timeout=(10, 600))
     except requests.RequestException as exc:
         raise EditorError(f"Could not reach the app's graphics drawing service: {exc}")
