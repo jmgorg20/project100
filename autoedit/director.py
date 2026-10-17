@@ -553,7 +553,7 @@ def place_items(ctx, items):
     clear of the other graphics that are on screen at the same time."""
     placed = []
     result = []
-    for it in sorted(items, key=lambda x: (x["start"], -x["importance"])):
+    for it in sorted(items, key=lambda x: (-x["importance"], x["start"])):
         meta = meta_of(it["template"])
         t0, t1 = it["start"], it["end"]
         face = ctx.face.rect(t0, t1)
@@ -593,7 +593,7 @@ def place_items(ctx, items):
         it["x"], it["y"], it["size_final"], it["angle"], it["box"] = round(x, 4), round(y, 4), round(size, 3), angle, box
         placed.append({"box": box, "start": t0, "end": t1})
         result.append(it)
-    return result
+    return sorted(result, key=lambda x: x["start"])
 
 
 def place_pointer(ctx, it, meta, obstacles, face, size):
@@ -774,24 +774,28 @@ def next_ids(project, prefix):
 
 
 def lay_out(project, clips):
-    """Put graphic clips on Graphics tracks (a new lane whenever two overlap in time)."""
-    from .project import assign_lanes
-    existing = [t for t in project["tracks"] if t["kind"] == "graphics"]
-    lanes = assign_lanes([c for c in clips])
-    for i, lane in enumerate(lanes):
-        track = existing[i] if i < len(existing) else None
+    """Put graphic clips on Graphics tracks: the first track where a clip overlaps nothing
+    (locked and own graphics included), else a new "Graphics N" track."""
+    from .project import TIME_TOLERANCE
+
+    def free(track, clip):
+        return all(clip["start"] >= c["start"] + c["duration"] - TIME_TOLERANCE
+                   or clip["start"] + clip["duration"] <= c["start"] + TIME_TOLERANCE for c in track["clips"])
+
+    for clip in sorted(clips, key=lambda c: c["start"]):
+        tracks = [t for t in project["tracks"] if t["kind"] == "graphics"]
+        track = next((t for t in tracks if not t.get("locked") and free(t, clip)), None)
         if track is None:
-            tid = "graphics" if i == 0 and not any(t["id"] == "graphics" for t in project["tracks"]) \
+            n = len(tracks)
+            tid = "graphics" if not any(t["id"] == "graphics" for t in project["tracks"]) \
                 else next(next_ids(project, "graphics-"))
-            track = {"id": tid, "kind": "graphics", "name": "Graphics" if i == 0 else f"Graphics {i + 1}",
+            track = {"id": tid, "kind": "graphics", "name": "Graphics" if n == 0 else f"Graphics {n + 1}",
                      "clips": []}
-            index = max((k for k, t in enumerate(project["tracks"]) if t["kind"] in ("effect", "overlay")),
+            index = max((k for k, t in enumerate(project["tracks"]) if t["kind"] in ("effect", "overlay", "graphics")),
                         default=0) + 1
             project["tracks"].insert(index, track)
-            existing.append(track)
-        track["clips"] += lane
+        track["clips"].append(clip)
         track["clips"].sort(key=lambda c: c["start"])
-    # a lane of an existing track may now overlap its locked clips: move such clips to a new lane
     return project
 
 
@@ -1278,7 +1282,17 @@ def regenerate_item(project, clip_id, cfg, instruction="", provider=None, model=
             probe["start"] = old["start"]
             group = group_of(meta_of(old["template"]))
             alt = choose_template(ctx, {**probe, "mood": raw.get("mood")}, group, Counter(), exclude=exclude)
-            raw["template"] = alt or old["template"]
+            if alt is None and group != "text":
+                # nothing else of this kind: show the same words (or number) as pop-up text
+                if not raw.get("text"):
+                    num = raw.get("number")
+                    raw["text"] = (f"{raw.get('prefix', '')}{num:,}{raw.get('suffix', '')}" if num is not None
+                                   else spoken)
+                probe = {**raw_item(raw), "start": old["start"], "mood": raw.get("mood")}
+                alt = choose_template(ctx, probe, "text", Counter(), exclude=exclude)
+            if alt is None:
+                break
+            raw["template"] = alt
         final = refine_one(ctx, raw)
         if final or template:
             break

@@ -12,9 +12,8 @@ from .styles import get_style
 
 # The part of the frame that apps (TikTok, Reels) do not cover with their own buttons and text.
 SAFE = (40, 150, 1040, 1460)
-FACE_MARGIN = 24                      # keep graphics this far (px) from the face
+FACE_MARGIN = 20                      # keep graphics this far (px) from the face
 CAPTION_MARGIN = 18
-FACE_ASPECT = 1.45                    # the head is this much taller than the face is wide
 DEFAULT_FACE = (320, 380, 760, 920)  # a speaker in the upper middle (no tracking available)
 
 # How tall a caption block is for each zone (px): up to two lines of the usual sizes.
@@ -141,8 +140,8 @@ class FaceMap:
         x, y, size = self.fmap.to_frame(info, sx, sy, ssize)
         x, y, size = self.fmap.zoomed(f, x, y, size)
         width = max(size, 60.0)
-        height = width * FACE_ASPECT
-        return (x - width * 0.75, y - height * 0.62, x + width * 0.75, y + height * 0.62)
+        # the head around the detected face: hair above, the chin a little below
+        return (x - width * 0.65, y - width * 0.78, x + width * 0.65, y + width * 0.62)
 
     def rect(self, t0, t1, step=0.12):
         """The face region over t0..t1 (the union of where it is, sampled every `step` s)."""

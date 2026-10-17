@@ -169,3 +169,70 @@ def test_attached_punch_zooms_the_picture(red):
     del p["tracks"][-1]["clips"][0]["attach"]
     without = frame_png(tmp, p, 1.3, "b.png")
     assert np.abs(with_punch[:1000] - without[:1000]).mean() > 3
+
+
+def test_drawing_through_the_apps_graphics_service(red, monkeypatch, tmp_path):
+    """The desktop app draws graphics in a hidden window and serves /draw; the engine asks it.
+    Here a stand-in service draws with the command-line renderer and streams progress lines."""
+    import http.server
+    import json
+    import subprocess
+    import threading
+    from tests.gfx_helpers import CLI
+    tmp, p = red
+    add_graphics_track(p, [graphic("g1", "stamp", 0, 1, text="Served")])
+    monkeypatch.setenv("AUTOEDIT_GRAPHICS_CACHE", str(tmp_path / "served-cache"))
+    seen = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen["token"] = self.headers.get("x-graphics-token")
+            body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+            spec = tmp_path / "spec.json"
+            spec.write_text(json.dumps(body), encoding="utf-8")
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"type":"progress","done":0,"total":30}\n')
+            subprocess.run(["node", str(CLI), str(spec)], check=True, capture_output=True)
+            self.wfile.write(b'{"type":"done"}\n')
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv("AUTOEDIT_GRAPHICS_URL", f"http://127.0.0.1:{server.server_port}")
+    monkeypatch.setenv("AUTOEDIT_GRAPHICS_TOKEN", "secret-token")
+    try:
+        assert graphics.ensure_assets(p, tmp) == []
+    finally:
+        server.shutdown()
+    assert seen["token"] == "secret-token"
+    assert all(graphics.is_drawn(j) for j in graphics.project_jobs(p, tmp))
+
+
+def test_graphics_service_errors_are_reported(red, monkeypatch, tmp_path):
+    import http.server
+    import threading
+    tmp, p = red
+    add_graphics_track(p, [graphic("g1", "stamp", 0, 1, text="Nope")])
+    monkeypatch.setenv("AUTOEDIT_GRAPHICS_CACHE", str(tmp_path / "c2"))
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["content-length"]))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"type":"error","message":"the window crashed"}\n')
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv("AUTOEDIT_GRAPHICS_URL", f"http://127.0.0.1:{server.server_port}")
+    try:
+        with pytest.raises(Exception, match="the window crashed"):
+            graphics.ensure_assets(p, tmp)
+    finally:
+        server.shutdown()
