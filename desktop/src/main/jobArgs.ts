@@ -23,6 +23,15 @@ export function jobArgs(job: Job, settings: Settings, files: { instructionFile: 
   if (job.maxAiClips !== undefined) args.push("--max-ai-clips", String(job.maxAiClips));
   if (settings.brollFolder) args.push("--broll-library", settings.brollFolder);
   if (!settings.useStock) args.push("--no-stock");
+  if (job.graphics) args.push("--graphics", job.graphics);
+  if (job.format) args.push("--format", job.format);
+  for (const [role, files] of Object.entries(job.formatInputs ?? {})) {
+    for (const file of files) args.push("--input", `${role}=${file}`);
+  }
+  for (const item of job.items ?? []) if (item.trim()) args.push("--item", item.trim());
+  for (const [role, seconds] of Object.entries(job.offsets ?? {})) {
+    if (seconds) args.push("--offset", `${role}=${seconds}`);
+  }
   if (job.photos.length) args.push("--photos", ...job.photos);
   return args;
 }

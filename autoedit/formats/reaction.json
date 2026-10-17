@@ -1,0 +1,54 @@
+{
+  "id": "reaction",
+  "name": "Reaction",
+  "tl": "Reaction",
+  "about": "The video you react to fills the screen; you in a small window with a moving colour border. Emoji pop on your reactions.",
+  "about_tl": "Ang video na ni-re-react-an ay buong screen; ikaw sa maliit na bintana na may gumagalaw na kulay na border. May emoji sa mga reaction mo.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "source",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "The video you react to",
+      "tl": "Ang video na ni-re-react-an"
+    }
+  ],
+  "keywords": [
+    "reaction",
+    "react",
+    "reacting",
+    "nag-react"
+  ],
+  "edit": {},
+  "captions": {
+    "zone": "lower"
+  },
+  "graphics": {},
+  "instruction": "",
+  "steps": [
+    {
+      "op": "layout",
+      "type": "pip",
+      "with": "source",
+      "corner": "top_left",
+      "size": 0.36,
+      "border": "#ff3b6b",
+      "animated": true
+    },
+    {
+      "op": "reactions",
+      "template": "emoji-pop"
+    }
+  ]
+}

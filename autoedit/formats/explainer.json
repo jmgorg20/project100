@@ -1,0 +1,50 @@
+{
+  "id": "explainer",
+  "name": "Educational explainer",
+  "tl": "Paliwanag / tutorial",
+  "about": "Callouts with icons on the key points, your screenshots in a frame where you mention them.",
+  "about_tl": "May callout at icon sa mahahalagang punto, at ang mga screenshot mo kapag binanggit.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "screenshots",
+      "kinds": [
+        "image"
+      ],
+      "required": false,
+      "multiple": true,
+      "label": "Screenshots (named after what they show)",
+      "tl": "Mga screenshot (pangalanan ayon sa ipinapakita)"
+    }
+  ],
+  "keywords": [
+    "explainer",
+    "tutorial",
+    "how to",
+    "paano",
+    "educational",
+    "lesson",
+    "aral"
+  ],
+  "edit": {},
+  "captions": {},
+  "graphics": {
+    "style": "news"
+  },
+  "instruction": "",
+  "steps": [
+    {
+      "op": "callouts",
+      "template": "callout-box",
+      "screenshots": "screenshots"
+    }
+  ]
+}

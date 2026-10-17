@@ -1,0 +1,50 @@
+{
+  "id": "listicle",
+  "name": "Listicle",
+  "tl": "Listahan",
+  "about": "Numbered items pop in as you say them (first, second... / una, pangalawa...).",
+  "about_tl": "Lumalabas ang bawat item na may numero habang sinasabi mo (una, pangalawa...).",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "items",
+      "kinds": [
+        "text"
+      ],
+      "required": false,
+      "multiple": true,
+      "label": "The items (optional, else found in what you say)",
+      "tl": "Ang mga item (kung wala, hahanapin sa sinabi mo)"
+    }
+  ],
+  "keywords": [
+    "listicle",
+    "list",
+    "tips",
+    "steps",
+    "listahan",
+    "mga paraan",
+    "top"
+  ],
+  "edit": {},
+  "captions": {},
+  "graphics": {
+    "style": "minimal"
+  },
+  "instruction": "",
+  "steps": [
+    {
+      "op": "items",
+      "template": "list-item",
+      "sfx": "pop"
+    }
+  ]
+}

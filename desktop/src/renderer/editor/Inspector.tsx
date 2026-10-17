@@ -10,6 +10,7 @@ import type { BrollMeta, BrollStyle, Clip, FxEffect, Media, Project, TrackEffect
 import { mmss } from "../components/Player";
 import { TaskStatus, type BrollTask } from "./BrollPanel";
 import { CaptionEditor } from "./CaptionEditor";
+import { GraphicInspector, type GraphicActions } from "./GraphicInspector";
 
 export interface TrackClipActions {
   /** Following (tracking) is available / running. */
@@ -51,6 +52,7 @@ interface InspectorProps {
   captions: CaptionActions;
   broll: BrollClipActions;
   tracked: TrackClipActions;
+  graphics: GraphicActions;
   /** Shown when nothing is selected (the project's own settings). */
   empty?: ReactNode;
 }
@@ -90,7 +92,7 @@ const SPEEDS = [0.5, 1, 1.5, 2, 3];
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const secs = (v: number) => `${v.toFixed(1)} s`;
 
-export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, broll, tracked, empty }: InspectorProps) {
+export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDelete, captions, broll, tracked, graphics, empty }: InspectorProps) {
   if (selection.length > 1) {
     return (
       <div className="inspector" data-testid="inspector">
@@ -121,6 +123,7 @@ export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDele
     );
   }
   const { track, clip } = found;
+  if (clip.type === "graphic" || clip.type === "wipe") return <GraphicInspector project={project} clip={clip} actions={graphics} onDelete={onDelete} />;
   const allowed = allowedProps(track, clip);
   const m = project.media.find((x) => x.id === clip.media);
   const set = (patch: ClipPatch, key: string) => onProps(clip.id, patch, `${key}:${clip.id}`);
@@ -205,6 +208,53 @@ export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDele
               <Slider label="Left ↔ right" value={crop.x} min={0} max={1} step={0.01} format={pct} onChange={(v) => set({ crop: { ...crop, x: v } }, "crop")} testId="crop-x" />
               <Slider label="Up ↕ down" value={crop.y} min={0} max={1} step={0.01} format={pct} onChange={(v) => set({ crop: { ...crop, y: v } }, "crop")} testId="crop-y" />
               <button className="btn small ghost" onClick={() => set({ crop: { zoom: 1, x: 0.5, y: 0.5 } }, "crop-reset")}>Reset framing</button>
+            </>
+          )}
+        </Section>
+      )}
+
+      {allowed.has("layout") && clip.layout && (
+        <Section title={clip.layout.type === "split" ? "Split screen · Hati ang screen" : "Picture-in-picture · Maliit na bintana"}>
+          <p className="muted small">With {project.media.find((x) => x.id === clip.layout?.screen)?.name ?? "the other video"}. The preview shows only you; use “Exact frame” to see the layout.</p>
+          <label className="insp-field">
+            <span className="insp-label">Layout</span>
+            <select value={clip.layout.type} onChange={(e) => set({ layout: { ...clip.layout!, type: e.target.value as "split" | "pip" } }, "layout")} aria-label="Layout">
+              <option value="split">Split screen</option>
+              <option value="pip">You in a corner window</option>
+            </select>
+          </label>
+          {clip.layout.type === "split" ? (
+            <Slider label="Other video's share" value={clip.layout.ratio ?? 0.6} min={0.3} max={0.7} step={0.01} format={pct} onChange={(v) => set({ layout: { ...clip.layout!, ratio: v } }, "layout-ratio")} testId="layout-ratio" />
+          ) : (
+            <>
+              <label className="insp-field">
+                <span className="insp-label">Corner</span>
+                <select value={clip.layout.corner ?? "top_left"} onChange={(e) => set({ layout: { ...clip.layout!, corner: e.target.value as NonNullable<Clip["layout"]>["corner"] } }, "layout")} aria-label="Corner">
+                  <option value="top_left">Top left</option>
+                  <option value="top_right">Top right</option>
+                  <option value="bottom_left">Bottom left</option>
+                  <option value="bottom_right">Bottom right</option>
+                </select>
+              </label>
+              <Slider label="Window size" value={clip.layout.size ?? 0.33} min={0.2} max={0.6} step={0.01} format={pct} onChange={(v) => set({ layout: { ...clip.layout!, size: v } }, "layout-size")} testId="layout-size" />
+              <label className="insp-field">
+                <span className="insp-label">Moving border</span>
+                <input type="checkbox" checked={Boolean(clip.layout.animated)} onChange={(e) => set({ layout: { ...clip.layout!, animated: e.target.checked } }, "layout")} aria-label="Moving border" />
+              </label>
+            </>
+          )}
+          <Slider label="Other video starts later" value={clip.layout.offset ?? 0} min={-10} max={10} step={0.05} format={secs} onChange={(v) => set({ layout: { ...clip.layout!, offset: v } }, "layout-offset")} testId="layout-offset" />
+        </Section>
+      )}
+
+      {allowed.has("mask") && clip.mask && (
+        <Section title={clip.mask.type === "person" ? "Cut-out · Ikaw lang (person)" : "Green screen · Key"}>
+          {clip.mask.type === "person" ? (
+            <p className="muted small">Only the person is kept (found on this PC by a free model, edges cleaned up). The preview shows the whole picture; use “Exact frame”.</p>
+          ) : (
+            <>
+              <Slider label="Key strength" value={clip.mask.similarity ?? 0.18} min={0.01} max={0.6} step={0.01} format={pct} onChange={(v) => set({ mask: { ...clip.mask!, similarity: v } }, "mask-sim")} testId="mask-similarity" />
+              <Slider label="Soft edge" value={clip.mask.blend ?? 0.06} min={0} max={0.5} step={0.01} format={pct} onChange={(v) => set({ mask: { ...clip.mask!, blend: v } }, "mask-blend")} testId="mask-blend" />
             </>
           )}
         </Section>

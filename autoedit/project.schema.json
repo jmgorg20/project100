@@ -269,7 +269,8 @@
             "overlay",
             "effect",
             "caption",
-            "audio"
+            "audio",
+            "graphics"
           ]
         },
         "name": {
@@ -298,6 +299,24 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "graphics"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/graphicClip"
+                }
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {
@@ -403,7 +422,22 @@
                         "$ref": "#/$defs/trackFxClip"
                       },
                       "else": {
-                        "$ref": "#/$defs/zoomClip"
+                        "if": {
+                          "properties": {
+                            "type": {
+                              "const": "wipe"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        "then": {
+                          "$ref": "#/$defs/wipeClip"
+                        },
+                        "else": {
+                          "$ref": "#/$defs/zoomClip"
+                        }
                       }
                     }
                   }
@@ -519,7 +553,7 @@
             "type",
             "screen"
           ],
-          "description": "Combine with a screen recording that started at the same moment.",
+          "description": "Combine with another video: a screen recording (split: it on top), the video you react to (pip: it fills the screen, you small), or a second video. `offset`: the other video's time = this clip's time + offset.",
           "properties": {
             "type": {
               "enum": [
@@ -529,6 +563,39 @@
             },
             "screen": {
               "$ref": "#/$defs/id"
+            },
+            "ratio": {
+              "type": "number",
+              "minimum": 0.3,
+              "maximum": 0.7,
+              "description": "split: the share of the height for the other video (default 0.6)."
+            },
+            "corner": {
+              "enum": [
+                "top_left",
+                "top_right",
+                "bottom_left",
+                "bottom_right"
+              ],
+              "description": "pip: where you sit (default top_left)."
+            },
+            "size": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 0.6,
+              "description": "pip: your width as a share of the frame (default 0.33)."
+            },
+            "border": {
+              "$ref": "#/$defs/color"
+            },
+            "animated": {
+              "type": "boolean",
+              "description": "pip: the border colour cycles."
+            },
+            "offset": {
+              "type": "number",
+              "minimum": -3600,
+              "maximum": 3600
             }
           }
         },
@@ -669,6 +736,35 @@
         },
         "broll": {
           "$ref": "#/$defs/broll"
+        },
+        "mask": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "description": "Cut out part of the picture: `person` (found by a person segmentation model) or `chroma` (a green / blue screen keyed out).",
+          "properties": {
+            "type": {
+              "enum": [
+                "person",
+                "chroma"
+              ]
+            },
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "similarity": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 0.6
+            },
+            "blend": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.5
+            }
+          }
         }
       },
       "if": {
@@ -1354,6 +1450,252 @@
           "required": [
             "media"
           ]
+        }
+      }
+    },
+    "graphicParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What a graphics template shows: the words, numbers, colours and size. Which of these a template uses is listed in graphics_catalog.json.",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "text2": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "number": {
+          "type": "number"
+        },
+        "prefix": {
+          "type": "string",
+          "maxLength": 8
+        },
+        "suffix": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "image": {
+          "$ref": "#/$defs/id",
+          "description": "Id of an image in `media`."
+        },
+        "emoji": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "font": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "accent": {
+          "$ref": "#/$defs/color"
+        },
+        "bg": {
+          "$ref": "#/$defs/color"
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.4,
+          "maximum": 2.5,
+          "description": "1 = normal size."
+        },
+        "intensity": {
+          "$ref": "#/$defs/intensity"
+        },
+        "align": {
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "case": {
+          "enum": [
+            "",
+            "upper",
+            "lower",
+            "title"
+          ]
+        },
+        "angle": {
+          "type": "number",
+          "minimum": -360,
+          "maximum": 360,
+          "description": "Degrees; 0 = pointing right, 90 = down (arrows)."
+        },
+        "dir": {
+          "enum": [
+            "left",
+            "right",
+            "up",
+            "down"
+          ]
+        }
+      }
+    },
+    "graphicClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "template",
+        "x",
+        "y"
+      ],
+      "description": "A motion graphic (pop-up word, card, pill, counter, arrow, emoji...) drawn from a template. x and y are where its centre sits, as fractions of the frame (0.5, 0.5 = the middle).",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "graphic"
+        },
+        "template": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,48}$"
+        },
+        "params": {
+          "$ref": "#/$defs/graphicParams"
+        },
+        "x": {
+          "type": "number",
+          "minimum": -0.5,
+          "maximum": 1.5
+        },
+        "y": {
+          "type": "number",
+          "minimum": -0.5,
+          "maximum": 1.5
+        },
+        "attach": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "description": "A transition on the picture at the graphic's start (flash, whip or punch-in).",
+          "properties": {
+            "kind": {
+              "enum": [
+                "flash",
+                "whip",
+                "punch"
+              ]
+            },
+            "intensity": {
+              "$ref": "#/$defs/intensity"
+            }
+          }
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked graphic cannot be moved, changed or deleted until unlocked (and the AI will not regenerate it)."
+        },
+        "director": {
+          "type": "object",
+          "description": "Why the AI placed it: the words it belongs to, the mood, the style. Free-form notes."
+        }
+      }
+    },
+    "wipeClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "grade"
+      ],
+      "description": "A before/after wipe: a divider sweeps across the picture; one side shows the colour grade, the other side stays as it was.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "wipe"
+        },
+        "grade": {
+          "enum": [
+            "natural_clean",
+            "none",
+            "warm",
+            "black_and_white",
+            "orange_teal",
+            "high_contrast"
+          ]
+        },
+        "intensity": {
+          "$ref": "#/$defs/intensity"
+        },
+        "direction": {
+          "enum": [
+            "right",
+            "left",
+            "down",
+            "up"
+          ],
+          "description": "The way the divider travels (default right)."
+        },
+        "sweep": {
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 3,
+          "description": "Seconds the divider takes to get there."
+        },
+        "stop": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 0.95,
+          "description": "Where the divider ends, as a fraction of the frame (0.5 = the middle; 0.95 = nearly all graded)."
+        },
+        "divider": {
+          "type": "boolean",
+          "description": "Draw a thin white line at the divider (default true)."
         }
       }
     }

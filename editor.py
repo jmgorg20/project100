@@ -116,6 +116,48 @@ def build_parser():
                                             "(default from config.yaml, broll:)")
     ai.add_argument("--no-stock", action="store_true",
                     help="do not search Pexels/Pixabay for B-roll")
+    ai.add_argument("--graphics", help="motion graphics: auto (when the instruction asks), off, "
+                                       "or a style: promoter, calm_documentary, meme, news, "
+                                       "luxury, minimal (default from config.yaml, graphics:)")
+    ai.add_argument("--format", help="video format: auto (the AI picks), or one of "
+                                     "`python editor.py formats` (e.g. reaction, listicle)")
+    ai.add_argument("--input", action="append", default=[], metavar="ROLE=FILE",
+                    help="another file the format needs, e.g. source=clip.mp4, screen=rec.mp4, "
+                         "takes=take2.mp4 (repeat for more)")
+    ai.add_argument("--item", action="append", default=[], metavar="TEXT",
+                    help="Listicle/Ranking item text, in order (repeat for each item)")
+    ai.add_argument("--offset", action="append", default=[], metavar="ROLE=SECONDS",
+                    help="start the second video this many seconds later (negative: earlier)")
+    ai.add_argument("--voiceover", action="store_true",
+                    help="Voice-over with B-roll: the first file is your voice-over (audio), "
+                         "the --input broll=FILE files go under it")
+
+    sub.add_parser("formats", help="list the video formats (Reaction, Listicle, Clone, ...)")
+
+    gx = sub.add_parser("graphics", help="add motion graphics (pop-up words, cards, counters, "
+                                         "arrows, emoji) to a project with the Director")
+    gx.add_argument("project", help="a .project.json (saved in place unless --output)")
+    gx.add_argument("--style", default="promoter", help="promoter, calm_documentary, meme, news, "
+                                                        "luxury, minimal")
+    gx.add_argument("-i", "--instruction", default="", help="what you want, in plain words")
+    gx.add_argument("--provider", choices=["groq", "anthropic"], help="AI provider")
+    gx.add_argument("--model", help="AI model")
+    gx.add_argument("--no-ai", action="store_true", help="simple rule-based graphics, no AI call")
+    gx.add_argument("--output", help="save the new project here instead")
+    gr = sub.add_parser("graphics-regenerate", help="give one graphic another look")
+    gr.add_argument("project")
+    gr.add_argument("--clip", required=True, help="the graphic's clip id")
+    gr.add_argument("--template", help="use this template")
+    gr.add_argument("--provider", choices=["groq", "anthropic"], help="ask the AI (default: rules)")
+    gr.add_argument("--model")
+    gc = sub.add_parser("graphics-check", help="before export: graphics on the face, off the "
+                                               "screen, on the captions, hard to read")
+    gc.add_argument("project")
+    gj = sub.add_parser("graphics-jobs", help="the graphics of a project that still need drawing "
+                                              "(for the desktop app)")
+    gj.add_argument("project")
+    gj.add_argument("--draw", action="store_true", help="draw them now (needs Node.js + a browser)")
+    sub.add_parser("graphics-catalog", help="list the graphics templates")
 
     sub.add_parser("ui-data", help="print caption styles and layout facts for the desktop app")
 
@@ -166,7 +208,7 @@ def build_parser():
     sub.add_parser("track-status", help="can this PC track hands/face? (MediaPipe + models)")
     tm = sub.add_parser("track-models", help="the MediaPipe model files tracking needs: shows "
                                              "what they are, and downloads them only if you say so")
-    tm.add_argument("--download", nargs="+", choices=["hand", "face", "pose"],
+    tm.add_argument("--download", nargs="+", choices=["hand", "face", "pose", "segment"],
                     help="download these models into models/tracking/")
     tm.add_argument("--yes", action="store_true", help="yes, download them (you read the model pages)")
     th = sub.add_parser("thumbs", help="small pictures along a video for the timeline (cached)")
@@ -585,6 +627,37 @@ def read_plan_file(path):
     return data["plan"] if isinstance(data, dict) and "plan" in data else data
 
 
+def format_inputs(args):
+    """--input role=file, --item text and --offset role=seconds as the format engine's inputs."""
+    from autoedit.errors import EditorError
+    inputs = {}
+    for pair in args.input:
+        role, sep, path = pair.partition("=")
+        if not sep or not role.strip() or not path.strip():
+            raise EditorError(f"--input needs ROLE=FILE, e.g. source=clip.mp4 (got '{pair}').")
+        inputs.setdefault(role.strip(), []).append(path.strip())
+    if args.item:
+        inputs["items"] = list(args.item)
+    for pair in args.offset:
+        role, sep, value = pair.partition("=")
+        try:
+            inputs.setdefault("offsets", {})[role.strip()] = float(value)
+        except ValueError:
+            raise EditorError(f"--offset needs ROLE=SECONDS, e.g. source=1.5 (got '{pair}').")
+        if not sep:
+            raise EditorError(f"--offset needs ROLE=SECONDS (got '{pair}').")
+    return inputs
+
+
+def cmd_formats(args, reporter):
+    from autoedit import formats
+    items = formats.summary()
+    for f in items:
+        roles = ", ".join(("" if i["required"] else "optional ") + i["role"] for i in f["inputs"])
+        print(f"{f['id']:16} {f['name']:24} needs: {roles}")
+    reporter.result(formats=items)
+
+
 def cmd_ai_edit(args, reporter, cancel):
     from autoedit.ai_edit import ai_edit_video
     from autoedit.errors import Cancelled, EditorError
@@ -603,6 +676,18 @@ def cmd_ai_edit(args, reporter, cancel):
         instruction = Path(args.instruction_file).read_text(encoding="utf-8-sig")
     plan = read_plan_file(args.plan_file) if args.plan_file else None
     previous = read_plan_file(args.previous_plan) if args.previous_plan else None
+    inputs = format_inputs(args)
+    if args.voiceover or args.format == "voiceover_broll":
+        from autoedit.ai_edit import voiceover_edit
+        if len(args.videos) != 1:
+            raise EditorError("--voiceover takes one voice-over file.")
+        if not inputs.get("broll"):
+            raise EditorError("--voiceover needs B-roll: --input broll=FILE (repeat for more).")
+        item = voiceover_edit(args.videos[0], inputs["broll"], cfg, instruction, args.provider,
+                              args.model, render=not args.no_render, output=args.output,
+                              reporter=reporter, cancel=cancel, graphics=args.graphics)
+        reporter.result(**item, video=str(args.videos[0]), ok=True)
+        return
     results, failed = [], 0
     for index, video in enumerate(args.videos):
         reporter.event("item", index=index, total=len(args.videos), video=str(Path(video)))
@@ -612,7 +697,8 @@ def cmd_ai_edit(args, reporter, cancel):
                                  previous_plan=previous, plan=plan, reporter=reporter,
                                  cancel=cancel, gen_paths=generation_paths(args),
                                  max_gen_minutes=args.max_generation_minutes,
-                                 max_ai_clips=args.max_ai_clips)
+                                 max_ai_clips=args.max_ai_clips, graphics=args.graphics,
+                                 format=args.format, inputs=inputs)
             item.update(video=str(video), ok=True)
         except Cancelled:
             raise
@@ -740,6 +826,78 @@ def cmd_set_tier(args, reporter):
     reporter.result(default_tier=settings["default_tier"], pinned_tier=settings["pinned_tier"])
 
 
+def cmd_graphics(args, reporter, cancel):
+    from autoedit import director
+    from autoedit.ai_edit import provider_settings
+    from autoedit.cache import Cache
+    from autoedit.project import load_project, save_project
+    cfg = load_config(args.config)
+    path = Path(args.project).resolve()
+    project = load_project(path)
+    provider = model = None
+    if not args.no_ai:
+        provider, model = provider_settings(cfg, args.provider, args.model)
+    cache = Cache(project_path(cfg["ai"]["cache_folder"]))
+    result = director.generate(project, cfg, args.instruction, args.style, provider, model, cache,
+                               reporter, cancel, use_ai=not args.no_ai)
+    if result is None:
+        raise EditorError("Graphics are off (style 'off').")
+    out = save_project(result["project"], Path(args.output).resolve() if args.output else path)
+    print(f"{result['count']} graphics ({result['style']})" + (" - " + result["reason"] if result["reason"] else ""))
+    for note in result["notes"]:
+        print(f"  - {note}")
+    reporter.result(project=str(out), count=result["count"], style=result["style"],
+                    fallback=result["fallback"], reason=result["reason"], notes=result["notes"],
+                    cost=result["cost"])
+
+
+def cmd_graphics_regenerate(args, reporter, cancel):
+    from autoedit import director
+    from autoedit.ai_edit import provider_settings
+    from autoedit.project import load_project, save_project
+    cfg = load_config(args.config)
+    path = Path(args.project).resolve()
+    provider, model = provider_settings(cfg, args.provider, args.model) if args.provider else (None, None)
+    result = director.regenerate_item(load_project(path), args.clip, cfg, provider=provider, model=model,
+                                      cancel=cancel, template=args.template)
+    save_project(result["project"], path)
+    print(f"{args.clip}: now {result['clip']['template']}")
+    reporter.result(project=str(path), clip=result["clip"], notes=result["notes"])
+
+
+def cmd_graphics_check(args, reporter):
+    from autoedit.graphics_check import check_project
+    from autoedit.project import load_project
+    path = Path(args.project).resolve()
+    issues = check_project(load_project(path), path.parent, load_config(args.config))
+    for i in issues:
+        print(f"!!  {i['message']}")
+    if not issues:
+        print("OK  no problems found with the graphics")
+    reporter.result(issues=issues)
+
+
+def cmd_graphics_jobs(args, reporter, cancel):
+    from autoedit import graphics
+    from autoedit.project import load_project
+    path = Path(args.project).resolve()
+    project = load_project(path)
+    if args.draw:
+        graphics.ensure_assets(project, path.parent, reporter, cancel)
+    jobs = graphics.missing_jobs(project, path.parent)
+    print(f"{len(jobs)} graphic(s) still to draw")
+    reporter.result(jobs=jobs, folder=str(graphics.cache_dir()))
+
+
+def cmd_graphics_catalog(args, reporter):
+    from autoedit import director, graphics
+    cat = graphics.catalog()
+    for t in cat["templates"]:
+        print(f"{t['id']:20} {t['category']:8} {', '.join(t['moods'])}")
+    reporter.result(catalog=cat, styles={k: {"label": v["label"], "tl": v["tl"], "about": v["about"]}
+                                         for k, v in director.STYLES.items()})
+
+
 def cmd_validate(args, reporter):
     from autoedit.project import load_project, timeline_duration
     project = load_project(args.project)
@@ -852,6 +1010,18 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_peaks(args, reporter)
         elif args.command == "thumbs":
             cmd_thumbs(args, reporter)
+        elif args.command == "formats":
+            cmd_formats(args, reporter)
+        elif args.command == "graphics":
+            cmd_graphics(args, reporter, cancel)
+        elif args.command == "graphics-regenerate":
+            cmd_graphics_regenerate(args, reporter, cancel)
+        elif args.command == "graphics-check":
+            cmd_graphics_check(args, reporter)
+        elif args.command == "graphics-jobs":
+            cmd_graphics_jobs(args, reporter, cancel)
+        elif args.command == "graphics-catalog":
+            cmd_graphics_catalog(args, reporter)
         elif args.command == "track":
             cmd_track(args, reporter, cancel)
         elif args.command == "track-status":

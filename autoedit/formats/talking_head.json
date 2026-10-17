@@ -1,0 +1,28 @@
+{
+  "id": "talking_head",
+  "name": "Talking head",
+  "tl": "Nagsasalita sa camera",
+  "about": "You talking to the camera: pauses cut, punch-in zooms, captions.",
+  "about_tl": "Ikaw na nagsasalita: tinanggal ang mga hinto, may zoom at captions.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    }
+  ],
+  "keywords": [
+    "talking head",
+    "simple",
+    "basic"
+  ],
+  "edit": {},
+  "captions": {},
+  "graphics": {},
+  "instruction": "",
+  "steps": []
+}

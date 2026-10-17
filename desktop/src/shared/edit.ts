@@ -51,6 +51,7 @@ export function mustFind(p: Project, id: string): Found {
   const f = findClip(p, id);
   if (!f) throw new EditError("That clip is no longer on the timeline.");
   if (f.track.locked) throw new EditError(`The ${f.track.name ?? f.track.id} track is locked. Unlock it first.`);
+  if (f.clip.locked) throw new EditError("This clip is locked. Unlock it first.");
   return f;
 }
 
@@ -189,12 +190,12 @@ function cutFromClip(c: Clip, a: number, b: number, taken: Set<string>, p: Proje
 
 function cutRange(track: Track, a: number, b: number, taken: Set<string>, p: Project): Track {
   if (track.locked || isMain(track) || b - a <= EPS) return track;
-  return { ...track, clips: track.clips.flatMap((c) => cutFromClip(c, a, b, taken, p)) };
+  return { ...track, clips: track.clips.flatMap((c) => (c.locked ? [c] : cutFromClip(c, a, b, taken, p))) };
 }
 
 function openSpace(track: Track, at: number, d: number): Track {
   if (track.locked || isMain(track) || Math.abs(d) <= EPS) return track;
-  return { ...track, clips: track.clips.map((c) => (c.start >= at - EPS ? { ...c, start: r4(c.start + d) } : c)) };
+  return { ...track, clips: track.clips.map((c) => (c.start >= at - EPS && !c.locked ? { ...c, start: r4(c.start + d) } : c)) };
 }
 
 /**
@@ -289,7 +290,7 @@ export function splitAt(p: Project, t: number, ids?: string[]): Project {
   for (const track of p.tracks) {
     if (track.locked) continue;
     for (const c of track.clips) {
-      if (ids && !ids.includes(c.id)) continue;
+      if (c.locked || (ids && !ids.includes(c.id))) continue;
       if (t < c.start + min - EPS || t > clipEnd(c) - min + EPS) continue;
       try {
         q = splitClip(q, c.id, t).project;
@@ -506,7 +507,7 @@ export function setSpeed(p: Project, id: string, speed: number): Project {
 }
 
 export type ClipPatch = Partial<
-  Pick<Clip, "volume" | "fade_in" | "fade_out" | "opacity" | "crop" | "fit" | "x" | "y" | "width" | "height" | "animation" | "amount" | "anchor_y" | "grade" | "label" | "ease" | "intensity" | "effect" | "point" | "hand" | "size" | "smooth" | "color" | "blend" | "media">
+  Pick<Clip, "volume" | "fade_in" | "fade_out" | "opacity" | "crop" | "fit" | "x" | "y" | "width" | "height" | "animation" | "amount" | "anchor_y" | "grade" | "label" | "ease" | "intensity" | "effect" | "point" | "hand" | "size" | "smooth" | "color" | "blend" | "media" | "layout" | "mask">
 >;
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -518,7 +519,11 @@ export function allowedProps(track: Track, clip: Clip): Set<keyof ClipPatch> {
   if (track.kind === "video") {
     add("fit", "crop");
     if (clip.type === "video") add("volume", "fade_in", "fade_out");
-  } else if (track.kind === "overlay") add("x", "y", "width", "height", "opacity", "animation");
+    if (clip.type === "video" && clip.layout) add("layout");
+  } else if (track.kind === "overlay") {
+    add("x", "y", "width", "height", "opacity", "animation");
+    if (clip.mask) add("mask");
+  }
   else if (track.kind === "audio") add("volume", "fade_in", "fade_out");
   else if (clip.type === "zoom") add("amount", "anchor_y", "ease");
   else if (clip.type === "grade") add("grade", "intensity");
@@ -545,6 +550,21 @@ export function setClipProps(p: Project, id: string, patch: ClipPatch): Project 
       const e = r4(clamp(patch.ease, 0, 3));
       if (e > 0) n.ease = e;
       else delete n.ease;
+    }
+    if (patch.layout && c.layout) {
+      // A format's split / picture-in-picture: the other video stays; only its look changes.
+      const l = { ...c.layout, ...patch.layout, type: patch.layout.type ?? c.layout.type, screen: c.layout.screen };
+      if (l.ratio !== undefined) l.ratio = r4(clamp(l.ratio, 0.3, 0.7));
+      if (l.size !== undefined) l.size = r4(clamp(l.size, 0.2, 0.6));
+      if (l.offset !== undefined) l.offset = r4(clamp(l.offset, -3600, 3600));
+      if (!l.offset) delete l.offset;
+      n.layout = l;
+    }
+    if (patch.mask && c.mask) {
+      const m = { ...c.mask, ...patch.mask };
+      if (m.similarity !== undefined) m.similarity = r4(clamp(m.similarity, 0.01, 0.6));
+      if (m.blend !== undefined) m.blend = r4(clamp(m.blend, 0, 0.5));
+      n.mask = m;
     }
     if (patch.width !== undefined) n.width = Math.max(1, r4(patch.width));
     if (patch.height !== undefined) n.height = Math.max(1, r4(patch.height));

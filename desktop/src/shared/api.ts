@@ -4,6 +4,16 @@ import type {
   Settings, VideoHistory,
 } from "./types";
 
+/** A warning from the engine's graphics check. */
+export interface GraphicsIssue {
+  clip: string;
+  kind: string;
+  severity: string;
+  time: number;
+  message: string;
+  tl: string;
+}
+
 export interface OpenedProject {
   path: string;
   project?: Project;
@@ -88,7 +98,7 @@ export interface TrackStatus {
   face: boolean;
   pose: boolean;
   problems: string[];
-  models: { kind: "hand" | "face" | "pose"; file: string; url: string; page: string; size: string; path: string; present: boolean }[];
+  models: { kind: "hand" | "face" | "pose" | "segment"; file: string; url: string; page: string; size: string; path: string; present: boolean }[];
 }
 
 export interface TrackUpdate {
@@ -133,6 +143,8 @@ export interface AppApi {
   clearKey(provider: KeyName): Promise<KeysStatus>;
   pickVideos(): Promise<string[]>;
   pickPhotos(): Promise<string[]>;
+  /** Files for a video format's role ("video" / "image" / "audio"). */
+  pickFormatFiles(kinds: string[], multiple: boolean): Promise<string[]>;
   addJobs(requests: JobRequest[]): Promise<Job[]>;
   listJobs(): Promise<Job[]>;
   cancelJob(id: string): Promise<void>;
@@ -184,7 +196,7 @@ export interface AppApi {
   cancelTrack(taskId: string): Promise<void>;
   onTrack(callback: (update: TrackUpdate) => void): () => void;
   /** Download model files (only after the user confirmed: see TrackStatus.models for the sources). */
-  downloadTrackModels(kinds: ("hand" | "face" | "pose")[]): Promise<TrackStatus | { error: string }>;
+  downloadTrackModels(kinds: ("hand" | "face" | "pose" | "segment")[]): Promise<TrackStatus | { error: string }>;
   // ---- B-roll
   startBroll(request: BrollRequest): Promise<string>;
   cancelBroll(taskId: string): Promise<void>;
@@ -194,6 +206,10 @@ export interface AppApi {
   saveRecording(projectPath: string, data: Uint8Array, extension: string): Promise<{ path?: string; error?: string }>;
   /** Transcribe start-end (timeline seconds) again and replace the captions there (saves the project). */
   retranscribe(projectPath: string, start: number, end: number): Promise<{ project?: Project; words?: number; error?: string }>;
+  /** Another look for one graphic (the engine saves the project): by rules, or asking the AI. */
+  graphicsRegenerate(projectPath: string, clipId: string, useAi: boolean, provider: Provider): Promise<{ project?: Project; error?: string }>;
+  /** Graphics on the face, off the screen, on the captions, hard to read (before export). */
+  graphicsCheck(projectPath: string): Promise<{ issues: GraphicsIssue[]; error?: string }>;
   onJobChanged(callback: (job: Job) => void): () => void;
   onHistoryChanged(callback: (history: VideoHistory) => void): () => void;
 }

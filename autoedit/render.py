@@ -79,17 +79,23 @@ def layout_filters(job):
     return layout_chain(job.layout, "0:v", "1:v", "base", job.fps, "scr")
 
 
-def layout_chain(layout, face, screen, out, fps, tag):
+PIP_CORNERS = {"top_left": (40, 190), "top_right": (None, 190), "bottom_left": (40, None),
+               "bottom_right": (None, None)}
+
+
+def layout_chain(layout, face, screen, out, fps, tag, opts=None):
     """Filters that turn `face` (and `screen`) into one 1080x1920 picture labelled [out].
 
     `tag` keeps the intermediate labels unique when several chains share one graph.
+    `opts`: the layout's settings (split: ratio; pip: corner, size, border, animated).
     """
+    opts = opts or {}
     if layout == "face":
         return [f"[{face}]{fill(fps)}[{out}]"]
     if layout == "screen":
         return fit_over_blur(face, out, W, H, fps, tag)
     if layout == "split":
-        top_h = 1152                      # screen recording: top 60%
+        top_h = int(round(H * float(opts.get("ratio", 0.6)) / 2)) * 2   # the other video on top
         face_h = H - top_h
         return [
             # tpad: if the recording is shorter than the face video, hold its last frame
@@ -101,14 +107,29 @@ def layout_chain(layout, face, screen, out, fps, tag):
             f"[{tag}facecanvas][{tag}top]overlay=0:0:shortest=1[{out}]",
         ]
     if layout == "pip":
-        return [
+        pw = int(round(W * float(opts.get("size", 360 / W)) / 2)) * 2
+        ph = int(round(pw * 4 / 3 / 2)) * 2
+        b = 6
+        corner = opts.get("corner", "top_left")
+        x, y = PIP_CORNERS.get(corner, PIP_CORNERS["top_left"])
+        x = x if x is not None else W - pw - 2 * b - 40
+        y = y if y is not None else H - ph - 2 * b - 470      # above the captions and app buttons
+        color = "0x" + str(opts.get("border", "#ffffff")).lstrip("#")
+        lines = [
             f"[{screen}]tpad=stop_mode=clone:stop=-1[{tag}src]",
             *fit_over_blur(f"{tag}src", f"{tag}full", W, H, fps, tag),
-            f"[{face}]setpts=PTS-STARTPTS,fps={fps},scale=360:480:force_original_aspect_ratio="
-            f"increase,crop=360:480,setsar=1,pad=372:492:6:6:white[{tag}pip]",
-            # Face top-left, below the app's top bar and away from the right-side buttons.
-            f"[{tag}full][{tag}pip]overlay=40:190:shortest=1[{out}]",
+            f"[{face}]setpts=PTS-STARTPTS,fps={fps},scale={pw}:{ph}:force_original_aspect_ratio="
+            f"increase,crop={pw}:{ph},setsar=1[{tag}face]",
         ]
+        if opts.get("animated"):
+            # a frame whose colour cycles: a solid colour turned round the colour wheel over time
+            lines += [f"color=c={color}:s={pw + 2 * b}x{ph + 2 * b}:r={fps},format=yuv444p,"
+                      f"hue=h='t*120':s=2[{tag}frame]",
+                      f"[{tag}frame][{tag}face]overlay={b}:{b}:shortest=1[{tag}pip]"]
+        else:
+            lines += [f"[{tag}face]pad={pw + 2 * b}:{ph + 2 * b}:{b}:{b}:{color}[{tag}pip]"]
+        lines.append(f"[{tag}full][{tag}pip]overlay={x}:{y}:shortest=1[{out}]")
+        return lines
     raise ValueError(f"unknown layout {layout}")
 
 

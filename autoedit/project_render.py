@@ -176,6 +176,21 @@ def main_segments(project, media, fps, total_frames):
     return segments
 
 
+def screen_seek(layout, source, length):
+    """Input options that start the other video of a layout where it should be (its offset)."""
+    at = source + float(layout.get("offset", 0.0))
+    args = ["-ss", f"{at:.4f}"] if at > 0 else []
+    if length is not None:
+        args += ["-t", f"{length:.4f}"]
+    return args
+
+
+def screen_delay(layout, source):
+    """Filters that hold back the other video when it starts later than this clip (negative offset)."""
+    at = source + float(layout.get("offset", 0.0))
+    return f"tpad=start_duration={-at:.4f}:start_mode=clone," if at < 0 else ""
+
+
 def add_main_track(graph, project, media, base_dir, fps, total_frames, with_audio):
     """Add the main track to the graph. Returns the (video, audio) labels."""
     block = AUDIO_RATE // fps
@@ -209,11 +224,12 @@ def add_main_track(graph, project, media, base_dir, fps, total_frames, with_audi
             screen = None
             if seg.layout:
                 mode = seg.layout["type"]
-                sidx = graph.add_input([*seek, "-i", resolve_media_path(
+                sidx = graph.add_input([*screen_seek(seg.layout, source, length), "-i", resolve_media_path(
                     media[seg.layout["screen"]], base_dir)])
-                graph.add(f"[{sidx}:v]setpts=(PTS-STARTPTS)/{seg.speed:g}[m{k}sspd]")
+                graph.add(f"[{sidx}:v]{screen_delay(seg.layout, source)}setpts=(PTS-STARTPTS)/{seg.speed:g}"
+                          f"[m{k}sspd]")
                 screen = f"m{k}sspd"
-                graph.add(*layout_chain(mode, f"m{k}spd", screen, f"m{k}pic", fps, f"m{k}"))
+                graph.add(*layout_chain(mode, f"m{k}spd", screen, f"m{k}pic", fps, f"m{k}", seg.layout))
             elif seg.fit == "blur":
                 graph.add(*layout_chain("screen", f"m{k}spd", None, f"m{k}pic", fps, f"m{k}"))
             else:
@@ -232,9 +248,13 @@ def add_main_track(graph, project, media, base_dir, fps, total_frames, with_audi
             screen = None
             if seg.layout:
                 mode = seg.layout["type"]
-                sidx = graph.add_input(["-i", resolve_media_path(media[seg.layout["screen"]],
-                                                                  base_dir)])
+                sidx = graph.add_input([*screen_seek(seg.layout, 0.0, None), "-i",
+                                        resolve_media_path(media[seg.layout["screen"]], base_dir)])
                 screen = f"{sidx}:v"
+                delay = screen_delay(seg.layout, 0.0)
+                if delay:
+                    graph.add(f"[{screen}]{delay.rstrip(',')}[m{k}sdel]")
+                    screen = f"m{k}sdel"
             else:
                 mode = "screen" if seg.fit == "blur" else "face"
             keep = "+".join(f"gte(t,{s - half:.4f})*lt(t,{s + c / fps - half:.4f})"
@@ -242,7 +262,8 @@ def add_main_track(graph, project, media, base_dir, fps, total_frames, with_audi
             if mode == "face":
                 graph.add(*fill_chain(f"{idx}:v", f"m{k}pic", fps, seg.crop))
             else:
-                graph.add(*layout_chain(mode, f"{idx}:v", screen, f"m{k}pic", fps, f"m{k}"))
+                graph.add(*layout_chain(mode, f"{idx}:v", screen, f"m{k}pic", fps, f"m{k}",
+                                        seg.layout))
             graph.add(f"[m{k}pic]select='{keep}',setpts='round(N/{fps}/TB)',{exact}[{v}]")
             if with_audio and seg.media.get("has_audio", True) and seg.volume > 0:
                 has_sound = True
@@ -371,6 +392,47 @@ def add_grades(graph, current, project, fps, total_frames):
     return current
 
 
+def wipe_expression(t0, sweep, stop, direction, divider):
+    """FFmpeg `blend` expression for a before/after wipe. A = the picture as it was (first input),
+    B = the graded picture. The divider travels from one edge to `stop` (a fraction of the frame)
+    over `sweep` seconds, easing out, and stays there; the graded side is the one it has passed."""
+    horizontal = direction in ("right", "left")
+    axis, extent = ("X", "W") if horizontal else ("Y", "H")
+    travel = f"{extent}*{stop:g}*ld(0)"
+    pos = travel if direction in ("right", "down") else f"{extent}-{travel}"
+    graded = f"lt({axis},ld(1))" if direction in ("right", "down") else f"gt({axis},ld(1))"
+    pick = f"if({graded},B,A)"
+    if divider:
+        pick = f"if(gt(ld(0),0.001)*lt(abs({axis}-ld(1)),2.5),255,{pick})"
+    return (f"st(0,1-pow(1-clip((T-{t0:.4f})/{sweep:g},0,1),3));st(1,{pos});{pick}")
+
+
+def add_wipes(graph, current, project, fps):
+    """Before/after wipes: one side of a moving divider shows a colour grade (see wipe_expression)."""
+    k = 0
+    for track in visible_tracks(project, "effect"):
+        for clip in sorted(track["clips"], key=lambda c: c["start"]):
+            if clip["type"] != "wipe":
+                continue
+            f0, f1 = clip_frames(clip, fps)
+            if f1 <= f0:
+                continue
+            expr = wipe_expression(f0 / fps, float(clip.get("sweep", 0.8)),
+                                   float(clip.get("stop", 0.5)), clip.get("direction", "right"),
+                                   bool(clip.get("divider", True)))
+            on = f"enable='{frames_expression([(f0, f1)], fps)}'"
+            graph.add(f"[{current}]split[wipea{k}][wipeb{k}]")
+            graded(graph, f"wipeb{k}", f"wipeg{k}", clip["grade"], float(clip.get("intensity", 1.0)),
+                   f"wp{k}")
+            # blend does not use RGB values the way "screen" does, but gbrp keeps every plane the
+            # same size, so X / Y / W / H mean the same thing in all three planes
+            graph.add(f"[wipea{k}]format=gbrp[wipeo{k}]", f"[wipeg{k}]format=gbrp[wipef{k}]",
+                      f"[wipeo{k}][wipef{k}]blend=all_expr='{expr}':{on}[wipe{k}]")
+            current = f"wipe{k}"
+            k += 1
+    return current
+
+
 def triangle(t0, d):
     """0 at the start and end of [t0, t0 + d], 1 in the middle (FFmpeg expression in t)."""
     return f"max(0,1-abs(2*(t-{t0 + d / 2:.4f})/{d:.4f}))"
@@ -432,7 +494,23 @@ def add_trackfx(graph, current, layer, fps, total_frames):
     return "tfxout"
 
 
-def add_overlays(graph, current, project, media, base_dir, fps):
+def add_graphics(graph, current, layers, fps):
+    """Lay the drawn graphics (videos with transparency) over the picture, each for its frames."""
+    for k, layer in enumerate(layers):
+        idx = graph.add_input(["-i", layer["path"]])
+        f0, f1 = layer["f0"], layer["f1"]
+        graph.add(f"[{idx}:v]setpts=PTS-STARTPTS+{f0 / fps:.5f}/TB,format=rgba[gfx{k}]",
+                  f"[{current}][gfx{k}]overlay=x={layer['x']}:y={layer['y']}:eof_action=pass:"
+                  f"enable='{frames_expression([(f0, f1)], fps)}'[gfxout{k}]")
+        current = f"gfxout{k}"
+    return current
+
+
+def add_overlays(graph, current, project, media, base_dir, fps, masks=None):
+    """Photos, B-roll and cut-outs over the picture. A clip with `mask` is cut out first: a
+    green/blue screen keyed out (chroma), or a person mask video (masks[clip id], see segment.py)."""
+    from .segment import chroma_filter
+    masks = masks or {}
     k = 0
     for track in visible_tracks(project, "overlay"):
         for clip in sorted(track["clips"], key=lambda c: c["start"]):
@@ -450,8 +528,23 @@ def add_overlays(graph, current, project, media, base_dir, fps):
                                        "-i", path])
             speed = float(clip.get("speed", 1.0)) if clip["type"] == "video" else 1.0
             pts = "PTS-STARTPTS" if speed == 1 else f"(PTS-STARTPTS)/{speed:g}"
-            chain = (f"[{idx}:v]setpts={pts},fps={fps},trim=duration={d:.4f},"
-                     f"scale=w={round(clip['width'])}:h={round(clip['height'])}:"
+            src = f"[{idx}:v]setpts={pts},fps={fps},trim=duration={d:.4f},"
+            mask = clip.get("mask")
+            if mask and mask["type"] == "chroma":
+                src += chroma_filter(mask.get("color", "#00ff00"), mask.get("similarity", 0.18),
+                                     mask.get("blend", 0.06)) + ","
+            elif mask and mask["type"] == "person" and clip["id"] in masks:
+                m = media[clip["media"]]
+                midx = graph.add_input(["-i", masks[clip["id"]]])
+                graph.add(f"[{midx}:v]setpts={pts},fps={fps},trim=duration={d:.4f},"
+                          f"scale={m.get('width') or W}:{m.get('height') or H},format=gray[ovm{k}]",
+                          f"{src}format=yuv420p,scale={m.get('width') or W}:{m.get('height') or H}"
+                          f"[ovs{k}]",
+                          f"[ovs{k}][ovm{k}]alphamerge[ova{k}]")
+                src = f"[ova{k}]"
+            elif mask and mask["type"] == "person":
+                raise EditorError(f"The cut-out of clip '{clip['id']}' has no person mask yet.")
+            chain = (f"{src}scale=w={round(clip['width'])}:h={round(clip['height'])}:"
                      f"force_original_aspect_ratio=decrease,format=rgba")
             if clip.get("animation", "none") == "pop":
                 chain += (f",scale=w='trunc(iw*({pop_scale_expression(d)})/2)*2':h=-2:eval=frame,"
@@ -620,11 +713,12 @@ def add_audio_tracks(graph, project, media, base_dir, fps, dialog):
 # ---------------------------------------------------------------- the command
 
 def build_command(project, base_dir, output, ass_name=None, export=None, frame=None,
-                  trackfx=None):
+                  trackfx=None, graphics=None, masks=None):
     """Return (input_args, filter_graph_text, output_args).
 
     `frame`: render only this frame number (0-based) to `output` as a picture.
     `trackfx`: the drawn tracked-effect video {"path", "f0", "f1"} (see trackfx.prepare_layer).
+    `graphics`: the drawn motion graphics (graphics.render_layers), laid over the picture.
     """
     export = {**DEFAULT_EXPORT, **(export or {})}
     fps = project["settings"]["fps"]
@@ -638,10 +732,13 @@ def build_command(project, base_dir, output, ass_name=None, export=None, frame=N
                                      with_audio)
     current = add_zooms(graph, current, project, fps)
     current = add_grades(graph, current, project, fps, total_frames)
+    current = add_wipes(graph, current, project, fps)
     current = add_fx(graph, current, project, fps)
     if trackfx:
         current = add_trackfx(graph, current, trackfx, fps, total_frames)
-    current = add_overlays(graph, current, project, media, base_dir, fps)
+    current = add_overlays(graph, current, project, media, base_dir, fps, masks)
+    if graphics:
+        current = add_graphics(graph, current, graphics, fps)
     if ass_name:
         graph.add(f"[{current}]subtitles={ass_name}:fontsdir=fonts[capout]")
         current = "capout"
@@ -694,12 +791,43 @@ def check_media_files(project, base_dir):
                           + "\n  ".join(missing))
 
 
+def prepare_masks(project, base_dir, reporter=None, cancel=None, cfg=None):
+    """Person masks for the cut-out clips ({clip id: mask video}), made and cached by segment.py."""
+    from . import segment
+    fps = project["settings"]["fps"]
+    media = media_by_id(project)
+    out = {}
+    for track in visible_tracks(project, "overlay"):
+        for clip in track["clips"]:
+            if (clip.get("mask") or {}).get("type") != "person" or clip["type"] != "video":
+                continue
+            path = resolve_media_path(media[clip["media"]], base_dir)
+            speed = float(clip.get("speed", 1.0))
+            out[clip["id"]] = str(segment.person_mask(path, clip["in"], clip["out"], fps * speed if speed != 1
+                                                      else fps, cfg, cancel, reporter))
+    return out
+
+
+def prepare_graphics(project, base_dir, reporter=None, cancel=None, mode="require"):
+    """Make sure the project's motion graphics are drawn; return their layers for build_command."""
+    from . import graphics
+    if not graphics.graphic_clips(project):
+        return []
+    graphics.ensure_assets(project, base_dir, reporter, cancel, mode)
+    return graphics.render_layers(project, base_dir)
+
+
 def _run(project, output, base_dir, work_dir, fonts_folder, export, reporter, cancel,
-         keep_work, frame, description):
+         keep_work, frame, description, graphics_mode="require"):
     check_ffmpeg()
     check_project(project)
     base_dir = Path(base_dir or ".").resolve()
     check_media_files(project, base_dir)
+    from . import graphics as graphics_mod
+    gfx_layers = prepare_graphics(project, base_dir, reporter, cancel, graphics_mode)
+    masks = prepare_masks(project, base_dir, reporter, cancel)
+    # flash / whip / punch-in transitions that belong to graphics are real effect clips here
+    project = graphics_mod.expand_attachments(project)
     fonts_folder = Path(fonts_folder or PROJECT_DIR / "assets" / "fonts")
     own_work = work_dir is None
     job = Path(tempfile.mkdtemp(prefix="render-") if own_work else work_dir)
@@ -716,7 +844,7 @@ def _run(project, output, base_dir, work_dir, fonts_folder, export, reporter, ca
             (job / ass_name).write_text(ass_text, encoding="utf-8")
         layer = prepare_trackfx(project, base_dir, job, frame, cancel, reporter)
         inputs, graph, outputs = build_command(project, base_dir, part, ass_name, export, frame,
-                                               trackfx=layer)
+                                               trackfx=layer, graphics=gfx_layers, masks=masks)
         script = job / "filters.txt"
         script.write_text(graph, encoding="utf-8")
         fps = project["settings"]["fps"]

@@ -20,6 +20,7 @@ const api: AppApi = {
   clearKey: (provider) => ipcRenderer.invoke("keys:clear", provider),
   pickVideos: () => ipcRenderer.invoke("dialog:videos"),
   pickPhotos: () => ipcRenderer.invoke("dialog:photos"),
+  pickFormatFiles: (kinds, multiple) => ipcRenderer.invoke("dialog:formatFiles", kinds, multiple),
   addJobs: (requests) => ipcRenderer.invoke("jobs:add", requests),
   listJobs: () => ipcRenderer.invoke("jobs:list"),
   cancelJob: (id) => ipcRenderer.invoke("jobs:cancel", id),
@@ -65,6 +66,8 @@ const api: AppApi = {
   pickFolder: (title) => ipcRenderer.invoke("dialog:folder", title),
   saveRecording: (projectPath, data, extension) => ipcRenderer.invoke("media:saveRecording", projectPath, data, extension),
   retranscribe: (projectPath, start, end) => ipcRenderer.invoke("project:retranscribe", projectPath, start, end),
+  graphicsRegenerate: (projectPath, clipId, useAi, provider) => ipcRenderer.invoke("graphics:regenerate", projectPath, clipId, useAi, provider),
+  graphicsCheck: (projectPath) => ipcRenderer.invoke("graphics:check", projectPath),
   onJobChanged: (callback) => listen<Job>("job:changed", callback),
   onHistoryChanged: (callback) => listen<VideoHistory>("history:changed", callback),
 };

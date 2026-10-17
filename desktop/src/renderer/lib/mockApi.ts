@@ -8,6 +8,7 @@ import type {
   CompareResult, EngineEvent, TrackData, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Media, Plan, Project, Settings, Summary, Track, VideoHistory,
 } from "../../shared/types";
 import { CONTENT_TYPES } from "../../shared/types";
+import { anotherLook, templateMeta } from "../../shared/graphicsEdit";
 
 interface Fixture {
   project: Project;
@@ -52,12 +53,14 @@ export function createMockApi(): AppApi {
     brollRequests: BrollRequest[];
     trackStarts: string[];
     trackDownloads: string[][];
+    graphicsRegenerated: { clip: string; ai: boolean }[];
   };
   w.vocabulary = { words: ["GCash", "Shopee"], corrections: [{ from: "g cash", to: "GCash" }] };
   w.recordings = [];
   w.brollRequests = [];
   w.trackStarts = [];
   w.trackDownloads = [];
+  w.graphicsRegenerated = [];
   // Tracking: ?track=none (MediaPipe not installed), ?track=models (installed, no model files), else ready.
   const trackMode = params.get("track") ?? "ready";
   const trackModels: TrackStatus["models"] = (["hand", "face", "pose"] as const).map((kind) => ({
@@ -264,6 +267,8 @@ export function createMockApi(): AppApi {
     pickVideos: async () =>
       params.get("scenario") === "parity" ? ["C:/Videos/parity.mp4"] : ["C:/Videos/demo_talk.mp4", "C:/Videos/demo_talk_2.mp4"],
     pickPhotos: async () => ["C:/Videos/github_logo.png"],
+    pickFormatFiles: async (kinds) =>
+      kinds.includes("video") ? ["C:/Videos/reaction_source.mp4"] : kinds.includes("audio") ? ["C:/Videos/vo.wav"] : ["C:/Videos/background.png"],
     addJobs: async (requests) => {
       (window as unknown as { lastJobRequests: JobRequest[] }).lastJobRequests = requests;
       return enqueue(requests);
@@ -493,6 +498,37 @@ export function createMockApi(): AppApi {
       caps.clips.sort((a, b) => a.start - b.start);
       w.savedProjects.push({ path: projectPath, project });
       return { project, words: 2 };
+    },
+    graphicsRegenerate: async (projectPath, clipId, useAi) => {
+      await wait(200 / speed);
+      const saved = [...w.savedProjects].reverse().find((x) => x.path === projectPath);
+      if (!saved) return { error: "The project was not saved." };
+      w.graphicsRegenerated.push({ clip: clipId, ai: useAi });
+      try {
+        const project = anotherLook(structuredClone(saved.project), clipId);
+        w.savedProjects.push({ path: projectPath, project });
+        return { project };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    },
+    graphicsCheck: async (projectPath) => {
+      // The stand-in checks one thing like the engine: a graphic over the usual face area.
+      const saved = [...w.savedProjects].reverse().find((x) => x.path === projectPath);
+      const issues = [];
+      for (const t of saved?.project.tracks ?? []) {
+        for (const c of t.kind === "graphics" ? t.clips : []) {
+          const meta = templateMeta(c.template);
+          if (!meta) continue;
+          const k = c.params?.size ?? 1;
+          const [cx, cy] = [(c.x ?? 0.5) * 1080, (c.y ?? 0.5) * 1920];
+          const [w2, h2] = [(meta.box.w * k) / 2, (meta.box.h * k) / 2];
+          if (cx - w2 < 760 && cx + w2 > 320 && cy - h2 < 920 && cy + h2 > 380) {
+            issues.push({ clip: c.id, kind: "face", severity: "warn", time: c.start, message: `'${meta.name}' at ${c.start.toFixed(1)}s covers the speaker's face.`, tl: `Natatakpan ang mukha.` });
+          }
+        }
+      }
+      return { issues };
     },
     cancelExport: async (taskId) => {
       stoppedExports.add(taskId);

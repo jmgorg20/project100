@@ -1,0 +1,45 @@
+{
+  "id": "green_screen",
+  "name": "Green screen",
+  "tl": "Green screen",
+  "about": "Your background replaced by a picture or video: a real green screen is keyed out, otherwise you are cut out with person detection.",
+  "about_tl": "Pinalitan ang background mo ng larawan o video.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "background",
+      "kinds": [
+        "image",
+        "video"
+      ],
+      "required": true,
+      "label": "New background",
+      "tl": "Bagong background"
+    }
+  ],
+  "keywords": [
+    "green screen",
+    "greenscreen",
+    "background",
+    "palitan ang background"
+  ],
+  "edit": {},
+  "captions": {},
+  "graphics": {},
+  "instruction": "",
+  "steps": [
+    {
+      "op": "background",
+      "role": "background",
+      "mask": "auto"
+    }
+  ]
+}

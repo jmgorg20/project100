@@ -1,6 +1,6 @@
 // Export: render the project to an MP4 with the FFmpeg engine (what the timeline shows).
 import { useEffect, useRef, useState } from "react";
-import type { ExportOptions, ExportUpdate } from "../../shared/api";
+import type { ExportOptions, ExportUpdate, GraphicsIssue } from "../../shared/api";
 import { baseName } from "../../shared/paths";
 import { Dialog } from "../components/Dialogs";
 import { api } from "../lib/api";
@@ -18,7 +18,7 @@ export const SIZES: { height: ExportOptions["height"]; label: string }[] = [
   { height: 960, label: "540 × 960" },
 ];
 
-export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, onClose, broll, untracked }: {
+export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, onClose, broll, untracked, graphics = 0 }: {
   projectPath: string;
   defaultOutput: string;
   fps: number;
@@ -29,7 +29,24 @@ export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, on
   broll?: { credits: string[]; aiClips: number };
   /** Tracked effects with nothing to follow (they will not show). */
   untracked?: number;
+  /** How many motion graphics the project has (they are checked before export). */
+  graphics?: number;
 }) {
+  const [check, setCheck] = useState<{ issues: GraphicsIssue[]; error?: string } | null>(null);
+  useEffect(() => {
+    if (!graphics) return;
+    let alive = true;
+    (async () => {
+      const problem = await beforeExport();
+      if (problem) return alive && setCheck({ issues: [], error: problem });
+      const r = await api.graphicsCheck(projectPath);
+      if (alive) setCheck(r);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphics, projectPath]);
   const [copied, setCopied] = useState(false);
   const creditText = broll?.credits.length ? `Credits: ${broll.credits.join("; ")}` : "";
   const [output, setOutput] = useState(defaultOutput);
@@ -76,6 +93,23 @@ export function ExportDialog({ projectPath, defaultOutput, fps, beforeExport, on
   return (
     <Dialog title="Export video · I-export" onClose={task ? undefined : onClose}>
       <div className="stack" data-testid="export-dialog">
+        {graphics > 0 && (
+          <div className="graphics-check" data-testid="graphics-check">
+            {!check && <p className="muted small">Checking the {graphics} graphics…</p>}
+            {check && !check.error && !check.issues.length && <p className="ok small">✓ Graphics: none on the face, off the screen or on the captions, and the text is readable.</p>}
+            {check?.error && <p className="muted small">The graphics could not be checked: {check.error}</p>}
+            {check && check.issues.length > 0 && (
+              <>
+                <p className="warn small">Graphics to look at before you export (you can still export):</p>
+                <ul className="check-list">
+                  {check.issues.map((i, k) => (
+                    <li key={k}>{i.message} <span className="tl-text">{i.tl}</span></li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
         <div className="field">
           <label htmlFor="export-size">Size</label>
           <select id="export-size" value={height} onChange={(e) => setHeight(Number(e.target.value) as ExportOptions["height"])} disabled={Boolean(task)}>

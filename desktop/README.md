@@ -44,6 +44,16 @@ like the Groq key). See [docs/broll.md](../docs/broll.md).
 **Effects tab → Follow my hands → Set up…** (the model files are downloaded only after you confirm).
 See [docs/tracking.md](../docs/tracking.md).
 
+**Pop-up words and graphics:** pick a look under **Motion graphics** next to the AI instructions
+(or write *"like a professional promoter"*), or add templates yourself from the editor's
+**Graphics** tab. The app draws them in a hidden window when you export. See
+[docs/graphics.md](../docs/graphics.md). (If you edit a template in `graphics/`, run
+`npm run graphics-catalog`.)
+
+**Video formats:** pick one under **Video format** in the AI panel and choose the files it asks
+for. The list comes from the engine's `autoedit/formats/*.json`; after adding or changing one, run
+`npm run engine-data`. See [docs/formats.md](../docs/formats.md).
+
 There is no installer yet (that is Phase 4).
 
 ## Tests

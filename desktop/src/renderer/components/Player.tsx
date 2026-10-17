@@ -11,6 +11,8 @@ import {
   gradeLookAt, overlaysAt, popOpacity, popScale, segmentAt, segments, sourceTime, zoomAt, type CaptionFrame,
 } from "../lib/timeline";
 import { TrackFxLayer } from "./TrackFxLayer";
+import { GraphicsLayer, WipeLayer } from "./GraphicsLayer";
+import { withAttachments } from "../../shared/graphicsEdit";
 
 // libass sizes text so that ascent + descent equals the style size; Inter's is 1.211 em.
 const INTER_LINE = 1.211;
@@ -148,6 +150,17 @@ function AudioClipView({ clip, t, url, playing, volume }: { clip: Clip; t: numbe
   return <audio ref={ref} src={url} preload="auto" data-testid="audio-clip" data-clip={clip.id} />;
 }
 
+const attachCache = new WeakMap<Project, Project>();
+function withProjectAttachments(project: Project | null | undefined): Project | null {
+  if (!project) return null;
+  let out = attachCache.get(project);
+  if (!out) {
+    out = withAttachments(project);
+    attachCache.set(project, out);
+  }
+  return out;
+}
+
 /** CSS that places the main picture like the engine's fill/reframe (or "blur": fit inside). */
 function pictureStyle(clip: Clip | null | undefined, m: Media | undefined): { className?: string; style: CSSProperties } {
   if (!clip || clip.fit === "blur") return { className: "contain", style: {} };
@@ -180,10 +193,14 @@ interface PlayerProps {
   onPlaying?: (playing: boolean) => void;
   /** Clicking a caption on the picture (the editor selects it). */
   onCaptionClick?: (clipId: string) => void;
+  /** Clicking a graphic on the picture (the editor selects it). */
+  onGraphicClick?: (clipId: string) => void;
+  /** Selected clip ids (a selected graphic is outlined). */
+  selection?: string[];
 }
 
 export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
-  { project, videoPath, mediaUrl, onExactFrame, emptyText, onTime, keepTime, compact, onPlaying, onCaptionClick },
+  { project, videoPath, mediaUrl, onExactFrame, emptyText, onTime, keepTime, compact, onPlaying, onCaptionClick, onGraphicClick, selection },
   handle,
 ) {
   const [wrapRef, size] = useStageSize();
@@ -340,9 +357,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const seg = project ? segs[segmentAt(segs, time)] : null;
   const showVideo = !project || seg?.clip?.type === "video";
   const still = project && seg?.clip?.type === "image" ? media.get(seg.clip.media ?? "") : null;
-  const zoom = project ? zoomAt(project, time) : { amount: 1, anchorY: 0.4 };
+  // a graphic's flash / whip / punch-in shows like the effect clips the engine adds for it
+  const fxProject = withProjectAttachments(project);
+  const zoom = fxProject ? zoomAt(fxProject, time) : { amount: 1, anchorY: 0.4 };
   const look = project ? gradeLookAt(project, time) : { grade: "none", intensity: 1 };
-  const fx = project ? fxStyle(fxAt(project, time), CANVAS.width, CANVAS.height) : { transform: "", filter: "", overlay: null };
+  const fx = fxProject ? fxStyle(fxAt(fxProject, time), CANVAS.width, CANVAS.height) : { transform: "", filter: "", overlay: null };
   const gradeFilter = gradeCss(look.grade, look.intensity);
   const grade = [gradeFilter === "none" ? "" : gradeFilter, fx.filter].filter(Boolean).join(" ") || "none";
   const caption = project ? captionAt(project, time) : null;
@@ -380,6 +399,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 {still && stillFrame && <img className={`still ${stillFrame.className ?? ""}`} src={mediaUrl(still.path)} alt="" style={stillFrame.style} />}
                 {fx.overlay && <div className="fx-layer" style={{ background: fx.overlay.color, opacity: fx.overlay.opacity }} data-testid="fx-layer" />}
                 {project && <TrackFxLayer project={project} time={time} />}
+                {project && <WipeLayer project={project} time={time} />}
               </div>
               {overlays.map((clip) => {
                 const m = media.get(clip.media ?? "");
@@ -387,6 +407,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 if (m?.kind === "video" && clip.type === "video") return <OverlayVideoView key={clip.id} clip={clip} t={time} url={mediaUrl(m.path)} playing={playing} />;
                 return null;
               })}
+              {project && <GraphicsLayer project={project} time={time} media={media} mediaUrl={mediaUrl} selection={selection} onSelect={onGraphicClick} />}
               {caption && <CaptionView frame={caption} onClick={onCaptionClick} />}
             </div>
             {sounds.map(({ clip, muted }) => {

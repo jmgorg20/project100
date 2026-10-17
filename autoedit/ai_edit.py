@@ -15,6 +15,7 @@ import shutil
 import time
 from pathlib import Path
 
+from . import director
 from .ai_gen import availability
 from .ai_plan import apply_plan, load_plan_schema, preset_plan, upgrade_plan, validate_plan
 from .broll import resolve_plan, sources_text
@@ -218,7 +219,7 @@ def staged_projects(project):
     """Views of the project as each editing stage completes (for the live preview)."""
     stages = [("cuts", {"video"}), ("zooms", {"video", "effect"}),
               ("captions", {"video", "effect", "caption"}),
-              ("photos", {"video", "effect", "caption", "overlay", "audio"})]
+              ("photos", {"video", "effect", "caption", "overlay", "audio", "graphics"})]
     for name, kinds in stages:
         view = copy.deepcopy(project)
         for track in view["tracks"]:
@@ -227,7 +228,8 @@ def staged_projects(project):
         yield name, view
 
 
-def describe(project, plan, result, raw_duration, photo_names, generation=None, tracking=None):
+def describe(project, plan, result, raw_duration, photo_names, generation=None, tracking=None,
+             graphics=None):
     """Plain-language summary of what was actually done (from the finished project)."""
     tracks = project["tracks"]
     main = next(t for t in tracks if t["kind"] == "video")["clips"]
@@ -294,6 +296,8 @@ def describe(project, plan, result, raw_duration, photo_names, generation=None, 
                 details.append(f"Tracked {c['effect']} on {follows}{hand} at {mmss(c['start'])}.")
     if tracking:
         details += tracking["notes"]
+    if graphics:
+        details += graphics_lines(graphics)
     if generation:
         details += generation.get("sourced", [])
         for item in generation["done"]:
@@ -313,6 +317,26 @@ def describe(project, plan, result, raw_duration, photo_names, generation=None, 
         headline = plan.get("summary") or "Done."
     return {"headline": headline, "details": details, "fallback": result.fallback,
             "duration_before": raw_duration, "duration_after": final}
+
+
+def graphics_lines(graphics):
+    """Plain-language lines about the motion graphics the Director added."""
+    style = director.STYLES[graphics["style"]]["label"]
+    clips = [c for t in graphics["project"]["tracks"] if t["kind"] == "graphics" for c in t["clips"]
+             if "director" in c]
+    lines = [f"Motion graphics ({style}): {len(clips)} placed"
+             + (", from simple rules (the AI plan was not used)." if graphics["fallback"] else ".")]
+    for c in sorted(clips, key=lambda c: c["start"])[:10]:
+        lines.append(f"  {mmss(c['start'])}  {c['template']}"
+                     + (f" - {c['label'].split(': ', 1)[1]}" if ": " in c.get("label", "") else "")
+                     + (f" (+{c['attach']['kind']})" if c.get("attach") else ""))
+    if len(clips) > 10:
+        lines.append(f"  ... and {len(clips) - 10} more")
+    if any(t["kind"] == "effect" and any(c["type"] == "wipe" for c in t["clips"])
+           for t in graphics["project"]["tracks"]):
+        lines.append("A before/after wipe was added.")
+    lines += [f"Graphics: {n}" for n in graphics["notes"]]
+    return lines
 
 
 def load_words(video, cfg, cache, job_dir, duration):
@@ -337,7 +361,8 @@ def load_words(video, cfg, cache, job_dir, duration):
 
 def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=None,
                   render=True, output=None, previous_plan=None, plan=None, reporter=None,
-                  cancel=None, gen_paths=None, max_gen_minutes=None, max_ai_clips=None):
+                  cancel=None, gen_paths=None, max_gen_minutes=None, max_ai_clips=None,
+                  graphics=None, format=None, inputs=None):
     """Make an AI edit of one video. Returns a dict describing the result.
 
     `plan`: use this plan as is (e.g. the creator accepted only some AI changes); no AI call.
@@ -346,6 +371,12 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
     AI pictures, clips and voice-over in the plan are made with WanGP (see ai_gen.py):
     a Draft pass for the preview, then the final tier when rendering; `max_gen_minutes`
     and `max_ai_clips` limit generation for this video.
+    `graphics`: motion graphics: a style (promoter, calm_documentary, meme, news, luxury,
+    minimal), "off", or "auto"/None (config graphics.style; auto = only when the instruction
+    asks for them). See director.py.
+    `format`: a video format id (formats/*.json), "auto" (rules, then the AI picks), or None
+    (rules only: what the instruction names or the extra files say, else Talking head).
+    `inputs`: the format's other files by role, e.g. {"screen": [path]}, {"takes": [a, b]}.
     """
     from .progress import TextReporter
 
@@ -364,6 +395,22 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         if not path.exists():
             raise EditorError(f"Photo not found: {path}")
     provider, model = provider_settings(cfg, provider, model)
+    from . import formats as fmt
+    format_inputs = {k: ({r: float(o) for r, o in v.items()} if k == "offsets"
+                         else [str(x) for x in v]) for k, v in (inputs or {}).items() if v}
+    for role, files in format_inputs.items():
+        if role in ("items", "offsets"):
+            continue
+        for f in files:
+            if not Path(f).exists():
+                raise EditorError(f"File not found ({role}): {f}")
+    all_inputs = {"main": [str(video)], **format_inputs}
+    format_id, format_reason = fmt.choose(
+        instruction, all_inputs, forced=format, cfg=cfg,
+        provider=provider if format == "auto" and plan is None else None, model=model)
+    spec = fmt.get(format_id)
+    cfg = fmt.cfg_for(spec, cfg)
+    plan_instruction = fmt.instruction_for(spec, instruction)
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
     job_dir = project_path(cfg["work_folder"]) / f"{video.stem}-ai-{time.strftime('%Y%m%d-%H%M%S')}"
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -414,7 +461,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
             generation_text = (generation_text or "AI GENERATION: NOT available. Leave "
                                "voiceovers empty.") + "\n" + sources_text(cfg, gen_ok) \
                 + "\n" + tracking_text(cfg)
-            result = request_plan(cfg, provider, model, instruction, words, duration,
+            result = request_plan(cfg, provider, model, plan_instruction, words, duration,
                                   list(photos), cache, upgrade_plan(previous_plan), check,
                                   cancel, generation_text)
         reporter.event("plan", **result.as_event(), baseline=preset_plan(cfg))
@@ -449,6 +496,29 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                                           "meta": generation["meta"]})
             generation["passes"] = passes
             check_cancel()
+        format_notes = []
+        if format_id != fmt.DEFAULT_FORMAT:
+            reporter.stage("format", f"Making it a {spec['name']}")
+            project, format_notes = fmt.apply(project, format_id, all_inputs, cfg, output.parent,
+                                              reporter, cancel, instruction)
+            reporter.event("format", format=format_id, name=spec["name"], reason=format_reason,
+                           notes=format_notes)
+            check_cancel()
+        graphics_result = None
+        style = director.resolve_style(cfg, instruction, graphics)
+        if style and graphics in (None, "auto") and (spec.get("graphics") or {}).get("style"):
+            style = spec["graphics"]["style"]          # the format's own look
+        if style:
+            graphics_result = director.generate(
+                project, cfg, instruction, style, provider=provider,
+                model=model, cache=cache, reporter=reporter, cancel=cancel, video=video,
+                use_ai=not result.fallback)
+            project = graphics_result["project"]
+            reporter.event("graphics", style=style, count=graphics_result["count"],
+                           fallback=graphics_result["fallback"], reason=graphics_result["reason"],
+                           notes=graphics_result["notes"])
+            check_cancel()
+        project["meta"].update({"format": format_id})
         project["meta"].update({"made_by": "AI edit", "instruction": instruction,
                                 "provider": provider if not result.given else None,
                                 "model": result.model, "fallback": result.fallback})
@@ -458,13 +528,21 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                                    "photos": "Placing photos"}[stage])
             reporter.event("project", stage=stage, project=view)
 
-        summary = describe(project, result.plan, result, duration, list(photos), generation, tracking)
+        summary = describe(project, result.plan, result, duration, list(photos), generation, tracking,
+                           graphics_result)
+        if format_id != fmt.DEFAULT_FORMAT:
+            summary["details"] = ([f"Format: {spec['name']} ({format_reason})."]
+                                  + [f"Format: {n}" for n in format_notes] + summary["details"])
+        summary["format"] = format_id
         # Token counts are the provider's own; the prices are from config.yaml (ai.prices).
-        cost = {"transcription": transcript_cost, "plan": result.cost,
-                "total": total(transcript_cost, result.cost), "currency": "USD",
+        graphics_cost = graphics_result["cost"] if graphics_result else None
+        cost = {"transcription": transcript_cost, "plan": result.cost, "graphics": graphics_cost,
+                "total": total(transcript_cost, result.cost, graphics_cost), "currency": "USD",
                 "provider": provider, "model": result.model or model,
                 "paid_provider": provider == "anthropic", "usage": result.usage,
                 "transcript_cached": cached, "plan_cached": result.cached}
+        if graphics_result:
+            cost["usage"] = {k: cost["usage"][k] + graphics_result["usage"].get(k, 0) for k in cost["usage"]}
         summary["cost"] = cost
         summary["cost_text"] = format_usd(cost["total"])
         reporter.event("summary", **summary)
@@ -473,6 +551,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         plan_file = output.with_suffix(".plan.json")
         plan_file.write_text(json.dumps({
             "plan": result.plan, "instruction": instruction, "provider": provider,
+            "format": format_id, "inputs": format_inputs,
             "model": result.model, "fallback": result.fallback, "reason": result.reason,
             "photos": {k: str(v) for k, v in photos.items()}, "summary": summary,
         }, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -519,3 +598,72 @@ def estimate_cost(video, cfg, instruction="", photo_names=(), provider=None, mod
             "currency": "USD", "provider": provider, "model": model,
             "paid_provider": provider == "anthropic", "estimated": True,
             "transcript_cached": cached, "text": format_usd(total(transcript, plan))}
+
+
+def voiceover_edit(audio, broll, cfg, instruction="", provider=None, model=None, render=True,
+                   output=None, reporter=None, cancel=None, graphics=None):
+    """The Voice-over with B-roll format: no face. Your voice-over is transcribed, your B-roll
+    files are cut to its sentences, captions are added (and graphics, if asked)."""
+    from . import formats as fmt
+    from .progress import TextReporter
+    from .ffmpeg_tools import probe
+    reporter = reporter or TextReporter()
+    audio = Path(audio).resolve()
+    if not audio.exists():
+        raise EditorError(f"Voice-over not found: {audio}")
+    files = [Path(f).resolve() for f in broll]
+    for f in files:
+        if not f.exists():
+            raise EditorError(f"B-roll file not found: {f}")
+    check_ffmpeg()
+    duration = probe(audio)["duration"]
+    provider, model = provider_settings(cfg, provider, model)
+    spec = fmt.get("voiceover_broll")
+    cfg = fmt.cfg_for(spec, cfg)
+    cache = Cache(project_path(cfg["ai"]["cache_folder"]))
+    job_dir = project_path(cfg["work_folder"]) / f"{audio.stem}-vo-{time.strftime('%Y%m%d-%H%M%S')}"
+    job_dir.mkdir(parents=True, exist_ok=True)
+    out_folder = project_path(cfg["output"]["folder"])
+    output = Path(output).resolve() if output else unique_output_path(out_folder, audio.stem)
+    try:
+        reporter.stage("transcript", "Listening to your voice-over")
+        words, cached, transcript_cost = load_words(audio, cfg, cache, job_dir, duration)
+        reporter.event("transcript", words=len(words), cached=cached,
+                       text=" ".join(w.text for w in words)[:4000])
+        reporter.stage("format", "Putting your B-roll under the voice-over")
+        project = fmt.build_voiceover_project(audio, files, cfg, words, name=audio.stem)
+        overrides = fmt.caption_overrides(spec)
+        for t in project["tracks"]:
+            if t["kind"] == "caption":
+                for c in t["clips"]:
+                    c.setdefault("overrides", {}).update(overrides)
+        details = [f"Format: {spec['name']}: {len(files)} B-roll file(s) under {mmss(duration)} of "
+                   "voice-over."]
+        cost = transcript_cost
+        style = director.resolve_style(cfg, instruction, graphics)
+        if style:
+            g = director.generate(project, cfg, instruction, style, provider, model, cache, reporter,
+                                  cancel, use_ai=True)
+            project = g["project"]
+            details += graphics_lines(g)
+            cost = total(cost, g["cost"])
+        project["meta"] = {**project.get("meta", {}), "made_by": "AI edit", "format": "voiceover_broll",
+                           "instruction": instruction}
+        summary = {"headline": "Voice-over with B-roll.", "details": details, "fallback": False,
+                   "duration_before": duration, "duration_after": duration, "format": "voiceover_broll",
+                   "cost": {"total": cost, "currency": "USD"}, "cost_text": format_usd(cost)}
+        reporter.event("summary", **summary)
+        project_file = save_project(project, output.with_suffix(".project.json"))
+        rendered = None
+        if render:
+            o = cfg["output"]
+            rendered = render_project(project, output, work_dir=job_dir,
+                                      fonts_folder=project_path(cfg["captions"]["fonts_folder"]),
+                                      export={"crf": o["crf"], "encoder_speed": o["encoder_speed"],
+                                              "audio_bitrate": o["audio_bitrate"]},
+                                      reporter=reporter, cancel=cancel)
+    finally:
+        if not cfg.get("keep_work_files"):
+            shutil.rmtree(job_dir, ignore_errors=True)
+    return {"output": str(rendered) if rendered else None, "project": str(project_file),
+            "summary": summary, "fallback": False, "reason": "", "cost": summary["cost"]}
