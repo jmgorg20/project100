@@ -37,7 +37,7 @@ def test_track_status_and_model_listing(setup, capsys, monkeypatch):
     tmp, cfg, _video = setup
     code, lines, _ = run(["--config", str(cfg), "track-status"], capsys)
     assert code == 0 and lines[-1]["available"] and lines[-1]["hands"] and not lines[-1]["face"]
-    assert {m["kind"] for m in lines[-1]["models"]} == {"hand", "face", "pose"}
+    assert {m["kind"] for m in lines[-1]["models"]} == {"hand", "face", "pose", "segment"}
     monkeypatch.setitem(sys.modules, "mediapipe", None)
     code, lines, _ = run(["--config", str(cfg), "track-status"], capsys)
     assert not lines[-1]["available"] and "pip install mediapipe" in lines[-1]["problems"][0]

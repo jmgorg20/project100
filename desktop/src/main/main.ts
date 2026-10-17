@@ -419,7 +419,7 @@ function registerIpc(): void {
   ipcMain.handle("track:cancel", (_e, taskId: string) => trackTasks.get(taskId)?.cancel());
   // Only called after the window's confirm dialog (the app never downloads a model by itself).
   ipcMain.handle("track:models", async (_e, kinds: string[]) => {
-    const clean = kinds.filter((k) => ["hand", "face", "pose"].includes(k));
+    const clean = kinds.filter((k) => ["hand", "face", "pose", "segment"].includes(k));
     if (!clean.length) return { error: "Choose a model to download." };
     const r = await engineOnce(["track-models", "--download", ...clean, "--yes"]);
     if (r.error) return { error: r.error };

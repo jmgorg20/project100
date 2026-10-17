@@ -98,7 +98,7 @@ export interface TrackStatus {
   face: boolean;
   pose: boolean;
   problems: string[];
-  models: { kind: "hand" | "face" | "pose"; file: string; url: string; page: string; size: string; path: string; present: boolean }[];
+  models: { kind: "hand" | "face" | "pose" | "segment"; file: string; url: string; page: string; size: string; path: string; present: boolean }[];
 }
 
 export interface TrackUpdate {
@@ -196,7 +196,7 @@ export interface AppApi {
   cancelTrack(taskId: string): Promise<void>;
   onTrack(callback: (update: TrackUpdate) => void): () => void;
   /** Download model files (only after the user confirmed: see TrackStatus.models for the sources). */
-  downloadTrackModels(kinds: ("hand" | "face" | "pose")[]): Promise<TrackStatus | { error: string }>;
+  downloadTrackModels(kinds: ("hand" | "face" | "pose" | "segment")[]): Promise<TrackStatus | { error: string }>;
   // ---- B-roll
   startBroll(request: BrollRequest): Promise<string>;
   cancelBroll(taskId: string): Promise<void>;
