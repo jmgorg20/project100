@@ -41,7 +41,7 @@ anything by hand. See [Project files](#project-files).
 Be aware of what has and has not been checked:
 
 **Tested (automatically, on Linux with FFmpeg 6.1, Python 3.13):**
-- 265 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
+- 320 automated tests pass (`python -m pytest`): cutting maths, timestamp remapping,
   keyword rules, settings, edit plans, watch mode, and all 13 caption styles. Each style
   is turned into a subtitle file and drawn by FFmpeg/libass to check that text appears.
 - **Project files:** the schema and ~30 kinds of mistakes (each with a clear message);
@@ -79,8 +79,8 @@ Be aware of what has and has not been checked:
   - **"Listen again"** maps words through sped-up clips correctly (tested with a fake
     transcriber).
   - A **voice-over recorded in Chromium** (fake microphone) is saved, measured and rendered.
-- **Desktop app:** 161 unit tests (including the app's main process driving the real
-  engine from start to finished video, undo/redo, exact frame) and 34 browser tests of the
+- **Desktop app:** 218 unit tests (including the app's main process driving the real
+  engine from start to finished video, undo/redo, exact frame) and 40 browser tests of the
   window (Playwright, at 1280x800 and 1920x1080, with screenshots checked by eye): Auto mode
   on by default and rendering with no extra clicks, live progress, the summary and cost,
   undo/redo, review with Auto mode off, the fallback warning, keys never shown, the
@@ -93,6 +93,12 @@ Be aware of what has and has not been checked:
   landing on the right moment, and the editor's find another / regenerate / replace (3
   browser tests; the editor's B-roll clips match the engine's and pass its validator). Real
   Pexels/Pixabay calls were **not** made. See [docs/broll.md](docs/broll.md).
+- **Tracked effects:** following a hand/face point (gaps, smoothing, fading out when lost) with
+  synthetic tracks, the detector run with a stand-in MediaPipe, and the effects **measured on
+  rendered pixels** (they land on a marker through fill, reframes, zooms, speed and cuts, and only
+  add light). The real MediaPipe ran on **one real photo only** (a plumbing check). **Not
+  tested: real talking videos**, so how well hands are followed and how the effects look on your
+  footage is unknown. See [docs/tracking.md](docs/tracking.md).
 - **AI pictures, clips and voice-over with WanGP** (quality tiers, hardware detection,
   tests, Compare, Auto mode's tier choice and fallback), tested **only against a stand-in
   for WanGP and a fake `nvidia-smi`**: there is no GPU on the test machine. See
@@ -367,6 +373,13 @@ as a normal clip with its source, credit and licence; click it to **find another
 and dips (transitions go on a jump cut). The Export window gives you the stock credits to
 paste and reminds you to turn on the platform's AI label for AI-made content. Guide:
 [docs/broll.md](docs/broll.md).
+
+**Effects that follow you · Sumusunod sa iyo.** A glow at your fingertips when you say a word,
+sparks on your palm, an aura around you: ask in your instruction (*"lagyan ng glow ang dulo ng
+hintuturo ko pag sinabi kong 'power'"*) or add one in the editor (Effects tab → **Follow my
+hands**). It uses the free, local MediaPipe tracker (`python -m pip install mediapipe` and two
+small model files you download once, only after you confirm). When it loses you, the effect fades
+out instead of jumping. Guide: [docs/tracking.md](docs/tracking.md).
 
 ### From the command line
 
