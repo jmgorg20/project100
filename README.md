@@ -99,6 +99,12 @@ Be aware of what has and has not been checked:
   add light). The real MediaPipe ran on **one real photo only** (a plumbing check). **Not
   tested: real talking videos**, so how well hands are followed and how the effects look on your
   footage is unknown. See [docs/tracking.md](docs/tracking.md).
+- **Motion graphics (42 templates) and the Director:** every template drawn by a real Chromium
+  and checked on its pixels (Taglish, *ñ*, emoji, long words); the compositing measured on
+  rendered frames; the Director's rules (sync to word frames, density, variety, mood, face-safe
+  on synthetic face tracks, caption-safe, readability) with a stand-in AI. **Not verified:**
+  Electron's hidden drawing window (no Electron here), real Taglish speech with a real AI, how the
+  templates look on your videos, Windows and speed. See [docs/graphics.md](docs/graphics.md).
 - **AI pictures, clips and voice-over with WanGP** (quality tiers, hardware detection,
   tests, Compare, Auto mode's tier choice and fallback), tested **only against a stand-in
   for WanGP and a fake `nvidia-smi`**: there is no GPU on the test machine. See
@@ -380,6 +386,13 @@ hintuturo ko pag sinabi kong 'power'"*) or add one in the editor (Effects tab �
 hands**). It uses the free, local MediaPipe tracker (`python -m pip install mediapipe` and two
 small model files you download once, only after you confirm). When it loses you, the effect fades
 out instead of jumping. Guide: [docs/tracking.md](docs/tracking.md).
+
+**Pop-up words and graphics · Mga pop-up na salita.** Write *"Edit this like a professional
+promoter"* and the AI places pop-up words, cards, counters, arrows and emoji on the important
+words, in a look that fits what you say (promoter, calm documentary, meme, news, luxury,
+minimal). They stay off your face and the captions, and land on the timeline's **Graphics** track
+where you can change, lock or redo each one. 42 free templates are built in (**Graphics** tab in
+the editor). Guide: [docs/graphics.md](docs/graphics.md).
 
 ### From the command line
 

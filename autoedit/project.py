@@ -32,7 +32,7 @@ FORMAT = "autoedit-project"
 VERSION = 2                   # 2 adds speed, video-clip fades and crop; 1 still loads
 SCHEMA_FILE = Path(__file__).with_name("project.schema.json")
 
-TRACK_KINDS = ("video", "overlay", "effect", "caption", "audio")
+TRACK_KINDS = ("video", "overlay", "effect", "graphics", "caption", "audio")
 AUDIO_ROLES = ("original", "voiceover", "music", "sfx")
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
@@ -159,6 +159,9 @@ def _clip_problems(track, clip, media, frame, where):
         if kind == "audio" and m["kind"] == "video" and m.get("has_audio") is False:
             problems.append(f"{where}: media '{ref}' has no sound")
 
+    if ctype == "graphic":
+        problems += _graphic_problems(clip, media, where)
+
     if "in" in clip and "out" in clip:
         length = clip["out"] - clip["in"]
         speed = float(clip.get("speed", 1.0))
@@ -200,6 +203,33 @@ def _clip_problems(track, clip, media, frame, where):
                 problems.append(f"{where} word {wi} ('{word['text']}'): words must be in "
                                 f"time order")
             last_start = word["start"]
+    return problems
+
+
+def _graphic_problems(clip, media, where):
+    """A graphic must use a template of the catalog, with fonts, icons and images that exist."""
+    from . import graphics
+    problems = []
+    if not graphics.has_template(clip["template"]):
+        ids = graphics.template_ids()
+        problems.append(f"{where}: unknown graphics template '{clip['template']}' "
+                        f"(there are {len(ids)}: {', '.join(ids[:6])}, ...)")
+        return problems
+    params = clip.get("params") or {}
+    font = params.get("font")
+    if font and font not in graphics.font_keys():
+        problems.append(f"{where}: unknown font '{font}' (use one of: "
+                        f"{', '.join(graphics.font_keys())})")
+    icon = params.get("icon")
+    if icon and icon not in graphics.icon_names():
+        problems.append(f"{where}: unknown icon '{icon}'")
+    image = params.get("image")
+    if image:
+        m = media.get(image)
+        if m is None:
+            problems.append(f"{where}: unknown image media '{image}'")
+        elif m["kind"] != "image":
+            problems.append(f"{where}: the picture '{image}' is {m['kind']}, not an image")
     return problems
 
 

@@ -1680,3 +1680,29 @@ kbd {
   background: linear-gradient(180deg, #8b5cf6, #6d3fd8);
   color: #fff;
 }
+
+/* ---------------------------------------------------------------- motion graphics */
+.canvas .graphics-layer { position: absolute; inset: 0; pointer-events: none; }
+.canvas .graphic { position: absolute; pointer-events: auto; cursor: pointer; }
+.canvas .graphic .gfx-tile { position: absolute !important; left: 0; top: 0; }
+.canvas .graphic.selected { outline: 6px dashed rgba(124, 92, 255, 0.9); outline-offset: -40px; }
+.canvas .wipe-layer { position: absolute; inset: 0; pointer-events: none; }
+.canvas .wipe-side { position: absolute; }
+.canvas .wipe-line { position: absolute; background: #fff; }
+.tl-row.kind-graphics .clip { background: linear-gradient(135deg, #7c5cff, #c04bff); }
+.clip.locked-clip { outline: 2px solid #ffd23f; }
+.clip .lock-badge { margin-right: 4px; }
+
+.templates { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+.templates .tpl-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.templates .tpl-tools input[type="search"] { flex: 1; min-width: 100px; }
+.templates .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; overflow-y: auto; padding-bottom: 8px; }
+.tpl-card { background: #1b1f2a; border: 1px solid #2c3242; border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.tpl-card .tpl-preview { position: relative; height: 96px; overflow: hidden; border-radius: 6px; background: repeating-conic-gradient(#3a4256 0% 25%, #2d3445 0% 50%) 50% / 16px 16px; }
+.tpl-card .tpl-preview .gfx-tile { position: absolute !important; }
+.tpl-card .tpl-name { font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; gap: 4px; align-items: center; }
+.tpl-card .tpl-moods { font-size: 10px; opacity: 0.6; }
+.tpl-card .fav { background: none; border: none; cursor: pointer; font-size: 14px; color: #ffd23f; padding: 0; }
+.check-list { margin: 6px 0; padding-left: 18px; font-size: 13px; }
+.check-list li { margin: 3px 0; }
+.check-list .tl-text { opacity: 0.65; font-size: 12px; }

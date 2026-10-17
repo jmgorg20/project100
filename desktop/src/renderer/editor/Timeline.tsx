@@ -8,21 +8,22 @@ import {
 } from "../../shared/edit";
 import { FX_INFO } from "../../shared/effectsEdit";
 import { trackfxLabel } from "../../shared/trackEdit";
+import { graphicLabel } from "../../shared/graphicsEdit";
 import type { Clip, FxEffect, Project, Track } from "../../shared/types";
 import { mmss } from "../components/Player";
 import { Filmstrip, Waveform } from "./ClipVisuals";
 
 export const HEADER_WIDTH = 150;
 const SNAP_PX = 8;
-const ROW_HEIGHT: Record<string, number> = { video: 64, overlay: 44, effect: 30, caption: 36, audio: 44 };
+const ROW_HEIGHT: Record<string, number> = { video: 64, overlay: 44, effect: 30, graphics: 34, caption: 36, audio: 44 };
 
-const TRACK_ICON: Record<string, string> = { video: "🎬", overlay: "🖼", effect: "✨", caption: "💬", audio: "🎵" };
+const TRACK_ICON: Record<string, string> = { video: "🎬", overlay: "🖼", effect: "✨", graphics: "🅰", caption: "💬", audio: "🎵" };
 const ROLE_ICON: Record<string, string> = { voiceover: "🎙", music: "🎵", sfx: "🔔", original: "🔊" };
 
 /** Tracks top to bottom, like CapCut: captions, effects, overlays (top one first), video, sound. */
 export function orderedTracks(p: Project): Track[] {
   const of = (kind: string) => p.tracks.filter((t) => t.kind === kind);
-  return [...of("caption").reverse(), ...of("effect").reverse(), ...of("overlay").reverse(), ...of("video"), ...of("audio")];
+  return [...of("caption").reverse(), ...of("graphics").reverse(), ...of("effect").reverse(), ...of("overlay").reverse(), ...of("video"), ...of("audio")];
 }
 
 function clipLabel(c: Clip, p: Project): string {
@@ -31,6 +32,8 @@ function clipLabel(c: Clip, p: Project): string {
   if (c.type === "zoom") return `Zoom ${Math.round((c.amount ?? 1) * 100)}%`;
   if (c.type === "grade") return `Colour: ${(c.grade ?? "").replace(/_/g, " ")}`;
   if (c.type === "trackfx") return trackfxLabel(c);
+  if (c.type === "graphic") return graphicLabel(c);
+  if (c.type === "wipe") return `Before/after: ${(c.grade ?? "").replace(/_/g, " ")}`;
   if (c.type === "fx") return FX_INFO[c.effect as FxEffect]?.label ?? c.id;
   const m = p.media.find((x) => x.id === c.media);
   return m?.name ?? m?.path.split(/[\\/]/).pop() ?? c.id;
@@ -351,7 +354,7 @@ const ClipView = memo(function ClipView({
   const sp = speedOf(clip);
   return (
     <div
-      className={`clip type-${clip.type}${selected ? " selected" : ""}`}
+      className={`clip type-${clip.type}${selected ? " selected" : ""}${clip.locked ? " locked-clip" : ""}`}
       style={{ left: clip.start * pps, width: w, height: height - 4 }}
       onPointerDown={(e) => !track.locked && onDown(e, "move", clip, track)}
       data-testid="clip"
@@ -366,9 +369,10 @@ const ClipView = memo(function ClipView({
       <span className="clip-label">
         {sp !== 1 && <span className="badge-speed">{sp}x</span>}
         {clip.broll?.ai_generated && <span className="badge-ai" title="Made with AI">AI</span>}
+        {clip.locked && <span className="lock-badge" title="Locked" aria-label="locked">🔒</span>}
         {label}
       </span>
-      {!track.locked && (
+      {!track.locked && !clip.locked && (
         <>
           <span className="handle start" onPointerDown={(e) => onDown(e, "trim-start", clip, track)} data-testid="trim-start" aria-hidden="true" />
           <span className="handle end" onPointerDown={(e) => onDown(e, "trim-end", clip, track)} data-testid="trim-end" aria-hidden="true" />

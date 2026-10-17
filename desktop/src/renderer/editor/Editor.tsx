@@ -17,6 +17,7 @@ import { Player, mmss, type PlayerHandle } from "../components/Player";
 import { api, mediaUrl } from "../lib/api";
 import { addCaption, addEmoji, correctCaptions, editWordText, setCaptionLook, setCaptionWords, toggleHighlight } from "../../shared/captionEdit";
 import { addFx, addGrade, addTransition, addZoom, setAudioSettings, speedRamp } from "../../shared/effectsEdit";
+import { addGraphic, addWipe, anotherLook, setClipLocked, setGraphic, setWipe } from "../../shared/graphicsEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Inspector } from "./Inspector";
 import { LeftPanel } from "./LeftPanel";
@@ -508,6 +509,21 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
     setToast(`Listened again: ${r.words ?? 0} words. Undo (Ctrl+Z) brings the old captions back.`);
   };
 
+  const [regenerating, setRegenerating] = useState(false);
+  /** A new graphic for the same words, made by the engine's Director (one undo step). */
+  const regenerateGraphic = async (id: string, useAi: boolean) => {
+    const problem = await saveNow();
+    if (problem) return setToast(problem);
+    setRegenerating(true);
+    const settings = await api.getSettings();
+    const r = await api.graphicsRegenerate(path, id, useAi, settings.provider);
+    setRegenerating(false);
+    if (!r.project) return setToast(r.error ?? "Could not make another graphic.");
+    savedProject.current = r.project;
+    if (histRef.current) commit(pushHistory(histRef.current, r.project));
+    savedProject.current = histRef.current?.present ?? r.project;
+  };
+
   const exactFrame = async () => {
     const problem = await saveNow();
     if (problem) {
@@ -600,13 +616,15 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
             onCancel: () => trackTask && void api.cancelTrack(trackTask.id),
             onSetup: () => setShowTrackSetup(true),
           },
+          onWipe: () => withNewClip((p) => addWipe(p, playhead)),
+          onGraphic: (id) => withNewClip((p) => addGraphic(p, id, playhead)),
           onGrade: (grade, whole) =>
             withNewClip((p) => addGrade(p, grade, whole ? undefined : mainTrack(p)?.clips.find((c) => playhead >= c.start && playhead < clipEnd(c))?.id)),
         }}
       />
 
       <main className="ed-preview" aria-label="Preview">
-        <Player ref={playerRef} project={project} videoPath={null} mediaUrl={url} keepTime compact onTime={setPlayhead} onPlaying={setPlaying} onCaptionClick={(id) => setSelection([id])} />
+        <Player ref={playerRef} project={project} videoPath={null} mediaUrl={url} keepTime compact onTime={setPlayhead} onPlaying={setPlaying} onCaptionClick={(id) => setSelection([id])} onGraphicClick={(id) => setSelection([id])} selection={selection} />
         <div className="ed-transport">
           <button className="btn small" onClick={() => run("play")} aria-label={playing ? "Pause" : "Play"} data-testid="play">{playing ? "❚❚" : "▶"}</button>
           <span className="time" data-testid="time">{mmss(playhead)} / {mmss(total)}</span>
@@ -622,6 +640,14 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
           onSpeed={(id, sp) => apply((p) => setSpeed(p, id, sp), `speed:${id}`)}
           onRamp={(id, ramp) => apply((p) => speedRamp(p, id, ramp as never))}
           onDelete={remove}
+          graphics={{
+            busy: regenerating,
+            onChange: (id, patch, key) => apply((p) => setGraphic(p, id, patch), key),
+            onWipe: (id, patch, key) => apply((p) => setWipe(p, id, patch), key),
+            onLock: (id, locked) => apply((p) => setClipLocked(p, id, locked)),
+            onAnotherLook: (id) => apply((p) => anotherLook(p, id)),
+            onRegenerate: (id, useAi) => void regenerateGraphic(id, useAi),
+          }}
           tracked={{ ready: Boolean(trackStatus?.available), busy: Boolean(trackTask), onFollow: () => void followHands(), onSetup: () => setShowTrackSetup(true) }}
           broll={{
             task: brollTask?.target.kind === "clip" ? brollTask : null,
@@ -694,7 +720,7 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
         </div>
       )}
       {showExport && (
-        <ExportDialog projectPath={path} defaultOutput={exportPathFor(path)} fps={fps} beforeExport={saveNow} onClose={() => setShowExport(false)} broll={brollCredits(project)} untracked={untrackedEffects(project).length} />
+        <ExportDialog projectPath={path} defaultOutput={exportPathFor(path)} fps={fps} beforeExport={saveNow} onClose={() => setShowExport(false)} broll={brollCredits(project)} untracked={untrackedEffects(project).length} graphics={project.tracks.filter((t) => t.kind === "graphics").reduce((n, t) => n + t.clips.length, 0)} />
       )}
       {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
       {showTrackSetup && trackStatus && <TrackSetup status={trackStatus} onStatus={setTrackStatus} onClose={() => setShowTrackSetup(false)} />}

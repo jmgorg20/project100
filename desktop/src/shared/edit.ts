@@ -51,6 +51,7 @@ export function mustFind(p: Project, id: string): Found {
   const f = findClip(p, id);
   if (!f) throw new EditError("That clip is no longer on the timeline.");
   if (f.track.locked) throw new EditError(`The ${f.track.name ?? f.track.id} track is locked. Unlock it first.`);
+  if (f.clip.locked) throw new EditError("This clip is locked. Unlock it first.");
   return f;
 }
 
@@ -189,12 +190,12 @@ function cutFromClip(c: Clip, a: number, b: number, taken: Set<string>, p: Proje
 
 function cutRange(track: Track, a: number, b: number, taken: Set<string>, p: Project): Track {
   if (track.locked || isMain(track) || b - a <= EPS) return track;
-  return { ...track, clips: track.clips.flatMap((c) => cutFromClip(c, a, b, taken, p)) };
+  return { ...track, clips: track.clips.flatMap((c) => (c.locked ? [c] : cutFromClip(c, a, b, taken, p))) };
 }
 
 function openSpace(track: Track, at: number, d: number): Track {
   if (track.locked || isMain(track) || Math.abs(d) <= EPS) return track;
-  return { ...track, clips: track.clips.map((c) => (c.start >= at - EPS ? { ...c, start: r4(c.start + d) } : c)) };
+  return { ...track, clips: track.clips.map((c) => (c.start >= at - EPS && !c.locked ? { ...c, start: r4(c.start + d) } : c)) };
 }
 
 /**
@@ -289,7 +290,7 @@ export function splitAt(p: Project, t: number, ids?: string[]): Project {
   for (const track of p.tracks) {
     if (track.locked) continue;
     for (const c of track.clips) {
-      if (ids && !ids.includes(c.id)) continue;
+      if (c.locked || (ids && !ids.includes(c.id))) continue;
       if (t < c.start + min - EPS || t > clipEnd(c) - min + EPS) continue;
       try {
         q = splitClip(q, c.id, t).project;

@@ -20,3 +20,13 @@ def no_default_tracking_models(tmp_path, monkeypatch):
     """Tests never pick up tracking model files you downloaded into models/tracking/."""
     from autoedit import tracking
     monkeypatch.setattr(tracking, "MODEL_DIR", tmp_path / "no-tracking-models")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def graphics_cache(tmp_path_factory):
+    """Drawn graphics are cached for the whole test session (and never in your real work folder)."""
+    import os
+    folder = tmp_path_factory.mktemp("graphics-cache")
+    os.environ["AUTOEDIT_GRAPHICS_CACHE"] = str(folder)
+    yield folder
+    os.environ.pop("AUTOEDIT_GRAPHICS_CACHE", None)

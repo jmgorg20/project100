@@ -8,8 +8,9 @@ import type { FxEffect, Project, TrackEffect } from "../../shared/types";
 import { api, mediaUrl } from "../lib/api";
 import { BrollPanel, type BrollAsk, type BrollTask } from "./BrollPanel";
 import { MediaBin } from "./MediaBin";
+import { TemplatesPanel } from "./TemplatesPanel";
 
-type Tab = "media" | "broll" | "music" | "sfx" | "effects";
+type Tab = "media" | "broll" | "music" | "sfx" | "effects" | "graphics";
 
 export interface BrollActions {
   folder: string;
@@ -41,7 +42,11 @@ export interface EffectActions {
   onTransition: (effect: FxEffect) => void;
   onZoom: (kind: "punch" | "smooth") => void;
   onGrade: (grade: string, wholeVideo: boolean) => void;
+  /** A before/after wipe (one side graded) at the playhead. */
+  onWipe: () => void;
   tracked: TrackedActions;
+  /** Add a graphics template at the playhead. */
+  onGraphic: (templateId: string) => void;
 }
 
 export function LeftPanel({ project, thumbs, url, busy, onImport, onAdd, onAddLibrary, effects, folders, onChooseFolder, broll }: {
@@ -61,6 +66,7 @@ export function LeftPanel({ project, thumbs, url, busy, onImport, onAdd, onAddLi
   // [tab, shown text, full name for screen readers and the tooltip]
   const tabs: [Tab, string, string][] = [
     ["media", "Media", "Media"], ["broll", "B-roll", "B-roll"], ["music", "Music", "Music"], ["sfx", "SFX", "Sound effects"], ["effects", "Effects", "Effects"],
+    ["graphics", "Graphics", "Graphics templates"],
   ];
   return (
     <div className="left-panel" data-testid="left-panel">
@@ -77,6 +83,7 @@ export function LeftPanel({ project, thumbs, url, busy, onImport, onAdd, onAddLi
       )}
       {tab === "broll" && <BrollPanel {...broll} />}
       {tab === "effects" && <EffectsList actions={effects} />}
+      {tab === "graphics" && <TemplatesPanel onAdd={effects.onGraphic} />}
     </div>
   );
 }
@@ -169,6 +176,10 @@ function EffectsList({ actions }: { actions: EffectActions }) {
         {GRADES.filter((g) => g !== "none").map((g) => (
           <button key={g} className="btn small" onClick={() => actions.onGrade(g, whole)}>{g.replace(/_/g, " ")}</button>
         ))}
+      </div>
+      <h3>Before / after · Bago at pagkatapos</h3>
+      <div className="fx-grid">
+        <button className="btn small" onClick={actions.onWipe} title="A line sweeps across: one side gets a colour look">Before/after wipe</button>
       </div>
       <TrackedSection actions={actions.tracked} />
       <p className="muted small">Every effect is a clip on the Effects track: drag it, trim it, or change its strength on the right.</p>
