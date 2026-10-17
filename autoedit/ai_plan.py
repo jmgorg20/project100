@@ -16,6 +16,10 @@ from .styles import get_style
 
 SCHEMA_FILE = Path(__file__).with_name("ai_plan.schema.json")
 MIN_KEPT_SECONDS = 1.0
+# Colour names the AI may use for tracked effects (None = the effect's own colour).
+TRACK_COLORS = {"default": None, "gold": "#ffd24a", "white": "#ffffff", "blue": "#4aa3ff",
+                "cyan": "#58e0ff", "purple": "#b06cff", "pink": "#ff6ec7", "red": "#ff4a4a",
+                "orange": "#ff9b3d", "green": "#5cff8a"}
 
 
 @lru_cache(maxsize=None)
@@ -36,7 +40,8 @@ def preset_plan(cfg):
                  "amount": float(pacing["zoom_amount"])},
         "captions": {"enabled": bool(cfg["captions"].get("enabled", True)), "size_scale": 1.0,
                      "position": None, "highlight_words": []},
-        "cuts": [], "zooms": [], "grades": [], "effects": [], "photos": [], "notes": [],
+        "cuts": [], "zooms": [], "grades": [], "effects": [], "tracked_effects": [], "photos": [],
+        "notes": [],
         "ai_clips": [], "voiceovers": [],
     }
 
@@ -47,6 +52,7 @@ def upgrade_plan(plan):
         return plan
     plan = copy.deepcopy(plan)
     plan.setdefault("effects", [])
+    plan.setdefault("tracked_effects", [])
     for clip in plan.get("ai_clips") or []:
         if isinstance(clip, dict):
             clip.setdefault("search", " ".join(str(clip.get("prompt", "")).split()[:4])[:80])
@@ -82,7 +88,7 @@ def validate_plan(plan, duration, photo_names=()):
         [(c["start"], min(c["end"], duration)) for c in plan["cuts"]]))
     if kept < MIN_KEPT_SECONDS:
         problems.append(f"plan.cuts: they remove almost the whole video (only {kept:.1f}s left)")
-    for kind in ("ai_clips", "voiceovers", "effects"):
+    for kind in ("ai_clips", "voiceovers", "effects", "tracked_effects"):
         for i, item in enumerate(plan[kind]):
             if item["at"] >= duration:
                 problems.append(f"plan.{kind}[{i}]: at {item['at']}s is after the end of the "
@@ -133,6 +139,11 @@ def apply_plan(cfg, plan, photos, generated=None):
                   for z in plan["zooms"]],
         "grades": [{"start": g["start"], "end": g["end"], "grade": g["grade"]}
                    for g in plan["grades"]],
+        "tracked": [{"effect": e["effect"], "point": e["point"], "hand": e["hand"],
+                     "at": float(e["at"]), "duration": float(e["duration"]),
+                     "intensity": float(e["intensity"]), "size": float(e["size"]),
+                     "color": TRACK_COLORS[e["color"]]} for e in plan.get("tracked_effects", [])],
+        "track": generated.get("track"),
         "effects": [{"effect": e["effect"], "at": float(e["at"]), "duration": float(e["duration"]),
                      "intensity": float(e["intensity"]), "on_cut": bool(e["on_cut"])}
                     for e in plan.get("effects", [])],

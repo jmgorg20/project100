@@ -23,6 +23,8 @@ python editor.py estimate inbox\talk.mp4 --provider anthropic                   
    effects and transitions (flash, whip, shake, glitch, dip), and B-roll items (what to
    show, search words, a look, and a source: see [broll.md](broll.md)). It is also told
    which B-roll sources you have (your folder's file-name words, stock keys, WanGP).
+   It can also attach effects to the speaker's hand, face or body (`tracked_effects`: a glow, sparks,
+   an aura or energy rings: see [tracking.md](tracking.md)) when tracking is set up.
    Anything it cannot do goes in `notes` and is shown to you as "Not done: ...".
    Plans saved by older versions (without effects or B-roll looks) still load.
 3. **Checks.** Every plan is checked against the schema, then for sense (times inside the

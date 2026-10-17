@@ -15,6 +15,7 @@
     "zooms",
     "grades",
     "effects",
+    "tracked_effects",
     "photos",
     "notes",
     "ai_clips",
@@ -281,6 +282,98 @@
           "on_cut": {
             "type": "boolean",
             "description": "true = a transition: placed on the jump cut nearest to `at`."
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "tracked_effects": {
+      "type": "array",
+      "maxItems": 12,
+      "description": "Effects that follow the speaker's hand, face or body (a glow at the fingertips, sparks on the palm, an aura around them). Only if TRACKED EFFECTS says tracking is available AND the creator asks for such an effect. Empty otherwise. `at` is when the speaker says the matching word.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "effect",
+          "point",
+          "hand",
+          "at",
+          "duration",
+          "intensity",
+          "color",
+          "size",
+          "reason"
+        ],
+        "properties": {
+          "effect": {
+            "enum": [
+              "glow",
+              "spark",
+              "aura",
+              "energy"
+            ],
+            "description": "glow = a soft light; spark = particles thrown off; aura = a glowing outline around the face or body; energy = a pulsing core with rings."
+          },
+          "point": {
+            "enum": [
+              "palm",
+              "wrist",
+              "index_tip",
+              "thumb_tip",
+              "fingertips",
+              "face",
+              "body"
+            ],
+            "description": "What to follow. aura goes with face or body; the others with a hand."
+          },
+          "hand": {
+            "enum": [
+              "left",
+              "right",
+              "any"
+            ],
+            "description": "Which hand; any = whichever is found. Ignored for face and body."
+          },
+          "at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds in the RAW video (use the transcript times)."
+          },
+          "duration": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 8.0,
+            "description": "Seconds; 1.5 to 4 is usual."
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1.0,
+            "description": "0.8 is normal."
+          },
+          "color": {
+            "enum": [
+              "default",
+              "gold",
+              "white",
+              "blue",
+              "cyan",
+              "purple",
+              "pink",
+              "red",
+              "orange",
+              "green"
+            ]
+          },
+          "size": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 3.0,
+            "description": "1 = normal."
           },
           "reason": {
             "type": "string",

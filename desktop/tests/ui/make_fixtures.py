@@ -16,6 +16,9 @@ Writes tests/ui/fixtures/:
                                    the "AI pictures, clips & voice" screen: the engine's status,
                                    test results and a Compare run, made with the fake WanGP in
                                    tests/fake_wangp and a fake nvidia-smi (no GPU, no real models)
+  trackfx.project.json, trackfx.json, trackfx_src.*, track.demo.json
+                                   a tracked glow (synthetic track) drawn by the real engine, and
+                                   where it put the light, for the preview comparison
   broll.json, broll_*.png          B-roll found by the engine: two from a library folder, one
                                    from "Pixabay" (its answer faked, no network) and one made
                                    by the fake WanGP
@@ -92,6 +95,69 @@ def editor_fixtures(work):
                 names.append(f"C:/cache/{name}")
             data["thumbs"][f.name] = {**th, "files": names}
     (OUT / "editor.media.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def trackfx_fixtures(work):
+    """A tracked glow on a dark video with a marker, drawn by the real engine, so the preview's
+    glow can be compared with where the engine puts it. The track is synthetic (a hand moving
+    across the frame, lost for a while): no hands are detected here."""
+    import numpy as np
+    from PIL import Image
+
+    from autoedit.tracking import Point, Track
+    src = synthetic.make_marker_video(OUT / "trackfx_src.mp4", 720, 1280, 4.0, marker=(0.3, 0.6))
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-c:v", "libvpx-vp9", "-b:v", "1M",
+                    "-deadline", "realtime", "-cpu-used", "8", "-an", str(src.with_suffix(".webm"))],
+                   check=True)                           # the test browser has no H.264
+    p = new_project("trackfx", normalize_audio=False)
+    m = media_from_file(src, "m1")
+    p["media"] = [m]
+    tracks = {t["id"]: t for t in p["tracks"]}
+    tracks["main"]["clips"] = [{"id": "v1", "type": "video", "media": "m1", "start": 0.0, "duration": 4.0,
+                                "in": 0.0, "out": 4.0}]
+    n = 120
+    conf = [0.9] * n
+    for i in range(int(1.6 * 30), int(2.4 * 30)):                  # lost from 1.6 s to 2.4 s
+        conf[i] = 0.0
+    hand = Point([0.2 + 0.5 * i / (n - 1) for i in range(n)], [0.45 + 0.05 * np.sin(i / 12) for i in range(n)],
+                 conf)
+    face = Point([0.5] * n, [0.25] * n, [0.9] * n, [0.3] * n)
+    p["tracking"] = {"m1": Track(30, 0.0, {"right_index_tip": hand, "face": face}, "synthetic").to_json()}
+    glow = {"id": "k1", "type": "trackfx", "start": 0.5, "duration": 3.0, "effect": "glow", "point": "index_tip",
+            "hand": "right", "intensity": 0.9, "smooth": 0.5, "size": 0.6}
+    tracks["effects"]["clips"] = [glow]
+    published = json.loads(json.dumps(p))
+    for mm in published["media"]:
+        mm["path"] = f"C:/Videos/{Path(mm['path']).name}"
+    (OUT / "trackfx.project.json").write_text(json.dumps(published), encoding="utf-8")
+    # The engine's own frames, with and without the effect: where did it add light?
+    plain = json.loads(json.dumps(p))
+    for t in plain["tracks"]:
+        t["clips"] = [c for c in t["clips"] if c["type"] != "trackfx"]
+    cases = []
+    for t in (0.8, 1.2, 1.5, 1.7, 2.0, 2.6, 3.0, 3.6):
+        a = render_frame(p, t, work / f"tfx_{t}.png", work_dir=work / "tf1")
+        b = render_frame(plain, t, work / f"tfx_{t}_base.png", work_dir=work / "tf2")
+        d = np.asarray(Image.open(a).convert("RGB")).astype(float) - np.asarray(Image.open(b).convert("RGB")).astype(float)
+        lum = np.where(d.sum(axis=2) > 12, d.sum(axis=2), 0.0)
+        total = float(lum.sum())
+        if total > 0:
+            ys, xs = np.mgrid[0:lum.shape[0], 0:lum.shape[1]]
+            cases.append({"time": t, "x": float((xs * lum).sum() / total), "y": float((ys * lum).sum() / total), "light": total})
+        else:
+            cases.append({"time": t, "x": None, "y": None, "light": 0.0})
+    shutil.copy(work / "tfx_1.2.png", OUT / "trackfx_frame.png")
+    (OUT / "trackfx.json").write_text(json.dumps({"cases": cases}, indent=1), encoding="utf-8")
+    # The same hand for the demo video (the app's stand-in "Follow my hands" saves this).
+    demo = json.loads((OUT / "demo.project.json").read_text(encoding="utf-8"))
+    main = next(t for t in demo["tracks"] if t["kind"] == "video")["clips"][0]["media"]
+    long = 8 * 30
+    moving = Point([0.25 + 0.4 * i / (long - 1) for i in range(long)], [0.5] * long, [0.9] * long)
+    (OUT / "track.demo.json").write_text(json.dumps({"media": main, "track": Track(30, 0.0, {
+        "right_index_tip": moving, "left_index_tip": Point([0.6] * long, [0.5] * long, [0.2] * long),
+        "right_palm": moving, "face": Point([0.5] * long, [0.25] * long, [0.9] * long, [0.3] * long),
+        "body": Point([0.5] * long, [0.55] * long, [0.6] * long, [0.7] * long)}, "synthetic").to_json()}),
+        encoding="utf-8")
 
 
 def generation_fixtures(work):
@@ -317,6 +383,7 @@ def main():
                         "-b:v", "1M", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus",
                         str(mp4.with_suffix(".webm"))], check=True)
     editor_fixtures(work)
+    trackfx_fixtures(work)
     broll_fixtures(work, generation_fixtures(work))
     shutil.rmtree(work, ignore_errors=True)
     print(f"fixtures written to {OUT}")

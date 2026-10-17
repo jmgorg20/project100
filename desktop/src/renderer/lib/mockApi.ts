@@ -1,11 +1,11 @@
 // A stand-in for the Electron bridge, used only by the UI tests (?mock=1). It replays an
 // AI edit that the real engine made (fixtures written by tests/ui/make_fixtures.py), with the
 // same events in the same order, so the window can be tested without Electron or API keys.
-import type { AppApi, BrollFound, BrollRequest, BrollUpdate, EstimateResult, ExportUpdate, LibraryFile } from "../../shared/api";
+import type { AppApi, BrollFound, BrollRequest, BrollUpdate, EstimateResult, ExportUpdate, LibraryFile, TrackStatus, TrackUpdate } from "../../shared/api";
 import { addVersion, emptyHistory, redo, undo } from "../../shared/history";
 import { applyEvent, finishJob, newJob, versionFromJob } from "../../shared/jobs";
 import type {
-  CompareResult, EngineEvent, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Media, Plan, Project, Settings, Summary, Track, VideoHistory,
+  CompareResult, EngineEvent, TrackData, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Media, Plan, Project, Settings, Summary, Track, VideoHistory,
 } from "../../shared/types";
 import { CONTENT_TYPES } from "../../shared/types";
 
@@ -50,9 +50,34 @@ export function createMockApi(): AppApi {
     vocabulary: { words: string[]; corrections: { from: string; to: string }[] };
     recordings: number[];
     brollRequests: BrollRequest[];
+    trackStarts: string[];
+    trackDownloads: string[][];
   };
   w.vocabulary = { words: ["GCash", "Shopee"], corrections: [{ from: "g cash", to: "GCash" }] };
   w.recordings = [];
+  w.brollRequests = [];
+  w.trackStarts = [];
+  w.trackDownloads = [];
+  // Tracking: ?track=none (MediaPipe not installed), ?track=models (installed, no model files), else ready.
+  const trackMode = params.get("track") ?? "ready";
+  const trackModels: TrackStatus["models"] = (["hand", "face", "pose"] as const).map((kind) => ({
+    kind, file: kind === "hand" ? "hand_landmarker.task" : kind === "face" ? "blaze_face_short_range.tflite" : "pose_landmarker_lite.task",
+    url: `https://storage.googleapis.com/mediapipe-models/${kind}`, page: `https://ai.google.dev/edge/mediapipe/solutions/vision/${kind}`,
+    size: kind === "face" ? "under 1 MB" : "about 8 MB", path: `C:/AutoEditor/models/tracking/${kind}`, present: trackMode === "ready",
+  }));
+  const trackStatus = (): TrackStatus => {
+    const have = (k: string) => trackModels.find((m) => m.kind === k)!.present;
+    const installed = trackMode !== "none";
+    return {
+      installed, available: installed && have("hand"), hands: installed && have("hand"), face: installed && have("face"), pose: installed && have("pose"),
+      problems: !installed
+        ? ["Tracking needs the free MediaPipe package. Install it once: python -m pip install mediapipe  (see docs/tracking.md)"]
+        : have("hand") ? [] : ["No hand model yet: download it once (docs/tracking.md, or `python editor.py track-models`) and set tracking: hand_model."],
+      models: trackModels.map((m) => ({ ...m })),
+    };
+  };
+  const trackListeners = new Set<(u: TrackUpdate) => void>();
+  const stoppedTracks = new Set<string>();
   w.brollRequests = [];
   // B-roll the real engine found or made (tests/ui/make_fixtures.py): library, stock, AI.
   type BrollFixture = { found: (BrollFound & { tag: string })[]; library: LibraryFile[]; media: Record<string, Media> };
@@ -321,7 +346,48 @@ export function createMockApi(): AppApi {
     showInFolder: async (target) => {
       w.shownInFolder.push(target);
     },
+    trackStatus: async () => trackStatus(),
+    downloadTrackModels: async (kinds) => {
+      w.trackDownloads.push([...kinds]);
+      await wait(300 / speed);
+      for (const m of trackModels) if (kinds.includes(m.kind)) m.present = true;
+      return trackStatus();
+    },
+    startTrack: async (projectPath) => {
+      const taskId = `mocktrack${++counter}`;
+      w.trackStarts.push(projectPath);
+      (async () => {
+        const send = (u: Omit<TrackUpdate, "taskId">) => trackListeners.forEach((l) => l({ taskId, ...u }));
+        send({ label: "Following your hands and face" });
+        for (const percent of [10, 40, 70]) {
+          await wait(250 / speed);
+          if (stoppedTracks.has(taskId)) return send({ done: true, cancelled: true });
+          send({ percent });
+        }
+        const fixture = (await fetch("/fixtures/track.demo.json").then((r) => r.json())) as { media: string; track: TrackData };
+        // The engine saves the points in the project file; the stand-in does the same.
+        const saved = [...w.savedProjects].reverse().find((x) => x.path === projectPath);
+        const project = structuredClone(saved?.project ?? ((await fetch("/fixtures/demo.project.json").then((r) => r.json())) as Project));
+        project.tracking = { ...(project.tracking ?? {}), [fixture.media]: fixture.track };
+        w.savedProjects.push({ path: projectPath, project });
+        await wait(150 / speed);
+        send({ done: true, percent: 100, found: { right_index_tip: 0.93, left_index_tip: 0.05, face: 0.97 } });
+      })();
+      return taskId;
+    },
+    cancelTrack: async (taskId) => {
+      stoppedTracks.add(taskId);
+    },
+    onTrack: (callback) => {
+      trackListeners.add(callback);
+      return () => {
+        trackListeners.delete(callback);
+      };
+    },
     openProject: async (path) => {
+      if (params.get("project") === "trackfx" && !w.savedProjects.some((x) => x.path === path)) {
+        return { path, project: (await fetch("/fixtures/trackfx.project.json").then((r) => r.json())) as Project, backup: path.replace(/\.project\.json$/, ".before-editing.project.json") };
+      }
       if (params.get("project") === "broken") return { path, error: "The project file has problems:\n  - project.tracks[0] clip 'v1': unknown media 'nope'" };
       const saved = [...w.savedProjects].reverse().find((x) => x.path === path);
       const project = saved?.project ?? ((await fetch("/fixtures/demo.project.json").then((r) => r.json())) as Project);

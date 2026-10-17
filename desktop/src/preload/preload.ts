@@ -1,7 +1,7 @@
 // The only bridge between the window and the main process (contextIsolation + sandbox).
 // Sandboxed preloads cannot load local modules: only type imports from ../shared.
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
-import type { AppApi, BrollUpdate, ExportUpdate } from "../shared/api";
+import type { AppApi, BrollUpdate, ExportUpdate, TrackUpdate } from "../shared/api";
 import type { GenTaskUpdate, Job, VideoHistory } from "../shared/types";
 
 function listen<T>(channel: string, callback: (value: T) => void): () => void {
@@ -54,6 +54,11 @@ const api: AppApi = {
   getVocabulary: () => ipcRenderer.invoke("vocab:get"),
   setVocabulary: (v) => ipcRenderer.invoke("vocab:set", v),
   listLibrary: (kind) => ipcRenderer.invoke("library:list", kind),
+  trackStatus: () => ipcRenderer.invoke("track:status"),
+  startTrack: (projectPath) => ipcRenderer.invoke("track:start", projectPath),
+  cancelTrack: (taskId) => ipcRenderer.invoke("track:cancel", taskId),
+  onTrack: (callback) => listen<TrackUpdate>("track:task", callback),
+  downloadTrackModels: (kinds) => ipcRenderer.invoke("track:models", kinds),
   startBroll: (request) => ipcRenderer.invoke("broll:start", request),
   cancelBroll: (taskId) => ipcRenderer.invoke("broll:cancel", taskId),
   onBroll: (callback) => listen<BrollUpdate>("broll:task", callback),

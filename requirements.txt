@@ -2,6 +2,7 @@
 PyYAML>=6.0
 requests>=2.31
 Pillow>=10.0
+numpy>=1.24              # tracked effects (drawing) and tracking
 jsonschema>=4.18         # checks project files against autoedit/project.schema.json
 
 # Local (offline) transcription. Large download; only needed if provider: local
@@ -12,3 +13,6 @@ anthropic>=1.15
 
 # For running the tests (python -m pytest)
 pytest>=7.0
+
+# Optional: tracked effects (follow your hands / face). Free; see docs/tracking.md.
+# mediapipe>=0.10

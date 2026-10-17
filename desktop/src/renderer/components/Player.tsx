@@ -10,6 +10,7 @@ import {
   CANVAS, audioClipsAt, captionAt, captionPlacement, clipGain, clipSourceTime, cropBox, displayText, duration, fxAt, fxStyle, gradeCss,
   gradeLookAt, overlaysAt, popOpacity, popScale, segmentAt, segments, sourceTime, zoomAt, type CaptionFrame,
 } from "../lib/timeline";
+import { TrackFxLayer } from "./TrackFxLayer";
 
 // libass sizes text so that ascent + descent equals the style size; Inter's is 1.211 em.
 const INTER_LINE = 1.211;
@@ -378,6 +379,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 />
                 {still && stillFrame && <img className={`still ${stillFrame.className ?? ""}`} src={mediaUrl(still.path)} alt="" style={stillFrame.style} />}
                 {fx.overlay && <div className="fx-layer" style={{ background: fx.overlay.color, opacity: fx.overlay.opacity }} data-testid="fx-layer" />}
+                {project && <TrackFxLayer project={project} time={time} />}
               </div>
               {overlays.map((clip) => {
                 const m = media.get(clip.media ?? "");

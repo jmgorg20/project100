@@ -295,14 +295,19 @@ def effect_layers(project, fps, clip_type, key):
     return layers
 
 
-def add_zooms(graph, current, project, fps):
-    """Zoom effects. A plain zoom (punch-in) crops at once; one with `ease` grows smoothly
-    from 100% to its amount over `ease` seconds, then holds."""
+def zoom_layers(project, fps):
+    """[((amount, anchor_y, ease, start), [(frame, frame)])]: the zoom layers, in render order."""
     layers = effect_layers(project, fps, "zoom",
                            lambda c: (float(c["amount"]),
                                       float(c.get("anchor_y", DEFAULT_ANCHOR_Y)),
                                       float(c.get("ease", 0)), c["start"] if c.get("ease") else 0))
-    layers = [(k, r) for k, r in layers if k[0] > 1.0]
+    return [(k, r) for k, r in layers if k[0] > 1.0]
+
+
+def add_zooms(graph, current, project, fps):
+    """Zoom effects. A plain zoom (punch-in) crops at once; one with `ease` grows smoothly
+    from 100% to its amount over `ease` seconds, then holds."""
+    layers = zoom_layers(project, fps)
     if not layers:
         return current
     labels = [f"zsrc{i}" for i in range(len(layers) + 1)]
@@ -410,6 +415,21 @@ def add_fx(graph, current, project, fps):
             current = out
             k += 1
     return current
+
+
+def add_trackfx(graph, current, layer, fps, total_frames):
+    """Add the tracked-effect video (drawn by trackfx.py, black background) with the screen
+    blend: black changes nothing, light adds. Both sides are converted to RGB first, because
+    "screen" on YUV planes would shift the colours."""
+    idx = graph.add_input(["-i", layer["path"]])
+    before = layer["f0"] / fps
+    after = max(0.0, (total_frames - layer["f1"]) / fps)
+    graph.add(f"[{idx}:v]scale={W}:{H}:flags=bicubic,format=gbrp,setsar=1,"
+              f"tpad=start_mode=add:start_duration={before:.5f}:stop_mode=add:"
+              f"stop_duration={after:.5f}:color=black,fps={fps}[tfx]",
+              f"[{current}]format=gbrp[tfxbase]",
+              "[tfxbase][tfx]blend=all_mode=screen:eof_action=pass[tfxout]")
+    return "tfxout"
 
 
 def add_overlays(graph, current, project, media, base_dir, fps):
@@ -599,10 +619,12 @@ def add_audio_tracks(graph, project, media, base_dir, fps, dialog):
 
 # ---------------------------------------------------------------- the command
 
-def build_command(project, base_dir, output, ass_name=None, export=None, frame=None):
+def build_command(project, base_dir, output, ass_name=None, export=None, frame=None,
+                  trackfx=None):
     """Return (input_args, filter_graph_text, output_args).
 
     `frame`: render only this frame number (0-based) to `output` as a picture.
+    `trackfx`: the drawn tracked-effect video {"path", "f0", "f1"} (see trackfx.prepare_layer).
     """
     export = {**DEFAULT_EXPORT, **(export or {})}
     fps = project["settings"]["fps"]
@@ -617,6 +639,8 @@ def build_command(project, base_dir, output, ass_name=None, export=None, frame=N
     current = add_zooms(graph, current, project, fps)
     current = add_grades(graph, current, project, fps, total_frames)
     current = add_fx(graph, current, project, fps)
+    if trackfx:
+        current = add_trackfx(graph, current, trackfx, fps, total_frames)
     current = add_overlays(graph, current, project, media, base_dir, fps)
     if ass_name:
         graph.add(f"[{current}]subtitles={ass_name}:fontsdir=fonts[capout]")
@@ -638,6 +662,24 @@ def build_command(project, base_dir, output, ass_name=None, export=None, frame=N
         "-movflags", "+faststart", str(output),
     ]
     return graph.inputs, ";\n".join(graph.lines) + "\n", outputs
+
+
+def prepare_trackfx(project, base_dir, job, frame=None, cancel=None, reporter=None):
+    """Draw the tracked effects (if the project has any) to a video in `job`.
+    Returns {"path", "f0", "f1"} or None."""
+    if not any(c["type"] == "trackfx" for t in visible_tracks(project, "effect")
+               for c in t["clips"]):
+        return None
+    from . import trackfx
+    fps = project["settings"]["fps"]
+    media = media_by_id(project)
+    total_frames = frame_index(timeline_duration(project), fps)
+    if reporter:
+        reporter.stage("trackfx", "drawing the tracked effects")
+    return trackfx.prepare_layer(
+        project, media, Path(base_dir), fps, total_frames,
+        main_segments(project, media, fps, total_frames), zoom_layers(project, fps), job,
+        last_frame=frame, cancel=cancel)
 
 
 def check_media_files(project, base_dir):
@@ -672,7 +714,9 @@ def _run(project, output, base_dir, work_dir, fonts_folder, export, reporter, ca
         if ass_text:
             ass_name = "captions.ass"
             (job / ass_name).write_text(ass_text, encoding="utf-8")
-        inputs, graph, outputs = build_command(project, base_dir, part, ass_name, export, frame)
+        layer = prepare_trackfx(project, base_dir, job, frame, cancel, reporter)
+        inputs, graph, outputs = build_command(project, base_dir, part, ass_name, export, frame,
+                                               trackfx=layer)
         script = job / "filters.txt"
         script.write_text(graph, encoding="utf-8")
         fps = project["settings"]["fps"]

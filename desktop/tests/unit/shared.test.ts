@@ -12,7 +12,7 @@ function basePlan(): Plan {
     summary: "", style: "yellow_pop", grade: "natural_clean",
     pacing: { silence_threshold: 0.25, remove_fillers: true }, zoom: { enabled: true, amount: 1.15 },
     captions: { enabled: true, size_scale: 1, position: null, highlight_words: [] },
-    cuts: [], zooms: [], grades: [], effects: [], photos: [], notes: [], ai_clips: [], voiceovers: [],
+    cuts: [], zooms: [], grades: [], effects: [], tracked_effects: [], photos: [], notes: [], ai_clips: [], voiceovers: [],
   };
 }
 
@@ -132,6 +132,22 @@ describe("plan review", () => {
     ]);
     expect(acceptedPlan(withFx, basePlan(), new Set(["effects.1"])).effects?.map((e) => e.effect)).toEqual(["shake"]);
     expect(planItems({ ...basePlan(), effects: undefined }, basePlan())).toEqual([]);
+  });
+
+  it("lists effects that follow the hands and drops the rejected ones", () => {
+    const withTracked: Plan = {
+      ...basePlan(),
+      tracked_effects: [
+        { effect: "glow", point: "index_tip", hand: "right", at: 12, duration: 2, intensity: 0.8, color: "gold", size: 1, reason: "when you say power" },
+        { effect: "aura", point: "body", hand: "any", at: 30, duration: 3, intensity: 0.8, color: "cyan", size: 1, reason: "" },
+      ],
+    };
+    const items = planItems(withTracked, basePlan());
+    expect(items.map((i) => [i.id, i.group, i.label])).toEqual([
+      ["tracked_effects.0", "Tracked effects", "Glow follows the right index fingertip at 0:12"],
+      ["tracked_effects.1", "Tracked effects", "Aura follows the body at 0:30"],
+    ]);
+    expect(acceptedPlan(withTracked, basePlan(), new Set(["tracked_effects.1"])).tracked_effects?.map((e) => e.effect)).toEqual(["aura"]);
   });
 
   it("lists AI clips and voice-overs, and drops the rejected ones", () => {

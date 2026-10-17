@@ -72,6 +72,14 @@ DEFAULTS = {
         "triggers_file": "triggers.yaml",
         "folder": "assets/overlays",
     },
+    "tracking": {
+        "hand_model": "",
+        "face_model": "",
+        "pose_model": "",
+        "fps": 30,
+        "min_confidence": 0.5,
+        "swap_hands": False,
+    },
     "broll": {
         "library_folder": "",
         "use_stock": True,

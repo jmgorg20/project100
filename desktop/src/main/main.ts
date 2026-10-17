@@ -2,7 +2,7 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from "electron";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { BrollFound, BrollRequest, BrollUpdate, ExportOptions, ExportUpdate } from "../shared/api";
+import type { BrollFound, BrollRequest, BrollUpdate, ExportOptions, ExportUpdate, TrackStatus, TrackUpdate } from "../shared/api";
 import { versionFromJob } from "../shared/jobs";
 import { cleanVocabulary } from "../shared/captionEdit";
 import { backupPathFor } from "../shared/paths";
@@ -33,6 +33,7 @@ const genTasks = new Map<string, RunHandle>();
 let genCounter = 0;
 const exportTasks = new Map<string, RunHandle>();
 const brollTasks = new Map<string, RunHandle>();
+const trackTasks = new Map<string, RunHandle>();
 const peaksCache = new Map<string, unknown>();
 const thumbsCache = new Map<string, unknown>();
 
@@ -129,6 +130,28 @@ function startBroll(request: BrollRequest): string {
     if (r.cancelled) update({ done: true, cancelled: true });
     else if (r.startError || error || r.code !== 0 || !result) update({ done: true, error: r.startError ?? error ?? `The B-roll search stopped (exit code ${r.code}).` });
     else update({ done: true, result: { file: result.file, media: result.media, broll: result.broll, notes: result.notes ?? [] } });
+  });
+  return taskId;
+}
+
+/** The engine's "track" command: finds the speaker's hands/face in the project's video and saves the points in the project file. */
+function startTrack(projectPath: string): string {
+  const taskId = `track${++genCounter}`;
+  const update = (u: Omit<TrackUpdate, "taskId">) => send("track:task", { taskId, ...u });
+  let error: string | undefined;
+  let found: Record<string, number> | undefined;
+  const handle = runEngine(engineConfig(), ["track", projectPath], (event) => {
+    if (event.type === "stage") update({ label: event.label });
+    if (event.type === "progress") update({ percent: event.percent });
+    if (event.type === "result") found = event.found as Record<string, number>;
+    if (event.type === "error") error = event.message;
+  });
+  trackTasks.set(taskId, handle);
+  handle.done.then((r) => {
+    trackTasks.delete(taskId);
+    if (r.cancelled) update({ done: true, cancelled: true });
+    else if (r.startError || error || r.code !== 0) update({ done: true, error: r.startError ?? error ?? `Following your hands stopped (exit code ${r.code}).` });
+    else update({ done: true, percent: 100, found });
   });
   return taskId;
 }
@@ -365,6 +388,21 @@ function registerIpc(): void {
     if (!folder) return { folder: "", files: [] };
     if (!fs.existsSync(folder)) return { folder, files: [], error: `The folder ${folder} was not found.` };
     return { folder, files: kind === "broll" ? listFiles(folder, [...VIDEO_TYPES, ...PHOTO_TYPES], 3000) : listAudioFiles(folder) };
+  });
+  ipcMain.handle("track:status", async () => {
+    const r = await engineOnce(["track-status"]);
+    return r.error || !r.result ? { error: r.error ?? "No answer from the editor engine." } : (r.result as unknown as TrackStatus);
+  });
+  ipcMain.handle("track:start", (_e, projectPath: string) => startTrack(projectPath));
+  ipcMain.handle("track:cancel", (_e, taskId: string) => trackTasks.get(taskId)?.cancel());
+  // Only called after the window's confirm dialog (the app never downloads a model by itself).
+  ipcMain.handle("track:models", async (_e, kinds: string[]) => {
+    const clean = kinds.filter((k) => ["hand", "face", "pose"].includes(k));
+    if (!clean.length) return { error: "Choose a model to download." };
+    const r = await engineOnce(["track-models", "--download", ...clean, "--yes"]);
+    if (r.error) return { error: r.error };
+    const status = await engineOnce(["track-status"]);
+    return status.error || !status.result ? { error: status.error ?? "No answer from the editor engine." } : (status.result as unknown as TrackStatus);
   });
   ipcMain.handle("broll:start", (_e, request: BrollRequest) => startBroll(request));
   ipcMain.handle("broll:cancel", (_e, taskId: string) => brollTasks.get(taskId)?.cancel());

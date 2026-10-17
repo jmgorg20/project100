@@ -1,10 +1,10 @@
 // The AI plan as a list of changes the creator can accept or reject one by one
 // (used when Auto mode is off). Pure functions.
-import type { FxEffect, Plan, PlanAiClip } from "./types";
+import type { FxEffect, Plan, PlanAiClip, PlanTrackedEffect } from "./types";
 
 export interface PlanItem {
   id: string;
-  group: "Look" | "Pacing" | "Cuts" | "Zooms" | "Effects" | "Colour" | "Photos" | "B-roll & AI clips";
+  group: "Look" | "Pacing" | "Cuts" | "Zooms" | "Effects" | "Tracked effects" | "Colour" | "Photos" | "B-roll & AI clips";
   label: string;
   detail?: string;
 }
@@ -40,6 +40,9 @@ export function planItems(plan: Plan, base: Plan): PlanItem[] {
   plan.zooms.forEach((r, i) => items.push({ id: `zooms.${i}`, group: "Zooms", label: `Zoom ${Math.round((r.amount ?? 1) * 100)}% at ${mmss(r.start)}–${mmss(r.end)}` }));
   (plan.effects ?? []).forEach((e, i) =>
     items.push({ id: `effects.${i}`, group: "Effects", label: `${FX_NAMES[e.effect] ?? e.effect}${e.on_cut ? " transition" : ""} at ${mmss(e.at)}`, detail: e.reason }),
+  );
+  (plan.tracked_effects ?? []).forEach((e, i) =>
+    items.push({ id: `tracked_effects.${i}`, group: "Tracked effects", label: `${TRACK_NAMES[e.effect] ?? e.effect} follows ${trackedWhere(e)} at ${mmss(e.at)}`, detail: e.reason }),
   );
   plan.grades.forEach((r, i) => items.push({ id: `grades.${i}`, group: "Colour", label: `${(r.grade ?? "").replace(/_/g, " ")} at ${mmss(r.start)}–${mmss(r.end)}` }));
   plan.photos.forEach((p, i) => items.push({ id: `photos.${i}`, group: "Photos", label: `${p.file} at ${mmss(p.at)}`, detail: p.reason }));
@@ -79,6 +82,7 @@ export function acceptedPlan(plan: Plan, base: Plan, accepted: Set<string>): Pla
     zooms: plan.zooms.filter((_, i) => keep(`zooms.${i}`)),
     grades: plan.grades.filter((_, i) => keep(`grades.${i}`)),
     effects: (plan.effects ?? []).filter((_, i) => keep(`effects.${i}`)),
+    tracked_effects: (plan.tracked_effects ?? []).filter((_, i) => keep(`tracked_effects.${i}`)),
     photos: plan.photos.filter((_, i) => keep(`photos.${i}`)),
     ai_clips: (plan.ai_clips ?? []).filter((_, i) => keep(`ai_clips.${i}`)),
     voiceovers: (plan.voiceovers ?? []).filter((_, i) => keep(`voiceovers.${i}`)),
@@ -93,6 +97,15 @@ export function formatCost(total: number | null | undefined): string {
 }
 
 const FX_NAMES: Record<FxEffect, string> = { flash: "Flash", whip: "Whip blur", shake: "Shake", glitch: "Glitch", dip: "Dip to black" };
+
+const TRACK_NAMES: Record<string, string> = { glow: "Glow", spark: "Sparks", aura: "Aura", energy: "Energy rings" };
+
+function trackedWhere(e: PlanTrackedEffect): string {
+  if (e.point === "face") return "the face";
+  if (e.point === "body") return "the body";
+  const part = { palm: "palm", wrist: "wrist", index_tip: "index fingertip", thumb_tip: "thumb tip", fingertips: "fingertips" }[e.point] ?? e.point;
+  return `the ${e.hand === "any" ? "" : `${e.hand} `}${part}`;
+}
 
 /** "B-roll" when it may come from your folder or stock first; "AI" when only AI makes it. */
 function brollWhere(source: PlanAiClip["source"]): string {

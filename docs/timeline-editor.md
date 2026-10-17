@@ -144,6 +144,12 @@ Click a B-roll clip to see where it came from (credit, licence, or **AI**), and 
 another**, **Regenerate with AI** or **Replace with a file**. Each is one undo step.
 Full guide: [broll.md](broll.md).
 
+## Effects that follow you · Sumusunod sa iyo
+
+Effects tab → **Follow my hands**: add a glow, sparks, an aura, energy rings or your own clip, click
+**Follow my hands** once for the video, then set what it follows (palm, fingertips, face, body),
+which hand, strength, size, steadiness and colour. Full guide: [tracking.md](tracking.md).
+
 ### Keyboard shortcuts · Mga shortcut
 
 Press **?** in the editor for the full list.

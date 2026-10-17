@@ -13,3 +13,10 @@ def no_stock_keys(monkeypatch):
     """Tests never search Pexels/Pixabay with your real keys (set empty, so .env is not read)."""
     monkeypatch.setenv("PEXELS_API_KEY", "")
     monkeypatch.setenv("PIXABAY_API_KEY", "")
+
+
+@pytest.fixture(autouse=True)
+def no_default_tracking_models(tmp_path, monkeypatch):
+    """Tests never pick up tracking model files you downloaded into models/tracking/."""
+    from autoedit import tracking
+    monkeypatch.setattr(tracking, "MODEL_DIR", tmp_path / "no-tracking-models")

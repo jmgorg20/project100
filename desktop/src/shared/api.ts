@@ -80,6 +80,28 @@ export interface BrollUpdate {
   cancelled?: boolean;
 }
 
+/** Can this PC follow hands and faces? (MediaPipe + the model files you downloaded.) */
+export interface TrackStatus {
+  available: boolean;
+  installed: boolean;
+  hands: boolean;
+  face: boolean;
+  pose: boolean;
+  problems: string[];
+  models: { kind: "hand" | "face" | "pose"; file: string; url: string; page: string; size: string; path: string; present: boolean }[];
+}
+
+export interface TrackUpdate {
+  taskId: string;
+  label?: string;
+  percent?: number;
+  done?: boolean;
+  /** Share of the tracked time each point was found (0-1). */
+  found?: Record<string, number>;
+  error?: string;
+  cancelled?: boolean;
+}
+
 export interface ExportUpdate {
   taskId: string;
   percent?: number;
@@ -155,6 +177,14 @@ export interface AppApi {
   setVocabulary(v: { words: string[]; corrections: { from: string; to: string }[] }): Promise<{ ok: boolean; error?: string }>;
   /** Sound files in your music or sound-effect folder, or pictures/videos in your B-roll folder. */
   listLibrary(kind: "music" | "sfx" | "broll"): Promise<{ folder: string; files: LibraryFile[]; error?: string }>;
+  // ---- tracked effects (follow hands / face)
+  trackStatus(): Promise<TrackStatus | { error: string }>;
+  /** Find the points in the project's main video and save them in the project file. */
+  startTrack(projectPath: string): Promise<string>;
+  cancelTrack(taskId: string): Promise<void>;
+  onTrack(callback: (update: TrackUpdate) => void): () => void;
+  /** Download model files (only after the user confirmed: see TrackStatus.models for the sources). */
+  downloadTrackModels(kinds: ("hand" | "face" | "pose")[]): Promise<TrackStatus | { error: string }>;
   // ---- B-roll
   startBroll(request: BrollRequest): Promise<string>;
   cancelBroll(taskId: string): Promise<void>;

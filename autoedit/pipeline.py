@@ -297,6 +297,33 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
                          "duration": round(duration, 6), "effect": fx["effect"],
                          "intensity": round(min(1.0, max(0.0, float(fx["intensity"]))), 4)})
     effect_tracks += [("Effects", lane) for lane in assign_lanes(fx_clips)]
+    tracked = plan.get("tracked") or []
+    track_data = plan.get("track")
+    tracked_clips = []
+    if tracked and track_data is not None:
+        from .tracking import point_names_for
+        used = set()
+        for e in tracked:
+            t = remap_time(e["at"], segments, side="next")
+            if t is None:
+                continue
+            duration = min(float(e["duration"]), new_length - t)
+            if duration * fps < 1:
+                continue
+            clip = {"id": ids.next("k"), "type": "trackfx", "start": round(start + t, 6),
+                    "duration": round(duration, 6), "effect": e["effect"], "point": e["point"],
+                    "hand": e.get("hand", "any"), "intensity": float(e["intensity"]),
+                    "size": float(e.get("size", 1.0)), "smooth": 0.5}
+            if e.get("color"):
+                clip["color"] = e["color"]
+            names = point_names_for(clip)
+            if not any(n in track_data.points for n in names):
+                continue                         # that point was not tracked
+            tracked_clips.append(clip)
+            used.update(n for n in names if n in track_data.points)
+        if tracked_clips:
+            project["tracking"] = {main_media["id"]: track_data.to_json(sorted(used))}
+    effect_tracks += [("Tracked", lane) for lane in assign_lanes(tracked_clips)]
     replace_track(project, "effects", "effect", effect_tracks)
 
     # Overlays: pop-in pictures, then the logo on its own track (drawn on top).

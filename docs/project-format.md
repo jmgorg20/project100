@@ -43,8 +43,23 @@ track may not overlap; use another track of the same kind instead.
 | `effect` | `zoom` | `amount` (1-5), `anchor_y` (0 = zoom towards the top, 0.5 = the middle; default 0.4); `ease` (seconds to grow from 100%; 0 or missing = punch-in) |
 | | `grade` | `grade`: `natural_clean`, `none`, `warm`, `black_and_white`, `orange_teal`, `high_contrast`; `intensity` (0-1, default 1: blended with the original) |
 | | `fx` | `effect`: `shake`, `flash` (to white), `dip` (to black), `glitch` (colour split + noise), `whip` (sideways motion blur); `intensity` (0-1, default 0.6). Flash and dip peak in the middle of the clip. Used for transitions too (a short `fx` clip centred on a cut). |
+| | `trackfx` | An effect that follows a tracked point: `effect` (`glow`, `spark`, `aura`, `energy`, `clip`), `point` (`palm`, `wrist`, `thumb_tip`, `index_tip`, `middle_tip`, `ring_tip`, `pinky_tip`, `fingertips`, `face`, `body`), `hand` (`left`, `right`, `any`), `intensity`, `color` (`#rrggbb`), `size` (0.1-4), `smooth` (0-1), `fade_in`, `fade_out`; `effect: "clip"` needs `media` (your clip) and may set `blend` (`screen` for a black background, or `alpha`). See [tracking.md](tracking.md). |
 | `caption` | `caption` | `style` (name or number 1-13), `highlight_keywords` (true/false), `overrides` (size, colours, outline, `zone` `lower`/`center`/`top`/`divider`, `align`, case, words per line...), `words` (each `text`, `start`, `end` in seconds **from the start of the clip**, `highlight`) |
 | `audio` (needs a `role`: `original`, `voiceover`, `music`, `sfx`) | `audio` | `in`, `out`, `volume`, `fade_in`, `fade_out` (seconds); version 2: `speed` |
+
+**Tracking (optional, top level `tracking`).** Where the speaker's hands, face and body are in
+a video, saved so tracked effects can follow them without any tracker running:
+
+```json
+"tracking": {"m1": {"fps": 30, "start": 0.0, "source": "mediapipe 1.1.1",
+  "points": {"right_index_tip": {"x": [0.41, 0.42], "y": [0.52, 0.52], "c": [0.93, 0.95]},
+             "face": {"x": [0.5], "y": [0.3], "c": [0.9], "s": [0.28]}}}}
+```
+
+The key is a media id (a video). Sample `i` is at `start + i / fps` seconds of that video; `x`, `y`
+are 0-1 across the frame (y down), `c` is the confidence (0 = not found), `s` an optional size
+(share of the frame width). Names: `left_` / `right_` + `wrist`, `palm`, `thumb_tip`, `index_tip`,
+`middle_tip`, `ring_tip`, `pinky_tip`, and `face`, `body`.
 
 **Speed (version 2).** A clip with `speed` plays `out - in` seconds of its file in
 `(out - in) / speed` seconds, so `out - in = duration × speed`. The sound keeps its pitch
@@ -117,6 +132,7 @@ python editor.py render output\talk_edited.project.json [--height 1280] [--crf 2
 python editor.py frame output\talk_edited.project.json --time 12.5    # exact frame -> PNG
 python editor.py validate output\talk_edited.project.json
 python editor.py broll output\talk_edited.project.json --clip o3   # B-roll: find another (broll.md)
+python editor.py track output\talk_edited.project.json              # follow hands/face for tracked effects (tracking.md)
 ```
 
 Add `--json` (before the command) to get progress as JSON lines on stdout, one object per

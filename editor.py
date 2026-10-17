@@ -155,6 +155,20 @@ def build_parser():
     br.add_argument("--download-folder", help="where stock downloads are kept")
     br.add_argument("--generation-settings", help="generation settings file "
                                                   "(default: generation.json)")
+    trk = sub.add_parser("track", help="find your hands / face in a video, or in a project's main "
+                                        "video (saves the points in the project)")
+    trk.add_argument("source", help="a video, or a .project.json")
+    trk.add_argument("--ranges", help='source seconds to look at, e.g. "2-5.5,9-12" (default: the '
+                                      "moments the project's tracked effects need, else all)")
+    trk.add_argument("--points", nargs="*", help="which points to keep (default: all, or the "
+                                                 "ones the project's effects use)")
+    trk.add_argument("--output", help="a video only: write the points to this .json file")
+    sub.add_parser("track-status", help="can this PC track hands/face? (MediaPipe + models)")
+    tm = sub.add_parser("track-models", help="the MediaPipe model files tracking needs: shows "
+                                             "what they are, and downloads them only if you say so")
+    tm.add_argument("--download", nargs="+", choices=["hand", "face", "pose"],
+                    help="download these models into models/tracking/")
+    tm.add_argument("--yes", action="store_true", help="yes, download them (you read the model pages)")
     th = sub.add_parser("thumbs", help="small pictures along a video for the timeline (cached)")
     th.add_argument("file")
     th.add_argument("--height", type=int, default=120)
@@ -406,6 +420,127 @@ def cmd_broll(args, reporter, cancel):
     print(f"Saved {project_file.name} (clip {clip['id']})")
     reporter.result(project=str(project_file), clip=clip["id"], file=str(file), broll=meta,
                     notes=notes)
+
+
+def _parse_ranges(text):
+    out = []
+    for part in (text or "").split(","):
+        if part.strip():
+            a, _, b = part.partition("-")
+            try:
+                out.append((float(a), float(b)))
+            except ValueError:
+                raise EditorError(f"Cannot read the range '{part}'. Use e.g. --ranges 2-5.5,9-12")
+    return out
+
+
+def _source_ranges(project, media_id, margin=0.5):
+    """Source-video seconds that the project's tracked effects show (through the main clips)."""
+    from autoedit.project import clip_end
+    main = next((t for t in project["tracks"] if t["kind"] == "video"), None)
+    out = []
+    for t in project["tracks"]:
+        for fx in (t["clips"] if t["kind"] == "effect" else []):
+            if fx["type"] != "trackfx":
+                continue
+            for c in (main["clips"] if main else []):
+                if c.get("media") != media_id or c["type"] != "video":
+                    continue
+                a, b = max(fx["start"], c["start"]), min(clip_end(fx), clip_end(c))
+                if b > a:
+                    speed = float(c.get("speed", 1.0))
+                    out.append((c["in"] + (a - c["start"]) * speed - margin,
+                                c["in"] + (b - c["start"]) * speed + margin))
+    return out
+
+
+def cmd_track(args, reporter, cancel):
+    import json
+    from autoedit import tracking
+    from autoedit.cache import Cache
+    from autoedit.project import load_project, resolve_media_path, save_project
+    cfg = load_config(args.config)
+    cache = Cache(project_path(cfg["ai"]["cache_folder"]))
+    source = Path(args.source).resolve()
+    ranges = _parse_ranges(args.ranges)
+    names = list(args.points) if args.points else None
+    project = media_id = None
+    if source.suffix.lower() == ".json" or source.name.endswith(".project.json"):
+        project = load_project(source)
+        main = next((t for t in project["tracks"] if t["kind"] == "video"), None)
+        clip = next((c for c in (main["clips"] if main else []) if c["type"] == "video"), None)
+        if clip is None:
+            raise EditorError("This project has no main video to track.")
+        media_id = clip["media"]
+        media = next(m for m in project["media"] if m["id"] == media_id)
+        video = resolve_media_path(media, source.parent)
+        fx = [c for t in project["tracks"] if t["kind"] == "effect" for c in t["clips"] if c["type"] == "trackfx"]
+        if not ranges:
+            ranges = tracking.merge_ranges(_source_ranges(project, media_id)) or []
+        if names is None:
+            names = sorted({n for c in fx for n in tracking.point_names_for(c)}) or list(tracking.DEFAULT_POINTS)
+    else:
+        video = source
+        if not video.exists():
+            raise EditorError(f"Video not found: {video}")
+    key = None
+    track = None
+    use_names = names or list(tracking.POINT_NAMES)
+    from autoedit.cache import key_for
+    key = key_for({"k": tracking.track_cache_key(cache, video, cfg), "ranges": ranges, "names": sorted(use_names)})
+    cached = cache.get("tracks", key)
+    if cached:
+        track = tracking.Track.from_json(cached)
+        print("Using the saved track for this video.")
+    else:
+        reporter.stage("tracking", "Following your hands and face")
+        track = tracking.detect_video(video, cfg, ranges=ranges or None, names=use_names,
+                                      reporter=reporter, cancel=cancel)
+        cache.put("tracks", key, track.to_json())
+    found = {n: round(sum(1 for c in p.c if c >= 0.5) / max(1, len(p)), 3) for n, p in track.points.items()}
+    for n, share in found.items():
+        print(f"  {n}: found in {share * 100:.0f}% of the tracked time")
+    if project is None:
+        if args.output:
+            Path(args.output).write_text(json.dumps(track.to_json(), ensure_ascii=False), encoding="utf-8")
+            print(f"Saved {args.output}")
+        reporter.result(track=track.to_json(), found=found)
+        return
+    project.setdefault("tracking", {})[media_id] = track.to_json()
+    save_project(project, source)
+    print(f"Saved the points in {source.name}")
+    reporter.result(project=str(source), media=media_id, found=found)
+
+
+def cmd_track_status(args, reporter):
+    from autoedit import tracking
+    cfg = load_config(args.config)
+    st = tracking.status(cfg)
+    for line in st["problems"]:
+        print(f"!!  {line}")
+    print(f"MediaPipe: {'installed' if st['installed'] else 'not installed'}   hands: {st['hands']}   "
+          f"face/body: {st['face']}   pose: {st['pose']}")
+    reporter.result(**st, models=tracking.model_info())
+
+
+def cmd_track_models(args, reporter):
+    from autoedit import tracking
+    info = tracking.model_info()
+    for m in info:
+        print(f"{m['kind']:5} {m['file']}  ({m['size']})  {'present' if m['present'] else 'not downloaded'}")
+        print(f"      from {m['url']}")
+        print(f"      read the model card first: {m['page']}")
+    if not args.download:
+        print("\nNothing was downloaded. The models are Google's MediaPipe models, with their own terms; "
+              "this app never downloads one by itself. To download: track-models --download hand face --yes")
+        reporter.result(models=info, downloaded=[])
+        return
+    if not args.yes:
+        raise EditorError("Add --yes to confirm the download (after reading the model cards above).")
+    paths = tracking.download_models(args.download)
+    for kind, path in paths.items():
+        print(f"Saved {path}")
+    reporter.result(models=tracking.model_info(), downloaded=list(paths))
 
 
 def cmd_thumbs(args, reporter):
@@ -717,6 +852,12 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_peaks(args, reporter)
         elif args.command == "thumbs":
             cmd_thumbs(args, reporter)
+        elif args.command == "track":
+            cmd_track(args, reporter, cancel)
+        elif args.command == "track-status":
+            cmd_track_status(args, reporter)
+        elif args.command == "track-models":
+            cmd_track_models(args, reporter)
         elif args.command == "retranscribe":
             cmd_retranscribe(args, reporter)
         elif args.command == "broll":

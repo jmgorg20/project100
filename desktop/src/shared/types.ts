@@ -37,9 +37,30 @@ export interface Word {
 
 export type FxEffect = "shake" | "flash" | "dip" | "glitch" | "whip";
 
+/** Effects that follow a tracked hand / face / body (see docs/tracking.md). */
+export type TrackEffect = "glow" | "spark" | "aura" | "energy" | "clip";
+export type TrackPointKind = "palm" | "wrist" | "thumb_tip" | "index_tip" | "middle_tip" | "ring_tip" | "pinky_tip" | "fingertips" | "face" | "body";
+export type TrackHand = "left" | "right" | "any";
+
+/** One tracked point: samples at start + i / fps. x, y: 0-1 across the source frame; c: confidence; s: size. */
+export interface TrackPoint {
+  x: number[];
+  y: number[];
+  c: number[];
+  s?: number[];
+}
+
+export interface TrackData {
+  fps: number;
+  start?: number;
+  source?: string;
+  swap_hands?: boolean;
+  points: Record<string, TrackPoint>;
+}
+
 export interface Clip {
   id: string;
-  type: "video" | "image" | "zoom" | "grade" | "caption" | "audio" | "fx";
+  type: "video" | "image" | "zoom" | "grade" | "caption" | "audio" | "fx" | "trackfx";
   start: number;
   duration: number;
   media?: string;
@@ -70,7 +91,14 @@ export interface Clip {
   grade?: string;
   /** Grade and fx: 0-1. */
   intensity?: number;
-  effect?: FxEffect;
+  effect?: FxEffect | TrackEffect;
+  /** trackfx: what to follow, which hand, how big, how steady, colour, and (effect "clip") how your clip is blended. */
+  point?: TrackPointKind;
+  hand?: TrackHand;
+  size?: number;
+  smooth?: number;
+  color?: string;
+  blend?: "screen" | "alpha";
   // captions
   style?: string | number;
   highlight_keywords?: boolean;
@@ -117,6 +145,8 @@ export interface Project {
   media: Media[];
   tracks: Track[];
   transcript?: unknown;
+  /** Tracked points per media id (the speaker's hands, face and body). */
+  tracking?: Record<string, TrackData>;
   meta?: Record<string, unknown>;
 }
 
@@ -146,6 +176,19 @@ export interface PlanAiClip {
   at: number;
   duration: number;
   position: "full" | "top" | "center";
+  reason: string;
+}
+
+/** An effect the AI attaches to the speaker's hand, face or body. */
+export interface PlanTrackedEffect {
+  effect: Exclude<TrackEffect, "clip">;
+  point: Exclude<TrackPointKind, "middle_tip" | "ring_tip" | "pinky_tip">;
+  hand: TrackHand;
+  at: number;
+  duration: number;
+  intensity: number;
+  color: string;
+  size: number;
   reason: string;
 }
 
@@ -182,6 +225,8 @@ export interface Plan {
   grades: PlanRange[];
   /** Older plans have none. */
   effects?: PlanEffect[];
+  /** Older plans have none. */
+  tracked_effects?: PlanTrackedEffect[];
   photos: PlanPhoto[];
   notes: string[];
   ai_clips?: PlanAiClip[];
