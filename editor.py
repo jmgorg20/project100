@@ -194,7 +194,7 @@ def build_parser():
     sub.add_parser("track-status", help="can this PC track hands/face? (MediaPipe + models)")
     tm = sub.add_parser("track-models", help="the MediaPipe model files tracking needs: shows "
                                              "what they are, and downloads them only if you say so")
-    tm.add_argument("--download", nargs="+", choices=["hand", "face", "pose"],
+    tm.add_argument("--download", nargs="+", choices=["hand", "face", "pose", "segment"],
                     help="download these models into models/tracking/")
     tm.add_argument("--yes", action="store_true", help="yes, download them (you read the model pages)")
     th = sub.add_parser("thumbs", help="small pictures along a video for the timeline (cached)")

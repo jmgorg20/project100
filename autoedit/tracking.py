@@ -58,6 +58,7 @@ MODEL_PAGES = {
     "hand": "https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker",
     "face": "https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector",
     "pose": "https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker",
+    "segment": "https://ai.google.dev/edge/mediapipe/solutions/vision/image_segmenter",
 }
 MODEL_URLS = {
     "hand": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/"
@@ -66,6 +67,8 @@ MODEL_URLS = {
             "blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
     "pose": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
             "pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+    "segment": "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/"
+               "float16/latest/selfie_segmenter.tflite",
 }
 
 
@@ -343,8 +346,9 @@ def pick_hand(track, hand, part, t0, t1, min_confidence=DEFAULTS["min_confidence
 
 MODEL_DIR = PROJECT_DIR / "models" / "tracking"
 MODEL_FILES = {"hand": "hand_landmarker.task", "face": "blaze_face_short_range.tflite",
-               "pose": "pose_landmarker_lite.task"}
-MODEL_SIZES = {"hand": "about 8 MB", "face": "under 1 MB", "pose": "about 6 MB"}
+               "pose": "pose_landmarker_lite.task", "segment": "selfie_segmenter.tflite"}
+MODEL_SIZES = {"hand": "about 8 MB", "face": "under 1 MB", "pose": "about 6 MB",
+               "segment": "under 1 MB"}
 
 
 def models_dir():

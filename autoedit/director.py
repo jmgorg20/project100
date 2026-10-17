@@ -300,7 +300,7 @@ def raw_item(d):
         "template": d.get("template"), "words": str(d.get("words") or "").strip(),
         "start": float(d.get("start", 0.0)), "end_hint": d.get("end"),
         "text": str(d.get("text") or "").strip(), "text2": str(d.get("text2") or "").strip(),
-        "list": [str(x) for x in (d.get("list") or [])][:5],
+        "list": [str(x) for x in (d.get("list") or [])][:5], "image": str(d.get("image") or ""),
         "number": d.get("number"), "prefix": str(d.get("prefix") or ""),
         "suffix": str(d.get("suffix") or ""), "emoji": str(d.get("emoji") or ""),
         "icon": d.get("icon") or "", "zone": d.get("zone") or "auto",
@@ -563,7 +563,9 @@ def place_items(ctx, items):
         busy = [(p["box"], p) for p in placed if p["start"] < t1 and p["end"] > t0]
         fixed_busy = [zones.inflate(graphics.estimated_box(c), 14) for c in ctx.fixed
                       if c["start"] < t1 and c["start"] + c["duration"] > t0]
-        obs = obstacles_for(ctx, t0, t1, face)
+        # a template made to cover the picture for a moment (a screenshot, like B-roll) may go
+        # over the face; nothing goes over the captions
+        obs = obstacles_for(ctx, t0, t1, None if meta.get("covers") else face)
         extra = [("graphic", zones.inflate(b, 16)) for b, _p in busy] + [("graphic", b) for b in fixed_busy]
         angle = 0
         found = None
@@ -728,6 +730,8 @@ def params_for(ctx, it):
         p["prefix"] = it["prefix"][:8]
     if "suffix" in fields and it.get("suffix"):
         p["suffix"] = it["suffix"][:12]
+    if "image" in fields and it.get("image"):
+        p["image"] = it["image"]
     if "emoji" in fields:
         p["emoji"] = it.get("emoji") or (EMOJI_FOR_MOOD.get(it.get("mood") or "hype") or ["✨"])[0]
     if "icon" in fields:
@@ -1321,5 +1325,18 @@ def refine_one(ctx, raw):
     items = [it for it in items if it.get("template")] if items and items[0].get("template") else \
         pick_templates(ctx, items, Counter())
     items = time_items(ctx, items)
+    items = place_items(ctx, items)
+    return style_items(ctx, items)
+
+
+def refine_given(ctx, raw):
+    """The rules for graphics a format has already chosen (template and words fixed): sync to
+    the words, timing, placement off the face and captions, readable colours. No density or
+    variety changes: the format decided those."""
+    items = [raw_item(r) for r in raw]
+    items = sync_items(ctx, items)
+    items = read_items(ctx, items)
+    items = [it for it in items if it.get("template")]
+    items = time_items(ctx, sorted(items, key=lambda x: x["start"]))
     items = place_items(ctx, items)
     return style_items(ctx, items)

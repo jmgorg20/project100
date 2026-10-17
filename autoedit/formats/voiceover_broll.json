@@ -1,0 +1,51 @@
+{
+  "id": "voiceover_broll",
+  "name": "Voice-over with B-roll",
+  "tl": "Voice-over at B-roll",
+  "about": "No face: your voice-over (or narration) over your B-roll clips and pictures, cut to the sentences, with captions.",
+  "about_tl": "Walang mukha: ang boses mo sa ibabaw ng mga B-roll clip at larawan, hinati ayon sa mga pangungusap, may captions.",
+  "inputs": [
+    {
+      "role": "voiceover",
+      "kinds": [
+        "audio",
+        "video"
+      ],
+      "required": true,
+      "label": "Voice-over or narration",
+      "tl": "Voice-over o narration"
+    },
+    {
+      "role": "broll",
+      "kinds": [
+        "video",
+        "image"
+      ],
+      "required": true,
+      "multiple": true,
+      "label": "B-roll clips and pictures (in order)",
+      "tl": "Mga B-roll (ayon sa pagkakasunod)"
+    }
+  ],
+  "keywords": [
+    "voice-over",
+    "voiceover",
+    "narration",
+    "faceless",
+    "walang mukha",
+    "b-roll only"
+  ],
+  "edit": {},
+  "captions": {
+    "zone": "center"
+  },
+  "graphics": {},
+  "instruction": "",
+  "steps": [
+    {
+      "op": "voiceover_broll",
+      "audio": "voiceover",
+      "broll": "broll"
+    }
+  ]
+}

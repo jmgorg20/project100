@@ -187,6 +187,9 @@ def _clip_problems(track, clip, media, frame, where):
         elif screen["kind"] != "video":
             problems.append(f"{where}: the screen recording '{layout['screen']}' is not a video")
 
+    if clip.get("mask") and kind == "overlay" and clip["mask"]["type"] == "person" and ctype != "video":
+        problems.append(f"{where}: a person cut-out needs a video clip")
+
     if ctype in ("audio", "video"):
         if clip.get("fade_in", 0) + clip.get("fade_out", 0) > clip["duration"] + TIME_TOLERANCE:
             problems.append(f"{where}: fade in + fade out are longer than the clip")

@@ -1,0 +1,47 @@
+{
+  "id": "screenshare",
+  "name": "Screenshare",
+  "tl": "Screen recording",
+  "about": "Your screen recording on top, you below, captions on the line between.",
+  "about_tl": "Ang screen recording sa itaas, ikaw sa ibaba, captions sa gitnang linya.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "screen",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "Screen recording (same start)",
+      "tl": "Screen recording (sabay nagsimula)"
+    }
+  ],
+  "keywords": [
+    "screenshare",
+    "screen share",
+    "screen recording",
+    "tutorial sa screen"
+  ],
+  "edit": {},
+  "captions": {
+    "zone": "divider"
+  },
+  "graphics": {},
+  "instruction": "",
+  "steps": [
+    {
+      "op": "layout",
+      "type": "split",
+      "with": "screen",
+      "ratio": 0.6
+    }
+  ]
+}
