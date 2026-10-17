@@ -1,0 +1,2460 @@
+{
+ "version": 1,
+ "renderer": 3,
+ "frame": {
+  "w": 1080,
+  "h": 1920
+ },
+ "moods": [
+  "hype",
+  "calm",
+  "urgent",
+  "funny",
+  "serious",
+  "money",
+  "tech",
+  "emotion",
+  "warning",
+  "luxury",
+  "news",
+  "playful"
+ ],
+ "fonts": {
+  "inter": "Clean (Inter)",
+  "black": "Black (Inter)",
+  "thin": "Thin (Inter)",
+  "impact": "Impact (Anton)",
+  "display": "Display (Archivo Black)",
+  "condensed": "Condensed (Bebas Neue)",
+  "heavy": "Heavy (Oswald)",
+  "serif": "Serif (Playfair)",
+  "mono": "Mono (JetBrains Mono)",
+  "hand": "Handwritten (Caveat)",
+  "comic": "Comic (Bangers)"
+ },
+ "icons": [
+  "check",
+  "star",
+  "bolt",
+  "heart",
+  "lock",
+  "bell",
+  "play",
+  "chat",
+  "fire",
+  "money",
+  "rocket",
+  "warning",
+  "clock",
+  "mic",
+  "camera",
+  "user",
+  "thumb",
+  "link",
+  "eye",
+  "globe",
+  "cart"
+ ],
+ "templates": [
+  {
+   "version": 1,
+   "tl": "Arrow na nakaturo",
+   "category": "pointer",
+   "moods": [
+    "hype",
+    "playful",
+    "serious",
+    "tech",
+    "money",
+    "funny"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 1.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 360,
+    "h": 200
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "color",
+    "accent",
+    "angle",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 24,
+   "minFont": 28,
+   "defaults": {
+    "color": "#ffffff",
+    "accent": "#ffd23f",
+    "angle": 0,
+    "font": "hand"
+   },
+   "sample": {
+    "text": "look here",
+    "angle": 20
+   },
+   "id": "arrow-point",
+   "name": "Pointing arrow",
+   "tip": {
+    "dist": 158
+   }
+  },
+  {
+   "version": 1,
+   "tl": "Before / After",
+   "category": "banner",
+   "moods": [
+    "hype",
+    "tech",
+    "serious",
+    "playful",
+    "luxury"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "upper",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.12
+   },
+   "box": {
+    "w": 900,
+    "h": 90
+   },
+   "pad": 50,
+   "fields": [
+    "text",
+    "text2",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 14,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#111111",
+    "color": "#ffffff",
+    "accent": "#ffd23f",
+    "font": "black",
+    "text": "BEFORE",
+    "text2": "AFTER",
+    "case": "upper"
+   },
+   "sample": {
+    "text": "BEFORE",
+    "text2": "AFTER"
+   },
+   "id": "before-after-tag",
+   "name": "Before / After tags"
+  },
+  {
+   "version": 1,
+   "tl": "Tumatalbog na salita",
+   "category": "text",
+   "moods": [
+    "funny",
+    "playful",
+    "hype"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 840,
+    "h": 220
+   },
+   "pad": 110,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": true,
+   "maxChars": 44,
+   "minFont": 28,
+   "defaults": {
+    "font": "comic",
+    "accent": "#ff5c8a",
+    "case": "upper"
+   },
+   "sample": {
+    "text": "Wait for *it*"
+   },
+   "id": "bounce-words",
+   "name": "Bounce words"
+  },
+  {
+   "version": 1,
+   "tl": "Checklist",
+   "category": "data",
+   "moods": [
+    "serious",
+    "tech",
+    "calm",
+    "money",
+    "news"
+   ],
+   "inputs": [
+    {
+     "key": "items",
+     "type": "list",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 780,
+    "h": 420
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 30,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#1b2230",
+    "accent": "#22c55e",
+    "items": [
+     "Hook",
+     "Value",
+     "Call to action"
+    ]
+   },
+   "sample": {
+    "text": "Do this",
+    "items": [
+     "Hook first",
+     "Show the result",
+     "Ask for the follow"
+    ]
+   },
+   "id": "checklist",
+   "name": "Checklist"
+  },
+  {
+   "version": 1,
+   "tl": "Bilog sa paligid",
+   "category": "pointer",
+   "moods": [
+    "hype",
+    "serious",
+    "playful",
+    "warning",
+    "tech",
+    "money"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 1.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 360,
+    "h": 260
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "accent",
+    "color",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 24,
+   "minFont": 28,
+   "defaults": {
+    "accent": "#ff3b3b",
+    "color": "#ffffff"
+   },
+   "sample": {
+    "text": ""
+   },
+   "id": "circle-ring",
+   "name": "Circle around it",
+   "tip": {
+    "dist": 0
+   }
+  },
+  {
+   "version": 1,
+   "tl": "Orasan",
+   "category": "card",
+   "moods": [
+    "urgent",
+    "serious",
+    "money",
+    "tech"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 420,
+    "h": 480
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 24,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#ffffff",
+    "accent": "#ff4d4d",
+    "font": "black"
+   },
+   "sample": {
+    "text": "24 hours left"
+   },
+   "id": "clock-timer",
+   "name": "Clock"
+  },
+  {
+   "version": 1,
+   "tl": "Comment keyword",
+   "category": "pill",
+   "moods": [
+    "hype",
+    "playful",
+    "tech",
+    "money"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "lower",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.74
+   },
+   "box": {
+    "w": 560,
+    "h": 110
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "text2",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 16,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#161a24",
+    "accent": "#ff3d71",
+    "text2": "Comment",
+    "case": "upper"
+   },
+   "sample": {
+    "text": "EDIT",
+    "text2": "Comment"
+   },
+   "id": "comment-pill",
+   "name": "Comment keyword"
+  },
+  {
+   "version": 1,
+   "tl": "Nagbibilang na numero",
+   "category": "data",
+   "moods": [
+    "money",
+    "hype",
+    "serious",
+    "tech",
+    "news"
+   ],
+   "inputs": [
+    {
+     "key": "number",
+     "type": "number",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "center",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.42
+   },
+   "box": {
+    "w": 760,
+    "h": 300
+   },
+   "pad": 80,
+   "fields": [
+    "text",
+    "number",
+    "prefix",
+    "suffix",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 28,
+   "minFont": 28,
+   "defaults": {
+    "font": "impact",
+    "color": "#ffffff",
+    "accent": "#35e08a",
+    "number": 1000000,
+    "prefix": "",
+    "suffix": ""
+   },
+   "sample": {
+    "number": 250000,
+    "prefix": "₱",
+    "suffix": "",
+    "text": "earned this month"
+   },
+   "id": "counter-number",
+   "name": "Number counter"
+  },
+  {
+   "version": 1,
+   "tl": "Sabog na emoji",
+   "category": "emoji",
+   "moods": [
+    "funny",
+    "playful",
+    "hype",
+    "money",
+    "emotion"
+   ],
+   "inputs": [
+    {
+     "key": "emoji",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 600,
+    "h": 600
+   },
+   "pad": 80,
+   "fields": [
+    "emoji",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 6,
+   "minFont": 28,
+   "defaults": {
+    "emoji": "💸"
+   },
+   "sample": {
+    "emoji": "💸"
+   },
+   "id": "emoji-burst",
+   "name": "Emoji burst"
+  },
+  {
+   "version": 1,
+   "tl": "Emoji pop",
+   "category": "emoji",
+   "moods": [
+    "funny",
+    "playful",
+    "hype",
+    "emotion",
+    "money"
+   ],
+   "inputs": [
+    {
+     "key": "emoji",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 1.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.4
+   },
+   "box": {
+    "w": 300,
+    "h": 300
+   },
+   "pad": 90,
+   "fields": [
+    "emoji",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 4,
+   "minFont": 28,
+   "defaults": {
+    "emoji": "🔥"
+   },
+   "sample": {
+    "emoji": "🔥"
+   },
+   "id": "emoji-pop",
+   "name": "Emoji pop"
+  },
+  {
+   "version": 1,
+   "tl": "Follow / Following",
+   "category": "pill",
+   "moods": [
+    "playful",
+    "hype",
+    "tech",
+    "calm"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "lower",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.72
+   },
+   "box": {
+    "w": 780,
+    "h": 120
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "text2",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 24,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#161a24",
+    "accent": "#2f6bff",
+    "text2": "Follow",
+    "items": [
+     "Following"
+    ]
+   },
+   "sample": {
+    "text": "@yourhandle",
+    "text2": "Follow",
+    "items": [
+     "Following"
+    ]
+   },
+   "id": "follow-pill",
+   "name": "Follow / Following"
+  },
+  {
+   "version": 1,
+   "tl": "Glitch",
+   "category": "text",
+   "moods": [
+    "tech",
+    "urgent",
+    "hype",
+    "warning"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 1.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 840,
+    "h": 200
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 32,
+   "minFont": 28,
+   "defaults": {
+    "font": "display",
+    "case": "upper",
+    "accent": "#00e5ff",
+    "bg": "#ff2e63"
+   },
+   "sample": {
+    "text": "System error"
+   },
+   "id": "glitch-text",
+   "name": "Glitch"
+  },
+  {
+   "version": 1,
+   "tl": "Kumikinang na lumilitaw",
+   "category": "text",
+   "moods": [
+    "tech",
+    "hype",
+    "emotion",
+    "calm"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 840,
+    "h": 200
+   },
+   "pad": 90,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 40,
+   "minFont": 28,
+   "defaults": {
+    "font": "black",
+    "accent": "#7aa8ff"
+   },
+   "sample": {
+    "text": "The *future* is here"
+   },
+   "id": "glow-blur-in",
+   "name": "Glow blur-in"
+  },
+  {
+   "version": 1,
+   "tl": "Gradient na kumikintab",
+   "category": "text",
+   "moods": [
+    "luxury",
+    "money",
+    "hype",
+    "tech"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 840,
+    "h": 200
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 36,
+   "minFont": 28,
+   "defaults": {
+    "font": "black",
+    "color": "#fff3b0",
+    "accent": "#ff9d00"
+   },
+   "sample": {
+    "text": "Premium quality"
+   },
+   "id": "gradient-shine",
+   "name": "Gradient shine"
+  },
+  {
+   "version": 1,
+   "tl": "Sulat-kamay",
+   "category": "text",
+   "moods": [
+    "emotion",
+    "funny",
+    "playful",
+    "calm"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 800,
+    "h": 180
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 36,
+   "minFont": 28,
+   "defaults": {
+    "font": "hand",
+    "accent": "#ff6b6b"
+   },
+   "sample": {
+    "text": "thank you!!"
+   },
+   "id": "handwritten",
+   "name": "Handwritten"
+  },
+  {
+   "version": 1,
+   "tl": "Mga puso",
+   "category": "emoji",
+   "moods": [
+    "emotion",
+    "playful",
+    "calm",
+    "hype"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 400,
+    "h": 400
+   },
+   "pad": 80,
+   "fields": [
+    "text",
+    "accent",
+    "color",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 14,
+   "minFont": 28,
+   "defaults": {
+    "accent": "#ff3b6b",
+    "color": "#ffffff"
+   },
+   "sample": {
+    "text": "1.2K"
+   },
+   "id": "heart-like",
+   "name": "Hearts"
+  },
+  {
+   "version": 1,
+   "tl": "Naka-highlight na kahon",
+   "category": "text",
+   "moods": [
+    "hype",
+    "serious",
+    "tech",
+    "money",
+    "news"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 840,
+    "h": 220
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": true,
+   "maxChars": 44,
+   "minFont": 28,
+   "defaults": {
+    "font": "black",
+    "accent": "#ffd23f",
+    "color": "#ffffff"
+   },
+   "sample": {
+    "text": "Save more with *this trick*"
+   },
+   "id": "highlight-box",
+   "name": "Highlight box"
+  },
+  {
+   "version": 1,
+   "tl": "Icon badge",
+   "category": "card",
+   "moods": [
+    "tech",
+    "hype",
+    "playful",
+    "money",
+    "serious"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 420,
+    "h": 340
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "icon",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 22,
+   "minFont": 28,
+   "defaults": {
+    "icon": "bolt",
+    "accent": "#ff7a1a",
+    "color": "#ffffff"
+   },
+   "sample": {
+    "text": "Fast results",
+    "icon": "bolt"
+   },
+   "id": "icon-badge",
+   "name": "Icon badge"
+  },
+  {
+   "version": 1,
+   "tl": "Karaoke",
+   "category": "text",
+   "moods": [
+    "playful",
+    "hype",
+    "emotion",
+    "funny"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "lower",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.66
+   },
+   "box": {
+    "w": 840,
+    "h": 200
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": true,
+   "maxChars": 56,
+   "minFont": 28,
+   "defaults": {
+    "font": "heavy",
+    "accent": "#ffe14d",
+    "color": "#ffffff"
+   },
+   "sample": {
+    "text": "Sing it with me now"
+   },
+   "id": "karaoke-line",
+   "name": "Karaoke line"
+  },
+  {
+   "version": 1,
+   "tl": "Pill sa ibaba",
+   "category": "pill",
+   "moods": [
+    "serious",
+    "tech",
+    "news",
+    "calm",
+    "hype"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "lower",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.76
+   },
+   "box": {
+    "w": 640,
+    "h": 110
+   },
+   "pad": 50,
+   "fields": [
+    "text",
+    "text2",
+    "icon",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 40,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#161a24",
+    "accent": "#2f6bff",
+    "icon": "check"
+   },
+   "sample": {
+    "text": "Revision #11 check",
+    "text2": ""
+   },
+   "id": "lower-third-pill",
+   "name": "Lower-third pill"
+  },
+  {
+   "version": 1,
+   "tl": "Meme caption",
+   "category": "text",
+   "moods": [
+    "funny",
+    "playful",
+    "hype"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "upper",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.14
+   },
+   "box": {
+    "w": 880,
+    "h": 220
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 50,
+   "minFont": 28,
+   "defaults": {
+    "font": "impact",
+    "case": "upper",
+    "color": "#ffffff"
+   },
+   "sample": {
+    "text": "When the wifi finally works"
+   },
+   "id": "meme-caption",
+   "name": "Meme caption"
+  },
+  {
+   "version": 1,
+   "tl": "Balita banner",
+   "category": "text",
+   "moods": [
+    "news",
+    "serious",
+    "urgent"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "lower",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.78
+   },
+   "box": {
+    "w": 900,
+    "h": 170
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "text2",
+    "font",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 60,
+   "minFont": 28,
+   "defaults": {
+    "font": "heavy",
+    "accent": "#d90429",
+    "bg": "#101828",
+    "color": "#ffffff",
+    "text2": "BREAKING"
+   },
+   "sample": {
+    "text": "Local prices are going down",
+    "text2": "BREAKING"
+   },
+   "id": "news-banner",
+   "name": "News banner"
+  },
+  {
+   "version": 1,
+   "tl": "Mga notification",
+   "category": "card",
+   "moods": [
+    "tech",
+    "hype",
+    "money",
+    "playful"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "items",
+     "type": "list",
+     "required": false
+    }
+   ],
+   "duration": 3.4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "upper",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.2
+   },
+   "box": {
+    "w": 780,
+    "h": 420
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 40,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#1d2433",
+    "accent": "#34c759",
+    "icon": "bell"
+   },
+   "sample": {
+    "text": "New order!",
+    "items": [
+     "Payment received",
+     "5 new followers"
+    ]
+   },
+   "id": "notification-stack",
+   "name": "Notification stack"
+  },
+  {
+   "version": 1,
+   "tl": "Balangkas na pinupunan",
+   "category": "text",
+   "moods": [
+    "hype",
+    "luxury",
+    "tech",
+    "playful"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 840,
+    "h": 220
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 30,
+   "minFont": 28,
+   "defaults": {
+    "font": "condensed",
+    "case": "upper",
+    "accent": "#ffffff"
+   },
+   "sample": {
+    "text": "No limits"
+   },
+   "id": "outline-fill",
+   "name": "Outline fill"
+  },
+  {
+   "version": 1,
+   "tl": "Polaroid",
+   "category": "card",
+   "moods": [
+    "emotion",
+    "playful",
+    "calm",
+    "funny"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "image",
+     "type": "image",
+     "required": false
+    }
+   ],
+   "duration": 2.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 520,
+    "h": 640
+   },
+   "pad": 80,
+   "fields": [
+    "text",
+    "image",
+    "color",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 28,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#fbfaf5",
+    "color": "#2b2b2b",
+    "font": "hand",
+    "accent": "#ff7a90",
+    "emoji": "📸"
+   },
+   "sample": {
+    "text": "best day ever",
+    "emoji": "🌴"
+   },
+   "id": "polaroid-card",
+   "name": "Polaroid"
+  },
+  {
+   "version": 1,
+   "tl": "Malaking pop",
+   "category": "text",
+   "moods": [
+    "hype",
+    "urgent",
+    "money",
+    "serious"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 1.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "center",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.42
+   },
+   "box": {
+    "w": 840,
+    "h": 240
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": true,
+   "maxChars": 44,
+   "minFont": 28,
+   "defaults": {
+    "font": "impact",
+    "case": "upper",
+    "accent": "#ffd23f"
+   },
+   "sample": {
+    "text": "DOUBLE YOUR *SALES* TODAY"
+   },
+   "id": "pop-heavy",
+   "name": "Heavy pop"
+  },
+  {
+   "version": 1,
+   "tl": "Price tag",
+   "category": "data",
+   "moods": [
+    "money",
+    "hype",
+    "playful",
+    "urgent"
+   ],
+   "inputs": [
+    {
+     "key": "number",
+     "type": "number",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 520,
+    "h": 300
+   },
+   "pad": 80,
+   "fields": [
+    "text",
+    "number",
+    "prefix",
+    "suffix",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 20,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#ffd23f",
+    "color": "#1b1b1b",
+    "accent": "#ff3b3b",
+    "font": "black",
+    "number": 499,
+    "prefix": "₱"
+   },
+   "sample": {
+    "number": 499,
+    "prefix": "₱",
+    "text": "ONLY"
+   },
+   "id": "price-tag",
+   "name": "Price tag"
+  },
+  {
+   "version": 1,
+   "tl": "Prompt card na nagta-type",
+   "category": "card",
+   "moods": [
+    "tech",
+    "hype",
+    "calm"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 800,
+    "h": 300
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "text2",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 90,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#1f2430",
+    "accent": "#6c5ce7",
+    "text2": "Ask anything"
+   },
+   "sample": {
+    "text": "Make me a video that goes viral",
+    "text2": "Ask anything"
+   },
+   "id": "prompt-card",
+   "name": "Prompt card (typing)"
+  },
+  {
+   "version": 1,
+   "tl": "Quote card",
+   "category": "card",
+   "moods": [
+    "serious",
+    "emotion",
+    "calm",
+    "luxury"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "center",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.46
+   },
+   "box": {
+    "w": 820,
+    "h": 420
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "text2",
+    "font",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 90,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#14161d",
+    "color": "#ffffff",
+    "accent": "#ffd23f",
+    "font": "serif"
+   },
+   "sample": {
+    "text": "Small steps every day beat big plans someday",
+    "text2": "— my rule"
+   },
+   "id": "quote-card",
+   "name": "Quote card"
+  },
+  {
+   "version": 1,
+   "tl": "Star rating",
+   "category": "data",
+   "moods": [
+    "money",
+    "hype",
+    "emotion",
+    "playful",
+    "luxury"
+   ],
+   "inputs": [
+    {
+     "key": "number",
+     "type": "number",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 620,
+    "h": 230
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "number",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 30,
+   "minFont": 28,
+   "defaults": {
+    "color": "#ffffff",
+    "accent": "#ffc531",
+    "number": 5
+   },
+   "sample": {
+    "number": 4.8,
+    "text": "Loved by customers"
+   },
+   "id": "rating-stars",
+   "name": "Star rating"
+  },
+  {
+   "version": 1,
+   "tl": "Guhit-guhit",
+   "category": "pointer",
+   "moods": [
+    "playful",
+    "funny",
+    "hype",
+    "emotion"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 1.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 560,
+    "h": 150
+   },
+   "pad": 50,
+   "fields": [
+    "text",
+    "color",
+    "accent",
+    "font",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 28,
+   "minFont": 28,
+   "defaults": {
+    "color": "#ffffff",
+    "accent": "#ff5c8a",
+    "font": "hand"
+   },
+   "sample": {
+    "text": "this part!"
+   },
+   "id": "scribble-underline",
+   "name": "Scribble underline"
+  },
+  {
+   "version": 1,
+   "tl": "Eleganteng serif",
+   "category": "text",
+   "moods": [
+    "luxury",
+    "calm",
+    "emotion",
+    "serious"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 800,
+    "h": 260
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 48,
+   "minFont": 28,
+   "defaults": {
+    "font": "serif",
+    "accent": "#d8b56a",
+    "color": "#fff8ea"
+   },
+   "sample": {
+    "text": "Timeless *elegance*",
+    "text2": "the collection"
+   },
+   "id": "serif-elegant",
+   "name": "Elegant serif"
+  },
+  {
+   "version": 1,
+   "tl": "Pasulong na pataas",
+   "category": "text",
+   "moods": [
+    "calm",
+    "serious",
+    "news",
+    "tech",
+    "luxury"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "lower",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.7
+   },
+   "box": {
+    "w": 840,
+    "h": 200
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": true,
+   "maxChars": 56,
+   "minFont": 28,
+   "defaults": {
+    "font": "inter",
+    "accent": "#58c8ff"
+   },
+   "sample": {
+    "text": "Three steps to *finish faster*"
+   },
+   "id": "slide-up",
+   "name": "Slide up"
+  },
+  {
+   "version": 1,
+   "tl": "Titik-titik na lumilitaw",
+   "category": "text",
+   "moods": [
+    "calm",
+    "luxury",
+    "emotion",
+    "tech"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 840,
+    "h": 200
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 28,
+   "minFont": 28,
+   "defaults": {
+    "font": "display",
+    "accent": "#ff8fb1"
+   },
+   "sample": {
+    "text": "Believe it"
+   },
+   "id": "split-reveal",
+   "name": "Letter reveal"
+  },
+  {
+   "version": 1,
+   "tl": "Tatak",
+   "category": "text",
+   "moods": [
+    "urgent",
+    "warning",
+    "hype",
+    "serious"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 1.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "center",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 700,
+    "h": 200
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 24,
+   "minFont": 28,
+   "defaults": {
+    "font": "impact",
+    "case": "upper",
+    "color": "#ff3b3b"
+   },
+   "sample": {
+    "text": "Approved"
+   },
+   "id": "stamp",
+   "name": "Stamp"
+  },
+  {
+   "version": 1,
+   "tl": "Percent bar",
+   "category": "data",
+   "moods": [
+    "tech",
+    "serious",
+    "money",
+    "news",
+    "calm"
+   ],
+   "inputs": [
+    {
+     "key": "number",
+     "type": "number",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 800,
+    "h": 190
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "number",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 34,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#10131c",
+    "color": "#ffffff",
+    "accent": "#35e08a",
+    "number": 80
+   },
+   "sample": {
+    "number": 87,
+    "text": "Customers love it"
+   },
+   "id": "stat-bar",
+   "name": "Percent bar"
+  },
+  {
+   "version": 1,
+   "tl": "Sticker",
+   "category": "banner",
+   "moods": [
+    "funny",
+    "playful",
+    "hype",
+    "urgent",
+    "money"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.7,
+    "y": 0.3
+   },
+   "box": {
+    "w": 420,
+    "h": 420
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "color",
+    "accent",
+    "font",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 14,
+   "minFont": 28,
+   "defaults": {
+    "accent": "#ff3b6b",
+    "color": "#ffffff",
+    "font": "comic",
+    "case": "upper"
+   },
+   "sample": {
+    "text": "New!"
+   },
+   "id": "sticker-label",
+   "name": "Sticker"
+  },
+  {
+   "version": 1,
+   "tl": "Manipis na may espasyo",
+   "category": "text",
+   "moods": [
+    "calm",
+    "luxury",
+    "serious",
+    "emotion"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 800,
+    "h": 140
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 40,
+   "minFont": 28,
+   "defaults": {
+    "font": "thin",
+    "case": "upper"
+   },
+   "sample": {
+    "text": "take a deep breath"
+   },
+   "id": "thin-spaced",
+   "name": "Thin spaced"
+  },
+  {
+   "version": 1,
+   "tl": "Title na may chips",
+   "category": "card",
+   "moods": [
+    "tech",
+    "serious",
+    "calm",
+    "news",
+    "hype"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "items",
+     "type": "list",
+     "required": false
+    }
+   ],
+   "duration": 3.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "center",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 800,
+    "h": 360
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "text2",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 40,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#10131c",
+    "color": "#ffffff",
+    "accent": "#7c5cff",
+    "font": "black",
+    "items": [
+     "Tips",
+     "Tricks",
+     "Guide"
+    ]
+   },
+   "sample": {
+    "text": "Editing basics",
+    "text2": "Part 1",
+    "items": [
+     "Cuts",
+     "Captions",
+     "Music"
+    ]
+   },
+   "id": "title-chips",
+   "name": "Title with chips"
+  },
+  {
+   "version": 1,
+   "tl": "Tinatype",
+   "category": "text",
+   "moods": [
+    "tech",
+    "serious",
+    "calm",
+    "news"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 820,
+    "h": 200
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 60,
+   "minFont": 28,
+   "defaults": {
+    "font": "mono",
+    "accent": "#6dff9e",
+    "color": "#e8fff0"
+   },
+   "sample": {
+    "text": "loading your results..."
+   },
+   "id": "typewriter",
+   "name": "Typewriter"
+  },
+  {
+   "version": 1,
+   "tl": "Guhit sa ilalim",
+   "category": "text",
+   "moods": [
+    "serious",
+    "hype",
+    "money",
+    "tech"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.5
+   },
+   "box": {
+    "w": 840,
+    "h": 200
+   },
+   "pad": 40,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity"
+   ],
+   "bg": false,
+   "words": true,
+   "maxChars": 44,
+   "minFont": 28,
+   "defaults": {
+    "font": "black",
+    "accent": "#ffd23f"
+   },
+   "sample": {
+    "text": "This is the *secret*"
+   },
+   "id": "underline-draw",
+   "name": "Drawn underline"
+  },
+  {
+   "version": 1,
+   "tl": "Babala",
+   "category": "banner",
+   "moods": [
+    "warning",
+    "urgent",
+    "serious",
+    "funny"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 900,
+    "h": 220
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 30,
+   "minFont": 28,
+   "defaults": {
+    "bg": "#111111",
+    "color": "#ffd400",
+    "accent": "#ffd400",
+    "font": "impact",
+    "case": "upper"
+   },
+   "sample": {
+    "text": "Warning: Don't skip this"
+   },
+   "id": "warning-banner",
+   "name": "Warning banner"
+  }
+ ]
+}
