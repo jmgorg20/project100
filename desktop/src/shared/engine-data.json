@@ -448,5 +448,351 @@
   30,
   50,
   60
+ ],
+ "formats": [
+  {
+   "id": "before_after",
+   "name": "Before / after",
+   "tl": "Bago at pagkatapos",
+   "about": "A wipe shows the change: one side as it was, the other with a colour look, with BEFORE / AFTER labels.",
+   "about_tl": "May wipe na nagpapakita ng pagbabago: isang panig gaya ng dati, ang kabila may kulay, may BEFORE / AFTER na label.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    }
+   ]
+  },
+  {
+   "id": "clone",
+   "name": "Clone yourself",
+   "tl": "Clone ng sarili",
+   "about": "You two or three times in one frame. Record the takes separately with the camera NOT moving; you are cut out of each extra take and laid over the first.",
+   "about_tl": "Dalawa o tatlo ka sa iisang frame. I-record nang hiwalay ang bawat take nang HINDI gumagalaw ang camera.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "takes",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "multiple": true,
+     "max": 2,
+     "label": "Your other takes (same camera position)",
+     "tl": "Ang iba mong take (parehong puwesto ng camera)"
+    }
+   ]
+  },
+  {
+   "id": "comparison",
+   "name": "Comparison (A vs B)",
+   "tl": "Paghahambing (A vs B)",
+   "about": "A versus B: a big A VS B header, the two sides on screen if you give a second video, and checklists for each.",
+   "about_tl": "A laban sa B: malaking A VS B, at ang dalawang panig kung may pangalawang video.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "second",
+     "kinds": [
+      "video"
+     ],
+     "required": false,
+     "label": "The other side (optional)",
+     "tl": "Ang kabilang panig (kung meron)"
+    }
+   ]
+  },
+  {
+   "id": "explainer",
+   "name": "Educational explainer",
+   "tl": "Paliwanag / tutorial",
+   "about": "Callouts with icons on the key points, your screenshots in a frame where you mention them.",
+   "about_tl": "May callout at icon sa mahahalagang punto, at ang mga screenshot mo kapag binanggit.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "screenshots",
+     "kinds": [
+      "image"
+     ],
+     "required": false,
+     "multiple": true,
+     "label": "Screenshots (named after what they show)",
+     "tl": "Mga screenshot (pangalanan ayon sa ipinapakita)"
+    }
+   ]
+  },
+  {
+   "id": "green_screen",
+   "name": "Green screen",
+   "tl": "Green screen",
+   "about": "Your background replaced by a picture or video: a real green screen is keyed out, otherwise you are cut out with person detection.",
+   "about_tl": "Pinalitan ang background mo ng larawan o video.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "background",
+     "kinds": [
+      "image",
+      "video"
+     ],
+     "required": true,
+     "label": "New background",
+     "tl": "Bagong background"
+    }
+   ]
+  },
+  {
+   "id": "listicle",
+   "name": "Listicle",
+   "tl": "Listahan",
+   "about": "Numbered items pop in as you say them (first, second... / una, pangalawa...).",
+   "about_tl": "Lumalabas ang bawat item na may numero habang sinasabi mo (una, pangalawa...).",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "items",
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "multiple": true,
+     "label": "The items (optional, else found in what you say)",
+     "tl": "Ang mga item (kung wala, hahanapin sa sinabi mo)"
+    }
+   ]
+  },
+  {
+   "id": "ranking",
+   "name": "Ranking / countdown",
+   "tl": "Ranking / countdown",
+   "about": "A countdown: big numbers flip in (#5, #4... #1) with a sound on each.",
+   "about_tl": "Countdown: malalaking numero (#5, #4... #1) na may tunog bawat isa.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "items",
+     "kinds": [
+      "text"
+     ],
+     "required": false,
+     "multiple": true,
+     "label": "The items, best last (optional)",
+     "tl": "Ang mga item, ang pinakamaganda sa huli"
+    }
+   ]
+  },
+  {
+   "id": "reaction",
+   "name": "Reaction",
+   "tl": "Reaction",
+   "about": "The video you react to fills the screen; you in a small window with a moving colour border. Emoji pop on your reactions.",
+   "about_tl": "Ang video na ni-re-react-an ay buong screen; ikaw sa maliit na bintana na may gumagalaw na kulay na border. May emoji sa mga reaction mo.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "source",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "The video you react to",
+     "tl": "Ang video na ni-re-react-an"
+    }
+   ]
+  },
+  {
+   "id": "screenshare",
+   "name": "Screenshare",
+   "tl": "Screen recording",
+   "about": "Your screen recording on top, you below, captions on the line between.",
+   "about_tl": "Ang screen recording sa itaas, ikaw sa ibaba, captions sa gitnang linya.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "screen",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "Screen recording (same start)",
+     "tl": "Screen recording (sabay nagsimula)"
+    }
+   ]
+  },
+  {
+   "id": "split_screen",
+   "name": "Split screen",
+   "tl": "Hati ang screen",
+   "about": "Two videos stacked: the other one on top, you below.",
+   "about_tl": "Dalawang video: ang isa sa itaas, ikaw sa ibaba.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "second",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "The other video",
+     "tl": "Ang isa pang video"
+    }
+   ]
+  },
+  {
+   "id": "talking_head",
+   "name": "Talking head",
+   "tl": "Nagsasalita sa camera",
+   "about": "You talking to the camera: pauses cut, punch-in zooms, captions.",
+   "about_tl": "Ikaw na nagsasalita: tinanggal ang mga hinto, may zoom at captions.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    }
+   ]
+  },
+  {
+   "id": "voiceover_broll",
+   "name": "Voice-over with B-roll",
+   "tl": "Voice-over at B-roll",
+   "about": "No face: your voice-over (or narration) over your B-roll clips and pictures, cut to the sentences, with captions.",
+   "about_tl": "Walang mukha: ang boses mo sa ibabaw ng mga B-roll clip at larawan, hinati ayon sa mga pangungusap, may captions.",
+   "inputs": [
+    {
+     "role": "voiceover",
+     "kinds": [
+      "audio",
+      "video"
+     ],
+     "required": true,
+     "label": "Voice-over or narration",
+     "tl": "Voice-over o narration"
+    },
+    {
+     "role": "broll",
+     "kinds": [
+      "video",
+      "image"
+     ],
+     "required": true,
+     "multiple": true,
+     "label": "B-roll clips and pictures (in order)",
+     "tl": "Mga B-roll (ayon sa pagkakasunod)"
+    }
+   ]
+  },
+  {
+   "id": "yap",
+   "name": "Yap",
+   "tl": "Yap (tuloy-tuloy na kwento)",
+   "about": "Fast and dense: tight cuts, two-three words of captions at a time in the middle, B-roll every few seconds.",
+   "about_tl": "Mabilis: dikit-dikit na cuts, 2-3 salita ng captions sa gitna, B-roll bawat ilang segundo.",
+   "inputs": [
+    {
+     "role": "main",
+     "kinds": [
+      "video"
+     ],
+     "required": true,
+     "label": "You talking",
+     "tl": "Ikaw na nagsasalita"
+    },
+    {
+     "role": "broll",
+     "kinds": [
+      "video",
+      "image"
+     ],
+     "required": false,
+     "multiple": true,
+     "label": "B-roll (optional)",
+     "tl": "B-roll (kung meron)"
+    }
+   ]
+  }
  ]
 }

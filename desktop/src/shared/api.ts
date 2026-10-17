@@ -143,6 +143,8 @@ export interface AppApi {
   clearKey(provider: KeyName): Promise<KeysStatus>;
   pickVideos(): Promise<string[]>;
   pickPhotos(): Promise<string[]>;
+  /** Files for a video format's role ("video" / "image" / "audio"). */
+  pickFormatFiles(kinds: string[], multiple: boolean): Promise<string[]>;
   addJobs(requests: JobRequest[]): Promise<Job[]>;
   listJobs(): Promise<Job[]>;
   cancelJob(id: string): Promise<void>;

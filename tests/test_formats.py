@@ -4,7 +4,6 @@ countdowns, wipes, A vs B, callouts, reactions, voice-over with B-roll)."""
 
 import json
 import subprocess
-import sys
 import types
 from pathlib import Path
 
@@ -15,7 +14,7 @@ from PIL import Image
 from autoedit import director, formats, segment
 from autoedit.config import load_config
 from autoedit.llm import LLMError
-from autoedit.project import media_from_file, new_project, validate_project
+from autoedit.project import media_from_file, validate_project
 from autoedit.project_render import render_frame
 from tests.director_helpers import make_project, make_words
 from tests.gfx_helpers import needs_chromium
@@ -146,7 +145,8 @@ def test_a_forced_format_needs_its_files():
 
 def test_the_ai_can_pick_when_nothing_else_decides(monkeypatch):
     import autoedit.llm as llm
-    answers = [json.dumps({"format": "nonsense", "reason": "x"}), json.dumps({"format": "explainer", "reason": "teaching"})]
+    answers = [json.dumps({"format": "nonsense", "reason": "x"}),
+               json.dumps({"format": "explainer", "reason": "teaching"})]
     calls = []
 
     def fake(provider, model, system, prompt, schema, **kw):

@@ -262,6 +262,19 @@ function registerIpc(): void {
     });
     return r.canceled ? [] : r.filePaths;
   });
+  ipcMain.handle("dialog:formatFiles", async (_e, kinds: string[], multiple: boolean) => {
+    const extensions = [
+      ...(kinds.includes("video") ? VIDEO_TYPES : []),
+      ...(kinds.includes("image") ? PHOTO_TYPES : []),
+      ...(kinds.includes("audio") ? AUDIO_TYPES : []),
+    ];
+    const r = await dialog.showOpenDialog(window!, {
+      title: "Choose files for this format",
+      properties: multiple ? ["openFile", "multiSelections"] : ["openFile"],
+      filters: [{ name: "Media", extensions }],
+    });
+    return r.canceled ? [] : r.filePaths;
+  });
   ipcMain.handle("jobs:add", (_e, requests: JobRequest[]) => queue.add(requests));
   ipcMain.handle("jobs:list", () => queue.jobs);
   ipcMain.handle("jobs:cancel", (_e, id: string) => queue.cancel(id));

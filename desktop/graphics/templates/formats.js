@@ -131,7 +131,7 @@ defineTemplate({
   id: "screenshot-frame", covers: true, name: "Screenshot frame", tl: "Screenshot", category: "card", moods: ["tech", "serious", "news", "calm"],
   zone: "any", anchor: { x: 0.5, y: 0.55 }, box: { w: 820, h: 640 }, duration: 3.5, maxChars: 40, bg: true, pad: 60,
   fields: ["text", "image", "color", "accent", "bg", "size", "intensity"],
-  inputs: [{ key: "image", type: "image", required: true }, { key: "text", type: "text", required: false }],
+  inputs: [{ key: "image", type: "image", required: false }, { key: "text", type: "text", required: false }],
   defaults: { bg: "#1b1f2a", color: "#ffffff", accent: "#ffd23f" }, sample: { text: "Step 2: click Export" },
 }, (c) => {
   const { p } = c;

@@ -551,3 +551,111 @@ def test_ai_edit_without_graphics_is_unchanged(talk, cfg, monkeypatch):
     assert "graphics" not in rec.stages
     project = load_project(result["project"])
     assert not [t for t in project["tracks"] if t["kind"] == "graphics"]
+
+
+# ------------------------------------------------------------ video formats in the AI edit
+
+def test_ai_edit_with_a_forced_format(talk, cfg, monkeypatch):
+    """--format reaction: the other video fills the screen, you in a corner window."""
+    tmp, video, photo, whisper = talk
+    source = synthetic.make_video(tmp / "source.mp4")
+    fake, calls = scripted([photo_plan(cfg)])
+    monkeypatch.setattr(ai_edit, "ask_json", fake)
+    rec = Recorder()
+    result = ai_edit.ai_edit_video(video, cfg, "fast", [photo], reporter=rec, render=True,
+                                   format="reaction",
+                                   inputs={"source": [source], "offsets": {"source": "0.5"}})
+    assert "format" in rec.stages
+    event = next(d for k, d in rec.events if k == "format")
+    assert event["format"] == "reaction"
+    project = load_project(result["project"])
+    assert project["meta"]["format"] == "reaction"
+    layout = project["tracks"][0]["clips"][0]["layout"]
+    assert layout["type"] == "pip" and layout["offset"] == 0.5
+    assert result["summary"]["format"] == "reaction"
+    assert result["summary"]["details"][0].startswith("Format: Reaction")
+    assert Path(result["output"]).exists()
+
+
+def test_ai_edit_format_without_its_files_is_refused(talk, cfg):
+    tmp, video, photo, _ = talk
+    with pytest.raises(EditorError, match="video you react to"):
+        ai_edit.ai_edit_video(video, cfg, "", [], format="reaction", render=False,
+                              reporter=Recorder())
+
+
+def test_ai_edit_picks_a_format_from_the_instruction(talk, cfg, monkeypatch):
+    tmp, video, photo, _ = talk
+    screen = synthetic.make_video(tmp / "screen.mp4")
+    fake, calls = scripted([photo_plan(cfg)])
+    monkeypatch.setattr(ai_edit, "ask_json", fake)
+    result = ai_edit.ai_edit_video(video, cfg, "screenshare tutorial", [photo], render=False,
+                                   reporter=Recorder(), inputs={"screen": [screen]})
+    assert result["summary"]["format"] == "screenshare"
+    assert len(calls) == 1                               # no extra AI call to pick the format
+
+
+def test_voiceover_edit_end_to_end(tmp_path, cfg, monkeypatch):
+    from autoedit.words import Word
+    vo = tmp_path / "vo.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=300:r=48000:d=4",
+                    str(vo)], check=True)
+    clip = synthetic.make_video(tmp_path / "b1.mp4")
+    pic = synthetic.make_image(tmp_path / "b2.png")
+    words = [Word(text=t, start=s, end=s + 0.3) for t, s in
+             (("Ang", 0.2), ("ganda", 0.6), ("dito.", 1.0), ("Tara", 2.0), ("na!", 2.4))]
+    monkeypatch.setattr(ai_edit, "load_words", lambda *a, **k: (words, False, 0.0))
+    rec = Recorder()
+    result = ai_edit.voiceover_edit(vo, [clip, pic], cfg, "", reporter=rec, render=True,
+                                    output=tmp_path / "out" / "vo.mp4")
+    assert rec.stages[:2] == ["transcript", "format"]
+    project = load_project(result["project"])
+    assert project["meta"]["format"] == "voiceover_broll"
+    assert any(t["kind"] == "caption" and t["clips"] for t in project["tracks"])
+    assert Path(result["output"]).exists()
+    assert result["summary"]["format"] == "voiceover_broll"
+
+
+def test_voiceover_edit_missing_broll_is_clear(tmp_path, cfg):
+    vo = tmp_path / "vo.wav"
+    vo.write_bytes(b"x")
+    with pytest.raises(EditorError, match="B-roll file not found"):
+        ai_edit.voiceover_edit(vo, [tmp_path / "nope.mp4"], cfg, render=False,
+                               reporter=Recorder())
+
+
+def test_cli_formats_list(tmp_path):
+    run = cli(["--json", "formats"], tmp_path)
+    assert run.returncode == 0, run.stderr
+    result = json.loads(run.stdout.splitlines()[-1])
+    assert len(result["formats"]) == 13
+    assert {f["id"] for f in result["formats"]} >= {"reaction", "clone", "green_screen", "listicle"}
+
+
+def test_cli_ai_edit_with_a_format_and_inputs(tmp_path, cfg):
+    video = synthetic.make_video(tmp_path / "talk.mp4")
+    other = synthetic.make_video(tmp_path / "second.mp4")
+    transcript = synthetic.make_transcript(tmp_path / "talk.json")
+    photo = synthetic.make_image(tmp_path / "github_logo.png")
+    seed_transcript(tmp_path, video, transcript)
+    plan_file = tmp_path / "accepted.plan.json"
+    plan_file.write_text(json.dumps({"plan": photo_plan(cfg)}), encoding="utf-8")
+    run = cli(["--config", str(write_cfg(tmp_path)), "--json", "ai-edit", str(video),
+               "--photos", str(photo), "--plan-file", str(plan_file), "--no-render",
+               "--format", "split_screen", "--input", f"second={other}",
+               "--offset", "second=-0.25"], tmp_path)
+    assert run.returncode == 0, run.stderr
+    events = [json.loads(line) for line in run.stdout.splitlines()]
+    assert any(e["type"] == "format" and e["format"] == "split_screen" for e in events)
+    result = next(e for e in events if e["type"] == "result")
+    project = load_project(result["project"])
+    layout = project["tracks"][0]["clips"][0]["layout"]
+    assert layout["type"] == "split" and layout["offset"] == -0.25
+
+
+@pytest.mark.parametrize("flag", [["--input", "nofile"], ["--offset", "second=soon"]])
+def test_cli_bad_format_inputs_are_explained(tmp_path, flag):
+    video = synthetic.make_video(tmp_path / "talk.mp4")
+    run = cli(["--config", str(write_cfg(tmp_path)), "ai-edit", str(video), *flag], tmp_path)
+    assert run.returncode != 0
+    assert "ROLE=" in run.stderr

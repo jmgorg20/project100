@@ -396,7 +396,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
             raise EditorError(f"Photo not found: {path}")
     provider, model = provider_settings(cfg, provider, model)
     from . import formats as fmt
-    format_inputs = {k: [str(x) for x in v] for k, v in (inputs or {}).items() if v}
+    format_inputs = {k: ({r: float(o) for r, o in v.items()} if k == "offsets"
+                         else [str(x) for x in v]) for k, v in (inputs or {}).items() if v}
     for role, files in format_inputs.items():
         if role in ("items", "offsets"):
             continue

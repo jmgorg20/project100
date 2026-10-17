@@ -536,7 +536,8 @@ def op_wipe(ctx, step):
                              "text": "BEFORE", "text2": "AFTER", "importance": 0.9, "zone": "upper"})
 
 
-VS = re.compile(r"([\w'’\-]+(?:\s[\w'’\-]+)?)\s+(?:vs\.?|versus|laban sa|o kaya)\s+([\w'’\-]+(?:\s[\w'’\-]+)?)", re.I)
+VS = re.compile(r"([\w'’\-]+(?:\s[\w'’\-]+)?)\s+(?:vs\.?|versus|laban sa|o kaya)\s+"
+                r"([\w'’\-]+(?:\s[\w'’\-]+)?)", re.I)
 
 
 # ---- A vs B header

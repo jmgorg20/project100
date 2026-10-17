@@ -2066,7 +2066,7 @@
     {
      "key": "image",
      "type": "image",
-     "required": true
+     "required": false
     },
     {
      "key": "text",
