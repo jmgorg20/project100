@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Auto Video Editor preset",
+  "description": "A ready-made look: format, graphics, captions, colour, pacing, music and sounds. Plain JSON: copy one to make your own.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "tl",
+    "about",
+    "about_tl",
+    "format",
+    "graphics",
+    "captions",
+    "grade",
+    "pacing"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tl": {
+      "type": "string",
+      "minLength": 1
+    },
+    "about": {
+      "type": "string"
+    },
+    "about_tl": {
+      "type": "string"
+    },
+    "format": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "a format id, \"auto\" (the AI picks) or null (from your words)"
+    },
+    "graphics": {
+      "type": "string",
+      "description": "a Director style or \"off\""
+    },
+    "density": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6,
+      "description": "at most this many graphics per 10 s"
+    },
+    "captions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "style"
+      ],
+      "properties": {
+        "style": {
+          "type": "string"
+        },
+        "size_scale": {
+          "type": "number",
+          "minimum": 0.6,
+          "maximum": 1.6
+        },
+        "zone": {
+          "enum": [
+            "lower",
+            "center",
+            "top"
+          ]
+        }
+      }
+    },
+    "grade": {
+      "type": "string"
+    },
+    "pacing": {
+      "type": "string",
+      "description": "a pacing preset in config.yaml (fast, relaxed)"
+    },
+    "zoom": {
+      "type": "boolean"
+    },
+    "sfx": {
+      "type": "boolean",
+      "description": "whoosh / pop on emphasised graphics (made on your PC)"
+    },
+    "music": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mood",
+            "volume"
+          ],
+          "properties": {
+            "mood": {
+              "type": "string"
+            },
+            "volume": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      ]
+    },
+    "broll": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "use_stock": {
+          "type": "boolean"
+        },
+        "ai_clips": {
+          "type": "boolean"
+        }
+      }
+    },
+    "instruction": {
+      "type": "string",
+      "description": "added to your instruction for the AI"
+    }
+  }
+}

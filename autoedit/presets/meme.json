@@ -1,0 +1,20 @@
+{
+  "id": "meme",
+  "name": "Meme",
+  "tl": "Meme",
+  "about": "Loud and funny: thick outlined captions, stickers and emoji, flashes and pops on the jokes.",
+  "about_tl": "Maingay at nakakatawa: makapal na outline na caption, stickers at emoji, flash at pop sa mga joke.",
+  "format": null,
+  "graphics": "meme",
+  "density": 4,
+  "captions": {
+    "style": "thick_outline",
+    "size_scale": 1.2
+  },
+  "grade": "high_contrast",
+  "pacing": "fast",
+  "zoom": true,
+  "sfx": true,
+  "music": null,
+  "instruction": "Make it funny: punch in on the jokes."
+}

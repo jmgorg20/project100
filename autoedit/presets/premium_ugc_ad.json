@@ -1,0 +1,22 @@
+{
+  "id": "premium_ugc_ad",
+  "name": "Premium UGC Ad",
+  "tl": "Premium UGC Ad",
+  "about": "Clean, trustworthy product video: boxed captions, price and benefit cards, a clear call to action at the end.",
+  "about_tl": "Malinis at kapani-paniwalang product video: boxed caption, presyo at benefit cards, malinaw na call to action sa dulo.",
+  "format": null,
+  "graphics": "promoter",
+  "density": 2,
+  "captions": {
+    "style": "boxed"
+  },
+  "grade": "natural_clean",
+  "pacing": "fast",
+  "zoom": true,
+  "sfx": true,
+  "music": {
+    "mood": "upbeat",
+    "volume": 0.1
+  },
+  "instruction": "This is a product ad: highlight the benefit, any price or number, and end with a clear call to action."
+}

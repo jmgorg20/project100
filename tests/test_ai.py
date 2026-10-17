@@ -659,3 +659,52 @@ def test_cli_bad_format_inputs_are_explained(tmp_path, flag):
     run = cli(["--config", str(write_cfg(tmp_path)), "ai-edit", str(video), *flag], tmp_path)
     assert run.returncode != 0
     assert "ROLE=" in run.stderr
+
+
+# ------------------------------------------------------------ presets in the AI edit
+
+def test_ai_edit_with_a_preset(talk, cfg, monkeypatch):
+    """--preset viral_tiktok: its captions and grade win over the AI's, its graphics style is
+    used (here the rule-based plan), whoosh/pop sounds and music from your music folder."""
+    from autoedit import director
+    tmp, video, photo, whisper = talk
+    music = tmp / "music"
+    music.mkdir()
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=220:r=48000:d=3",
+                    str(music / "upbeat_song.wav")], check=True)
+    cfg["music"] = {"folder": str(music)}
+    fake, calls = scripted([photo_plan(cfg)])
+    monkeypatch.setattr(ai_edit, "ask_json", fake)
+    gfake, _ = scripted(["not json"])
+    monkeypatch.setattr(director, "ask_json", gfake)
+    rec = Recorder()
+    result = ai_edit.ai_edit_video(video, cfg, "fast", [photo], reporter=rec, render=False,
+                                   preset="viral_tiktok")
+    assert "Hook in the first 2 seconds" in calls[0]
+    project = load_project(result["project"])
+    assert project["meta"]["preset"] == "viral_tiktok"
+    caps = [c for t in project["tracks"] if t["kind"] == "caption" for c in t["clips"]]
+    assert caps and all(c["style"] == "pop_word" for c in caps)
+    grades = [c["grade"] for t in project["tracks"] for c in t["clips"] if c["type"] == "grade"]
+    assert grades and set(grades) == {"high_contrast"}
+    event = next(d for k, d in rec.events if k == "graphics")
+    assert event["style"] == "promoter"
+    music_clips = [c for t in project["tracks"] if t.get("role") == "music" for c in t["clips"]]
+    assert music_clips and music_clips[0]["volume"] == 0.12
+    details = result["summary"]["details"]
+    assert details[0] == "Preset: Viral TikTok." and any("upbeat_song.wav" in d for d in details)
+    assert result["summary"]["preset"] == "viral_tiktok"
+
+
+def test_cli_presets_list_and_faceless_preset(tmp_path):
+    run = cli(["--json", "presets"], tmp_path)
+    assert run.returncode == 0, run.stderr
+    items = json.loads(run.stdout.splitlines()[-1])["presets"]
+    assert len(items) >= 7 and "faceless_automation" in {p["id"] for p in items}
+    # Faceless Automation is the voice-over format: the file given is the voice-over.
+    vo = tmp_path / "vo.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=300:r=48000:d=3",
+                    str(vo)], check=True)
+    run = cli(["--config", str(write_cfg(tmp_path)), "--json", "ai-edit", str(vo),
+               "--preset", "faceless_automation"], tmp_path)
+    assert run.returncode != 0 and "B-roll" in run.stderr

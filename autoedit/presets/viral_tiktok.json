@@ -1,0 +1,23 @@
+{
+  "id": "viral_tiktok",
+  "name": "Viral TikTok",
+  "tl": "Viral TikTok",
+  "about": "Fast cuts, big bold captions, punchy pop-up words with whooshes, high contrast, upbeat music if you have some.",
+  "about_tl": "Mabilis na cuts, malalaking caption, pop-up na salita na may whoosh, matingkad na kulay, masiglang music kung meron ka.",
+  "format": null,
+  "graphics": "promoter",
+  "density": 3,
+  "captions": {
+    "style": "pop_word",
+    "size_scale": 1.15
+  },
+  "grade": "high_contrast",
+  "pacing": "fast",
+  "zoom": true,
+  "sfx": true,
+  "music": {
+    "mood": "upbeat",
+    "volume": 0.12
+  },
+  "instruction": "Hook in the first 2 seconds. Keep it fast; cut every pause."
+}

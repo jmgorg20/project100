@@ -362,7 +362,7 @@ def load_words(video, cfg, cache, job_dir, duration):
 def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=None,
                   render=True, output=None, previous_plan=None, plan=None, reporter=None,
                   cancel=None, gen_paths=None, max_gen_minutes=None, max_ai_clips=None,
-                  graphics=None, format=None, inputs=None):
+                  graphics=None, format=None, inputs=None, preset=None):
     """Make an AI edit of one video. Returns a dict describing the result.
 
     `plan`: use this plan as is (e.g. the creator accepted only some AI changes); no AI call.
@@ -377,11 +377,19 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
     `format`: a video format id (formats/*.json), "auto" (rules, then the AI picks), or None
     (rules only: what the instruction names or the extra files say, else Talking head).
     `inputs`: the format's other files by role, e.g. {"screen": [path]}, {"takes": [a, b]}.
+    `preset`: a preset id (presets/*.json): its format, graphics, captions, grade, pacing, music
+    and sounds are the defaults (an explicit `format` / `graphics` still wins).
     """
+    from . import presets as pre
     from .progress import TextReporter
 
     reporter = reporter or TextReporter()
     started = time.time()
+    look = pre.get(preset, cfg) if preset else None
+    if look:
+        cfg = pre.cfg_for(look, cfg)
+        format = format if format is not None else look["format"]
+        graphics = graphics if graphics is not None else look["graphics"]
     video = Path(video).resolve()
     check_ffmpeg()
     info = probe_video_with_audio(video)
@@ -411,6 +419,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
     spec = fmt.get(format_id)
     cfg = fmt.cfg_for(spec, cfg)
     plan_instruction = fmt.instruction_for(spec, instruction)
+    if look:
+        plan_instruction = pre.instruction_for(look, plan_instruction)
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
     job_dir = project_path(cfg["work_folder"]) / f"{video.stem}-ai-{time.strftime('%Y%m%d-%H%M%S')}"
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -434,6 +444,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         extra = {}                        # e.g. the tracked points, once found
 
         def build(candidate, generated=None):
+            if look:
+                candidate = pre.pin_plan(look, candidate)
             new_cfg, pipeline_plan = apply_plan(cfg, candidate, photos, {**(generated or {}), **extra})
             return build_edit_project(video, new_cfg, plan=pipeline_plan, job_dir=job_dir,
                                       words=words)
@@ -518,7 +530,10 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                            fallback=graphics_result["fallback"], reason=graphics_result["reason"],
                            notes=graphics_result["notes"])
             check_cancel()
+        preset_notes = pre.finish(project, look, cfg) if look else []
         project["meta"].update({"format": format_id})
+        if look:
+            project["meta"]["preset"] = look["id"]
         project["meta"].update({"made_by": "AI edit", "instruction": instruction,
                                 "provider": provider if not result.given else None,
                                 "model": result.model, "fallback": result.fallback})
@@ -534,6 +549,10 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
             summary["details"] = ([f"Format: {spec['name']} ({format_reason})."]
                                   + [f"Format: {n}" for n in format_notes] + summary["details"])
         summary["format"] = format_id
+        if look:
+            summary["details"] = ([f"Preset: {look['name']}."] + [f"Preset: {n}" for n in preset_notes]
+                                  + summary["details"])
+            summary["preset"] = look["id"]
         # Token counts are the provider's own; the prices are from config.yaml (ai.prices).
         graphics_cost = graphics_result["cost"] if graphics_result else None
         cost = {"transcription": transcript_cost, "plan": result.cost, "graphics": graphics_cost,
@@ -551,7 +570,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         plan_file = output.with_suffix(".plan.json")
         plan_file.write_text(json.dumps({
             "plan": result.plan, "instruction": instruction, "provider": provider,
-            "format": format_id, "inputs": format_inputs,
+            "format": format_id, "inputs": format_inputs, "preset": look["id"] if look else None,
             "model": result.model, "fallback": result.fallback, "reason": result.reason,
             "photos": {k: str(v) for k, v in photos.items()}, "summary": summary,
         }, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -601,13 +620,18 @@ def estimate_cost(video, cfg, instruction="", photo_names=(), provider=None, mod
 
 
 def voiceover_edit(audio, broll, cfg, instruction="", provider=None, model=None, render=True,
-                   output=None, reporter=None, cancel=None, graphics=None):
+                   output=None, reporter=None, cancel=None, graphics=None, preset=None):
     """The Voice-over with B-roll format: no face. Your voice-over is transcribed, your B-roll
     files are cut to its sentences, captions are added (and graphics, if asked)."""
     from . import formats as fmt
-    from .progress import TextReporter
+    from . import presets as pre
     from .ffmpeg_tools import probe
+    from .progress import TextReporter
     reporter = reporter or TextReporter()
+    look = pre.get(preset, cfg) if preset else None
+    if look:
+        cfg = pre.cfg_for(look, cfg)
+        graphics = graphics if graphics is not None else look["graphics"]
     audio = Path(audio).resolve()
     if not audio.exists():
         raise EditorError(f"Voice-over not found: {audio}")
@@ -620,6 +644,8 @@ def voiceover_edit(audio, broll, cfg, instruction="", provider=None, model=None,
     provider, model = provider_settings(cfg, provider, model)
     spec = fmt.get("voiceover_broll")
     cfg = fmt.cfg_for(spec, cfg)
+    if look:
+        cfg["style"] = look["captions"]["style"]           # the preset's captions win
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
     job_dir = project_path(cfg["work_folder"]) / f"{audio.stem}-vo-{time.strftime('%Y%m%d-%H%M%S')}"
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -647,8 +673,10 @@ def voiceover_edit(audio, broll, cfg, instruction="", provider=None, model=None,
             project = g["project"]
             details += graphics_lines(g)
             cost = total(cost, g["cost"])
+        if look:
+            details += [f"Preset: {look['name']}."] + [f"Preset: {n}" for n in pre.finish(project, look, cfg)]
         project["meta"] = {**project.get("meta", {}), "made_by": "AI edit", "format": "voiceover_broll",
-                           "instruction": instruction}
+                           "instruction": instruction, **({"preset": look["id"]} if look else {})}
         summary = {"headline": "Voice-over with B-roll.", "details": details, "fallback": False,
                    "duration_before": duration, "duration_after": duration, "format": "voiceover_broll",
                    "cost": {"total": cost, "currency": "USD"}, "cost_text": format_usd(cost)}

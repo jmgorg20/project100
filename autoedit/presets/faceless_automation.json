@@ -1,0 +1,26 @@
+{
+  "id": "faceless_automation",
+  "name": "Faceless Automation",
+  "tl": "Faceless (walang mukha)",
+  "about": "Narration over your approved B-roll only: no stock search, no AI-made clips. Bold captions, calm music if you have some.",
+  "about_tl": "Narration sa ibabaw ng B-roll na inaprubahan mo lang: walang stock, walang AI clips. Bold na caption.",
+  "format": "voiceover_broll",
+  "graphics": "minimal",
+  "density": 2,
+  "captions": {
+    "style": "bold_caps"
+  },
+  "grade": "natural_clean",
+  "pacing": "fast",
+  "zoom": false,
+  "sfx": false,
+  "music": {
+    "mood": "calm",
+    "volume": 0.1
+  },
+  "broll": {
+    "use_stock": false,
+    "ai_clips": false
+  },
+  "instruction": "Use only the B-roll files given."
+}
