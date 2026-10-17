@@ -82,7 +82,7 @@ defineTemplate({
 // ---- scribble underline
 defineTemplate({
   id: "scribble-underline", name: "Scribble underline", tl: "Guhit-guhit", category: "pointer", moods: ["playful", "funny", "hype", "emotion"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 560, h: 150 }, duration: 1.8, maxChars: 28, pad: 50,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 393, h: 160 }, duration: 1.8, maxChars: 28, pad: 50,
   fields: ["text", "color", "accent", "font", "size", "intensity"], inputs: [{ key: "text", type: "text", required: true }],
   defaults: { color: "#ffffff", accent: "#ff5c8a", font: "hand" }, sample: { text: "this part!" },
 }, (c) => {

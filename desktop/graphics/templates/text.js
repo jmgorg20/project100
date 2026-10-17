@@ -20,7 +20,7 @@ const size = (node) => ({ w: Math.ceil(node.getBoundingClientRect().width), h: M
 // ---- 1. heavy uppercase pop, word by word
 defineTemplate({
   id: "pop-heavy", name: "Heavy pop", tl: "Malaking pop", category: "text", moods: ["hype", "urgent", "money", "serious"],
-  zone: "center", anchor: { x: 0.5, y: 0.42 }, box: { w: 840, h: 240 }, duration: 1.8, words: true, maxChars: 44,
+  zone: "center", anchor: { x: 0.5, y: 0.42 }, box: { w: 840, h: 354 }, duration: 1.8, words: true, maxChars: 44,
   defaults: { font: "impact", case: "upper", accent: "#ffd23f" }, sample: { text: "DOUBLE YOUR *SALES* TODAY" },
 }, (c) => {
   const { p } = c;
@@ -48,7 +48,7 @@ defineTemplate({
 // ---- 2. thin, letter-spaced
 defineTemplate({
   id: "thin-spaced", name: "Thin spaced", tl: "Manipis na may espasyo", category: "text", moods: ["calm", "luxury", "serious", "emotion"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 800, h: 140 }, duration: 2.4, maxChars: 40,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 800, h: 184 }, duration: 2.4, maxChars: 40,
   defaults: { font: "thin", case: "upper" }, sample: { text: "take a deep breath" },
 }, (c) => {
   const { p } = c;
@@ -71,7 +71,7 @@ defineTemplate({
 // ---- 3. glow / blur-in
 defineTemplate({
   id: "glow-blur-in", name: "Glow blur-in", tl: "Kumikinang na lumilitaw", category: "text", moods: ["tech", "hype", "emotion", "calm"],
-  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 840, h: 200 }, duration: 2.2, maxChars: 40, pad: 90,
+  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 810, h: 250 }, duration: 2.2, maxChars: 40, pad: 90,
   defaults: { font: "black", accent: "#7aa8ff" }, sample: { text: "The *future* is here" },
 }, (c) => {
   const { p } = c;
@@ -100,7 +100,7 @@ defineTemplate({
 // ---- 4. bounce words
 defineTemplate({
   id: "bounce-words", name: "Bounce words", tl: "Tumatalbog na salita", category: "text", moods: ["funny", "playful", "hype"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 840, h: 220 }, duration: 2, words: true, maxChars: 44, pad: 110,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 714, h: 196 }, duration: 2, words: true, maxChars: 44, pad: 110,
   defaults: { font: "comic", accent: "#ff5c8a", case: "upper" }, sample: { text: "Wait for *it*" },
 }, (c) => {
   const { p } = c;
@@ -162,7 +162,7 @@ defineTemplate({
 // ---- 6. word with a drawn underline
 defineTemplate({
   id: "underline-draw", name: "Drawn underline", tl: "Guhit sa ilalim", category: "text", moods: ["serious", "hype", "money", "tech"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 840, h: 200 }, duration: 2, words: true, maxChars: 44, pad: 40,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 738, h: 266 }, duration: 2, words: true, maxChars: 44, pad: 40,
   defaults: { font: "black", accent: "#ffd23f" }, sample: { text: "This is the *secret*" },
 }, (c) => {
   const { p } = c;
@@ -252,7 +252,7 @@ defineTemplate({
 // ---- 9. typewriter
 defineTemplate({
   id: "typewriter", name: "Typewriter", tl: "Tinatype", category: "text", moods: ["tech", "serious", "calm", "news"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 820, h: 200 }, duration: 2.6, maxChars: 60,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 820, h: 167 }, duration: 2.6, maxChars: 60,
   defaults: { font: "mono", accent: "#6dff9e", color: "#e8fff0" }, sample: { text: "loading your results..." },
 }, (c) => {
   const { p } = c;
@@ -281,7 +281,7 @@ defineTemplate({
 // ---- 10. glitch
 defineTemplate({
   id: "glitch-text", name: "Glitch", tl: "Glitch", category: "text", moods: ["tech", "urgent", "hype", "warning"],
-  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 840, h: 200 }, duration: 1.8, maxChars: 32,
+  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 725, h: 271 }, duration: 1.8, maxChars: 32,
   defaults: { font: "display", case: "upper", accent: "#00e5ff", bg: "#ff2e63" }, sample: { text: "System error" },
 }, (c) => {
   const { p } = c;
@@ -314,7 +314,7 @@ defineTemplate({
 // ---- 11. outline that fills
 defineTemplate({
   id: "outline-fill", name: "Outline fill", tl: "Balangkas na pinupunan", category: "text", moods: ["hype", "luxury", "tech", "playful"],
-  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 840, h: 220 }, duration: 2, maxChars: 30,
+  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 738, h: 198 }, duration: 2, maxChars: 30,
   defaults: { font: "condensed", case: "upper", accent: "#ffffff" }, sample: { text: "No limits" },
 }, (c) => {
   const { p } = c;
@@ -346,7 +346,7 @@ defineTemplate({
 // ---- 12. gradient with a shine sweep
 defineTemplate({
   id: "gradient-shine", name: "Gradient shine", tl: "Gradient na kumikintab", category: "text", moods: ["luxury", "money", "hype", "tech"],
-  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 840, h: 200 }, duration: 2.2, maxChars: 36,
+  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 698, h: 250 }, duration: 2.2, maxChars: 36,
   defaults: { font: "black", color: "#fff3b0", accent: "#ff9d00" }, sample: { text: "Premium quality" },
 }, (c) => {
   const { p } = c;
@@ -372,7 +372,7 @@ defineTemplate({
 // ---- 13. letters rise one by one
 defineTemplate({
   id: "split-reveal", name: "Letter reveal", tl: "Titik-titik na lumilitaw", category: "text", moods: ["calm", "luxury", "emotion", "tech"],
-  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 840, h: 200 }, duration: 2.2, maxChars: 28,
+  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 764, h: 136 }, duration: 2.2, maxChars: 28,
   defaults: { font: "display", accent: "#ff8fb1" }, sample: { text: "Believe it" },
 }, (c) => {
   const { p } = c;
@@ -398,7 +398,7 @@ defineTemplate({
 // ---- 14. elegant serif with fine lines
 defineTemplate({
   id: "serif-elegant", name: "Elegant serif", tl: "Eleganteng serif", category: "text", moods: ["luxury", "calm", "emotion", "serious"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 800, h: 260 }, duration: 2.6, maxChars: 48,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 780, h: 298 }, duration: 2.6, maxChars: 48,
   defaults: { font: "serif", accent: "#d8b56a", color: "#fff8ea" }, sample: { text: "Timeless *elegance*", text2: "the collection" },
 }, (c) => {
   const { p } = c;
@@ -428,7 +428,7 @@ defineTemplate({
 // ---- 15. handwriting
 defineTemplate({
   id: "handwritten", name: "Handwritten", tl: "Sulat-kamay", category: "text", moods: ["emotion", "funny", "playful", "calm"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 800, h: 180 }, duration: 2.2, maxChars: 36,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 714, h: 156 }, duration: 2.2, maxChars: 36,
   defaults: { font: "hand", accent: "#ff6b6b" }, sample: { text: "thank you!!" },
 }, (c) => {
   const { p } = c;
@@ -474,7 +474,7 @@ defineTemplate({
 // ---- 17. meme caption
 defineTemplate({
   id: "meme-caption", name: "Meme caption", tl: "Meme caption", category: "text", moods: ["funny", "playful", "hype"],
-  zone: "upper", anchor: { x: 0.5, y: 0.14 }, box: { w: 880, h: 220 }, duration: 2, maxChars: 50,
+  zone: "upper", anchor: { x: 0.5, y: 0.14 }, box: { w: 767, h: 229 }, duration: 2, maxChars: 50,
   defaults: { font: "impact", case: "upper", color: "#ffffff" }, sample: { text: "When the wifi finally works" },
 }, (c) => {
   const { p } = c;
@@ -495,7 +495,7 @@ defineTemplate({
 // ---- 18. karaoke highlight
 defineTemplate({
   id: "karaoke-line", name: "Karaoke line", tl: "Karaoke", category: "text", moods: ["playful", "hype", "emotion", "funny"],
-  zone: "lower", anchor: { x: 0.5, y: 0.66 }, box: { w: 840, h: 200 }, duration: 2.6, words: true, maxChars: 56,
+  zone: "lower", anchor: { x: 0.5, y: 0.66 }, box: { w: 827, h: 104 }, duration: 2.6, words: true, maxChars: 56,
   defaults: { font: "heavy", accent: "#ffe14d", color: "#ffffff" }, sample: { text: "Sing it with me now" },
 }, (c) => {
   const { p } = c;

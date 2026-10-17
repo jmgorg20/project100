@@ -78,7 +78,7 @@ defineTemplate({
 // ---- price tag
 defineTemplate({
   id: "price-tag", name: "Price tag", tl: "Price tag", category: "data", moods: ["money", "hype", "playful", "urgent"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 520, h: 300 }, duration: 2.4, maxChars: 20, bg: true, pad: 80,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 504, h: 212 }, duration: 2.4, maxChars: 20, bg: true, pad: 80,
   fields: ["text", "number", "prefix", "suffix", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "number", type: "number", required: true }, { key: "text", type: "text", required: false }],
   defaults: { bg: "#ffd23f", color: "#1b1b1b", accent: "#ff3b3b", font: "black", number: 499, prefix: "₱" }, sample: { number: 499, prefix: "₱", text: "ONLY" },
 }, (c) => {
@@ -104,7 +104,7 @@ defineTemplate({
 // ---- checklist
 defineTemplate({
   id: "checklist", name: "Checklist", tl: "Checklist", category: "data", moods: ["serious", "tech", "calm", "money", "news"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 780, h: 420 }, duration: 3.6, maxChars: 30, bg: true, pad: 60,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 780, h: 351 }, duration: 3.6, maxChars: 30, bg: true, pad: 60,
   fields: ["text", "items", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "items", type: "list", required: true }, { key: "text", type: "text", required: false }],
   defaults: { bg: "#ffffff", color: "#1b2230", accent: "#22c55e", items: ["Hook", "Value", "Call to action"] }, sample: { text: "Do this", items: ["Hook first", "Show the result", "Ask for the follow"] },
 }, (c) => {
@@ -144,7 +144,7 @@ defineTemplate({
 // ---- star rating
 defineTemplate({
   id: "rating-stars", name: "Star rating", tl: "Star rating", category: "data", moods: ["money", "hype", "emotion", "playful", "luxury"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 620, h: 230 }, duration: 2.6, maxChars: 30, pad: 70,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 645, h: 177 }, duration: 2.6, maxChars: 30, pad: 70,
   fields: ["text", "number", "color", "accent", "size", "intensity"], inputs: [{ key: "number", type: "number", required: true }, { key: "text", type: "text", required: false }],
   defaults: { color: "#ffffff", accent: "#ffc531", number: 5 }, sample: { number: 4.8, text: "Loved by customers" },
 }, (c) => {

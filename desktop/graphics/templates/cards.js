@@ -12,7 +12,7 @@ const pop = (e) => ease.back(e.i, 1.4);
 // ---- chat / prompt card with typing
 defineTemplate({
   id: "prompt-card", name: "Prompt card (typing)", tl: "Prompt card na nagta-type", category: "card", moods: ["tech", "hype", "calm"],
-  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 800, h: 300 }, duration: 3.6, maxChars: 90, bg: true, pad: 70,
+  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 800, h: 239 }, duration: 3.6, maxChars: 90, bg: true, pad: 70,
   fields: ["text", "text2", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: true }, { key: "text2", type: "text", required: false }],
   defaults: { bg: "#ffffff", color: "#1f2430", accent: "#6c5ce7", text2: "Ask anything" }, sample: { text: "Make me a video that goes viral", text2: "Ask anything" },
 }, (c) => {
@@ -53,7 +53,7 @@ defineTemplate({
 // ---- stacked notifications
 defineTemplate({
   id: "notification-stack", name: "Notification stack", tl: "Mga notification", category: "card", moods: ["tech", "hype", "money", "playful"],
-  zone: "upper", anchor: { x: 0.5, y: 0.2 }, box: { w: 780, h: 420 }, duration: 3.4, maxChars: 40, bg: true, pad: 60,
+  zone: "upper", anchor: { x: 0.5, y: 0.2 }, box: { w: 780, h: 354 }, duration: 3.4, maxChars: 40, bg: true, pad: 60,
   fields: ["text", "items", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: true }, { key: "items", type: "list", required: false }],
   defaults: { bg: "#ffffff", color: "#1d2433", accent: "#34c759", icon: "bell" }, sample: { text: "New order!", items: ["Payment received", "5 new followers"] },
 }, (c) => {
@@ -121,7 +121,7 @@ defineTemplate({
 // ---- icon badge
 defineTemplate({
   id: "icon-badge", name: "Icon badge", tl: "Icon badge", category: "card", moods: ["tech", "hype", "playful", "money", "serious"],
-  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 420, h: 340 }, duration: 2, maxChars: 22, bg: true, pad: 70,
+  zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 436, h: 271 }, duration: 2, maxChars: 22, bg: true, pad: 70,
   fields: ["text", "icon", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: false }],
   defaults: { icon: "bolt", accent: "#ff7a1a", color: "#ffffff" }, sample: { text: "Fast results", icon: "bolt" },
 }, (c) => {
@@ -147,7 +147,7 @@ defineTemplate({
 // ---- clock
 defineTemplate({
   id: "clock-timer", name: "Clock", tl: "Orasan", category: "card", moods: ["urgent", "serious", "money", "tech"],
-  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 420, h: 480 }, duration: 2.6, maxChars: 24, bg: true, pad: 60,
+  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 536, h: 388 }, duration: 2.6, maxChars: 24, bg: true, pad: 60,
   fields: ["text", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: false }],
   defaults: { bg: "#ffffff", color: "#ffffff", accent: "#ff4d4d", font: "black" }, sample: { text: "24 hours left" },
 }, (c) => {
@@ -178,7 +178,7 @@ defineTemplate({
 // ---- lower-third pill
 defineTemplate({
   id: "lower-third-pill", name: "Lower-third pill", tl: "Pill sa ibaba", category: "pill", moods: ["serious", "tech", "news", "calm", "hype"],
-  zone: "lower", anchor: { x: 0.5, y: 0.76 }, box: { w: 640, h: 110 }, duration: 2.8, maxChars: 40, bg: true, pad: 50,
+  zone: "lower", anchor: { x: 0.5, y: 0.76 }, box: { w: 568, h: 90 }, duration: 2.8, maxChars: 40, bg: true, pad: 50,
   fields: ["text", "text2", "icon", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: true }, { key: "text2", type: "text", required: false }],
   defaults: { bg: "#ffffff", color: "#161a24", accent: "#2f6bff", icon: "check" }, sample: { text: "Revision #11 check", text2: "" },
 }, (c) => {
@@ -206,7 +206,7 @@ defineTemplate({
 // ---- "Comment EDIT" pill with a click
 defineTemplate({
   id: "comment-pill", name: "Comment keyword", tl: "Comment keyword", category: "pill", moods: ["hype", "playful", "tech", "money"],
-  zone: "lower", anchor: { x: 0.5, y: 0.74 }, box: { w: 560, h: 110 }, duration: 2.6, maxChars: 16, bg: true, pad: 70,
+  zone: "lower", anchor: { x: 0.5, y: 0.74 }, box: { w: 455, h: 98 }, duration: 2.6, maxChars: 16, bg: true, pad: 70,
   fields: ["text", "text2", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: true }, { key: "text2", type: "text", required: false }],
   defaults: { bg: "#ffffff", color: "#161a24", accent: "#ff3d71", text2: "Comment", case: "upper" }, sample: { text: "EDIT", text2: "Comment" },
 }, (c) => {
@@ -244,7 +244,7 @@ defineTemplate({
 // ---- follow pill with a button state change
 defineTemplate({
   id: "follow-pill", name: "Follow / Following", tl: "Follow / Following", category: "pill", moods: ["playful", "hype", "tech", "calm"],
-  zone: "lower", anchor: { x: 0.5, y: 0.72 }, box: { w: 780, h: 120 }, duration: 3, maxChars: 24, bg: true, pad: 60,
+  zone: "lower", anchor: { x: 0.5, y: 0.72 }, box: { w: 715, h: 104 }, duration: 3, maxChars: 24, bg: true, pad: 60,
   fields: ["text", "text2", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: true }, { key: "text2", type: "text", required: false }],
   defaults: { bg: "#ffffff", color: "#161a24", accent: "#2f6bff", text2: "Follow", items: ["Following"] }, sample: { text: "@yourhandle", text2: "Follow", items: ["Following"] },
 }, (c) => {
@@ -279,7 +279,7 @@ defineTemplate({
 // ---- title card with chips
 defineTemplate({
   id: "title-chips", name: "Title with chips", tl: "Title na may chips", category: "card", moods: ["tech", "serious", "calm", "news", "hype"],
-  zone: "center", anchor: { x: 0.5, y: 0.45 }, box: { w: 800, h: 360 }, duration: 3.2, maxChars: 40, bg: true, pad: 60,
+  zone: "center", anchor: { x: 0.5, y: 0.45 }, box: { w: 800, h: 311 }, duration: 3.2, maxChars: 40, bg: true, pad: 60,
   fields: ["text", "text2", "items", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: true }, { key: "items", type: "list", required: false }],
   defaults: { bg: "#10131c", color: "#ffffff", accent: "#7c5cff", font: "black", items: ["Tips", "Tricks", "Guide"] }, sample: { text: "Editing basics", text2: "Part 1", items: ["Cuts", "Captions", "Music"] },
 }, (c) => {

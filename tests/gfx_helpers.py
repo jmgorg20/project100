@@ -46,3 +46,13 @@ def add_graphics_track(project, clips, track_id="graphics"):
     project["tracks"].append({"id": track_id, "kind": "graphics", "name": "Graphics",
                               "clips": list(clips)})
     return project
+
+
+def draw_stills(jobs, folder):
+    """Draw jobs (with `stills`) with the command-line renderer; returns the sidecar dicts."""
+    spec = Path(folder) / "jobs.json"
+    spec.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
+    done = subprocess.run([shutil.which("node"), str(CLI), str(spec)], capture_output=True,
+                          text=True, timeout=600)
+    assert done.returncode == 0, done.stdout[-500:] + done.stderr[-500:]
+    return {j["id"]: json.loads(Path(j["meta"]).read_text(encoding="utf-8")) for j in jobs}

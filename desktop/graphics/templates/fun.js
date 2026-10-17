@@ -10,7 +10,7 @@ const emojiFont = fontCss("inter").fontFamily;
 // ---- big emoji pop
 defineTemplate({
   id: "emoji-pop", name: "Emoji pop", tl: "Emoji pop", category: "emoji", moods: ["funny", "playful", "hype", "emotion", "money"],
-  zone: "any", anchor: { x: 0.5, y: 0.4 }, box: { w: 300, h: 300 }, duration: 1.6, maxChars: 4, pad: 90,
+  zone: "any", anchor: { x: 0.5, y: 0.4 }, box: { w: 260, h: 260 }, duration: 1.6, maxChars: 4, pad: 90,
   fields: ["emoji", "size", "intensity"], inputs: [{ key: "emoji", type: "text", required: true }],
   defaults: { emoji: "🔥" }, sample: { emoji: "🔥" },
 }, (c) => {
@@ -70,7 +70,7 @@ defineTemplate({
 // ---- warning banner
 defineTemplate({
   id: "warning-banner", name: "Warning banner", tl: "Babala", category: "banner", moods: ["warning", "urgent", "serious", "funny"],
-  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 900, h: 220 }, duration: 2.2, maxChars: 30, bg: true, pad: 60,
+  zone: "any", anchor: { x: 0.5, y: 0.45 }, box: { w: 900, h: 184 }, duration: 2.2, maxChars: 30, bg: true, pad: 60,
   fields: ["text", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: true }],
   defaults: { bg: "#111111", color: "#ffd400", accent: "#ffd400", font: "impact", case: "upper" }, sample: { text: "Warning: Don't skip this" },
 }, (c) => {
@@ -159,7 +159,7 @@ defineTemplate({
 // ---- before / after labels (pairs with the Before/after wipe effect)
 defineTemplate({
   id: "before-after-tag", name: "Before / After tags", tl: "Before / After", category: "banner", moods: ["hype", "tech", "serious", "playful", "luxury"],
-  zone: "upper", anchor: { x: 0.5, y: 0.12 }, box: { w: 900, h: 90 }, duration: 3, maxChars: 14, bg: true, pad: 50,
+  zone: "upper", anchor: { x: 0.5, y: 0.12 }, box: { w: 900, h: 78 }, duration: 3, maxChars: 14, bg: true, pad: 50,
   fields: ["text", "text2", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "text", type: "text", required: false }, { key: "text2", type: "text", required: false }],
   defaults: { bg: "#111111", color: "#ffffff", accent: "#ffd23f", font: "black", text: "BEFORE", text2: "AFTER", case: "upper" }, sample: { text: "BEFORE", text2: "AFTER" },
 }, (c) => {
