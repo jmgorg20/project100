@@ -46,7 +46,7 @@ defineTemplate({
 
 // ---- progress bar
 defineTemplate({
-  id: "stat-bar", name: "Percent bar", tl: "Percent bar", category: "data", moods: ["tech", "serious", "money", "news", "calm"],
+  id: "stat-bar", numRange: [0, 100], name: "Percent bar", tl: "Percent bar", category: "data", moods: ["tech", "serious", "money", "news", "calm"],
   zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 800, h: 190 }, duration: 2.8, maxChars: 34, bg: true, pad: 60,
   fields: ["text", "number", "color", "accent", "bg", "size", "intensity"], inputs: [{ key: "number", type: "number", required: true }, { key: "text", type: "text", required: false }],
   defaults: { bg: "#10131c", color: "#ffffff", accent: "#35e08a", number: 80 }, sample: { number: 87, text: "Customers love it" },
@@ -143,7 +143,7 @@ defineTemplate({
 
 // ---- star rating
 defineTemplate({
-  id: "rating-stars", name: "Star rating", tl: "Star rating", category: "data", moods: ["money", "hype", "emotion", "playful", "luxury"],
+  id: "rating-stars", numRange: [0, 5], name: "Star rating", tl: "Star rating", category: "data", moods: ["money", "hype", "emotion", "playful", "luxury"],
   zone: "any", anchor: { x: 0.5, y: 0.5 }, box: { w: 645, h: 177 }, duration: 2.6, maxChars: 30, pad: 70,
   fields: ["text", "number", "color", "accent", "size", "intensity"], inputs: [{ key: "number", type: "number", required: true }, { key: "text", type: "text", required: false }],
   defaults: { color: "#ffffff", accent: "#ffc531", number: 5 }, sample: { number: 4.8, text: "Loved by customers" },

@@ -213,9 +213,69 @@ NO_RENDERER = ("The graphics (pop-up words, cards, arrows...) have not been draw
                "draws them itself.")
 
 
+def draw_via_server(url, token, jobs, reporter=None, cancel=None):
+    """Ask the desktop app's graphics server (a hidden Electron window) to draw the jobs.
+    It answers with one json line per event: progress, job, done or error."""
+    import requests
+    if reporter:
+        reporter.stage("graphics", "drawing the graphics")
+    stop = threading.Event()
+    try:
+        response = requests.post(url.rstrip("/") + "/draw", json={"jobs": jobs}, stream=True,
+                                 headers={"x-graphics-token": token or ""}, timeout=(10, 600))
+    except requests.RequestException as exc:
+        raise EditorError(f"Could not reach the app's graphics drawing service: {exc}")
+
+    def watch():
+        while not stop.is_set():
+            if cancel is not None and cancel.wait(0.2):
+                response.close()
+                return
+            if cancel is None:
+                return
+
+    if cancel is not None:
+        threading.Thread(target=watch, daemon=True).start()
+    failure = None
+    try:
+        if response.status_code != 200:
+            raise EditorError(f"The graphics drawing service refused the request ({response.status_code}).")
+        for line in response.iter_lines():
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if event.get("type") == "progress" and reporter and event.get("total"):
+                reporter.progress(event["done"] / event["total"], stage="graphics")
+            elif event.get("type") == "error":
+                failure = event.get("message")
+    except requests.RequestException as exc:
+        if cancel is not None and cancel.is_set():
+            raise Cancelled("Cancelled while drawing the graphics.")
+        raise EditorError(f"The graphics drawing service stopped: {exc}")
+    finally:
+        stop.set()
+        response.close()
+    if cancel is not None and cancel.is_set():
+        raise Cancelled("Cancelled while drawing the graphics.")
+    if failure:
+        raise EditorError(f"Could not draw the graphics: {failure}")
+
+
 def draw_jobs(jobs, reporter=None, cancel=None):
-    """Draw jobs to their files with the renderer command. Raises EditorError if it cannot."""
+    """Draw jobs to their files: through the app's graphics service when there is one
+    (AUTOEDIT_GRAPHICS_URL), else with the command line renderer. Raises EditorError if it cannot."""
     if not jobs:
+        return
+    url = os.environ.get("AUTOEDIT_GRAPHICS_URL")
+    if url:
+        draw_via_server(url, os.environ.get("AUTOEDIT_GRAPHICS_TOKEN"), jobs, reporter, cancel)
+        still_missing = [j for j in jobs if not is_drawn(j)]
+        if still_missing:
+            raise EditorError(f"The graphics service finished but {len(still_missing)} graphic(s) "
+                              "were not written.")
         return
     cmd = renderer_command()
     if cmd is None:

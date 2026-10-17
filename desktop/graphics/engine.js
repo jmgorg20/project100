@@ -55,7 +55,7 @@ export function defineTemplate(meta, build) {
     version: 1, tl: meta.name, category: "text", moods: [], inputs: [{ key: "text", type: "text", required: true }],
     duration: 2, minDuration: 0.8, maxDuration: 8, zone: "any", anchor: { x: 0.5, y: 0.5 },
     box: { w: 600, h: 200 }, pad: 60, fields: ["text", "font", "color", "accent", "size", "intensity"],
-    bg: false, words: false, maxChars: 40, minFont: 28, defaults: {}, sample: {}, ...meta,
+    bg: false, words: false, maxChars: 40, minFont: 28, numRange: null, defaults: {}, sample: {}, ...meta,
   };
   registry.set(full.id, { meta: full, build });
   return full;

@@ -100,6 +100,7 @@
    "words": false,
    "maxChars": 24,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "color": "#ffffff",
     "accent": "#ffd23f",
@@ -165,6 +166,7 @@
    "words": false,
    "maxChars": 14,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#111111",
     "color": "#ffffff",
@@ -222,6 +224,7 @@
    "words": true,
    "maxChars": 44,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "comic",
     "accent": "#ff5c8a",
@@ -282,6 +285,7 @@
    "words": false,
    "maxChars": 30,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#ffffff",
     "color": "#1b2230",
@@ -346,6 +350,7 @@
    "words": false,
    "maxChars": 24,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "accent": "#ff3b3b",
     "color": "#ffffff"
@@ -401,6 +406,7 @@
    "words": false,
    "maxChars": 24,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#ffffff",
     "color": "#ffffff",
@@ -461,6 +467,7 @@
    "words": false,
    "maxChars": 16,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#ffffff",
     "color": "#161a24",
@@ -526,6 +533,7 @@
    "words": false,
    "maxChars": 28,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "impact",
     "color": "#ffffff",
@@ -583,6 +591,7 @@
    "words": false,
    "maxChars": 6,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "emoji": "💸"
    },
@@ -632,6 +641,7 @@
    "words": false,
    "maxChars": 4,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "emoji": "🔥"
    },
@@ -689,6 +699,7 @@
    "words": false,
    "maxChars": 24,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#ffffff",
     "color": "#161a24",
@@ -750,6 +761,7 @@
    "words": false,
    "maxChars": 32,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "display",
     "case": "upper",
@@ -804,6 +816,7 @@
    "words": false,
    "maxChars": 40,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "black",
     "accent": "#7aa8ff"
@@ -856,6 +869,7 @@
    "words": false,
    "maxChars": 36,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "black",
     "color": "#fff3b0",
@@ -909,6 +923,7 @@
    "words": false,
    "maxChars": 36,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "hand",
     "accent": "#ff6b6b"
@@ -960,6 +975,7 @@
    "words": false,
    "maxChars": 14,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "accent": "#ff3b6b",
     "color": "#ffffff"
@@ -1013,6 +1029,7 @@
    "words": true,
    "maxChars": 44,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "black",
     "accent": "#ffd23f",
@@ -1068,6 +1085,7 @@
    "words": false,
    "maxChars": 22,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "icon": "bolt",
     "accent": "#ff7a1a",
@@ -1122,6 +1140,7 @@
    "words": true,
    "maxChars": 56,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "heavy",
     "accent": "#ffe14d",
@@ -1183,6 +1202,7 @@
    "words": false,
    "maxChars": 40,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#ffffff",
     "color": "#161a24",
@@ -1237,6 +1257,7 @@
    "words": false,
    "maxChars": 50,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "impact",
     "case": "upper",
@@ -1296,6 +1317,7 @@
    "words": false,
    "maxChars": 60,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "heavy",
     "accent": "#d90429",
@@ -1358,6 +1380,7 @@
    "words": false,
    "maxChars": 40,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#ffffff",
     "color": "#1d2433",
@@ -1416,6 +1439,7 @@
    "words": false,
    "maxChars": 30,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "condensed",
     "case": "upper",
@@ -1474,6 +1498,7 @@
    "words": false,
    "maxChars": 28,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#fbfaf5",
     "color": "#2b2b2b",
@@ -1530,6 +1555,7 @@
    "words": true,
    "maxChars": 44,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "impact",
     "case": "upper",
@@ -1591,6 +1617,7 @@
    "words": false,
    "maxChars": 20,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#ffd23f",
     "color": "#1b1b1b",
@@ -1654,6 +1681,7 @@
    "words": false,
    "maxChars": 90,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#ffffff",
     "color": "#1f2430",
@@ -1716,6 +1744,7 @@
    "words": false,
    "maxChars": 90,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#14161d",
     "color": "#ffffff",
@@ -1777,6 +1806,10 @@
    "words": false,
    "maxChars": 30,
    "minFont": 28,
+   "numRange": [
+    0,
+    5
+   ],
    "defaults": {
     "color": "#ffffff",
     "accent": "#ffc531",
@@ -1831,6 +1864,7 @@
    "words": false,
    "maxChars": 28,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "color": "#ffffff",
     "accent": "#ff5c8a",
@@ -1884,6 +1918,7 @@
    "words": false,
    "maxChars": 48,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "serif",
     "accent": "#d8b56a",
@@ -1939,6 +1974,7 @@
    "words": true,
    "maxChars": 56,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "inter",
     "accent": "#58c8ff"
@@ -1991,6 +2027,7 @@
    "words": false,
    "maxChars": 28,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "display",
     "accent": "#ff8fb1"
@@ -2043,6 +2080,7 @@
    "words": false,
    "maxChars": 24,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "impact",
     "case": "upper",
@@ -2103,6 +2141,10 @@
    "words": false,
    "maxChars": 34,
    "minFont": 28,
+   "numRange": [
+    0,
+    100
+   ],
    "defaults": {
     "bg": "#10131c",
     "color": "#ffffff",
@@ -2159,6 +2201,7 @@
    "words": false,
    "maxChars": 14,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "accent": "#ff3b6b",
     "color": "#ffffff",
@@ -2213,6 +2256,7 @@
    "words": false,
    "maxChars": 40,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "thin",
     "case": "upper"
@@ -2273,6 +2317,7 @@
    "words": false,
    "maxChars": 40,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#10131c",
     "color": "#ffffff",
@@ -2338,6 +2383,7 @@
    "words": false,
    "maxChars": 60,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "mono",
     "accent": "#6dff9e",
@@ -2391,6 +2437,7 @@
    "words": true,
    "maxChars": 44,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "font": "black",
     "accent": "#ffd23f"
@@ -2443,6 +2490,7 @@
    "words": false,
    "maxChars": 30,
    "minFont": 28,
+   "numRange": null,
    "defaults": {
     "bg": "#111111",
     "color": "#ffd400",
