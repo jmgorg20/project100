@@ -49,10 +49,30 @@ export async function signUp(page: Page, email = uniqueEmail("user")) {
   return email;
 }
 
-/** No sideways scrolling and every control big enough to tap. */
+/** No sideways scrolling and every control big enough to tap; again with a wide font (phones and
+ * Linux use wider fonts than this machine may have). */
 export async function checkPhoneLayout(page: Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow, "page scrolls sideways").toBeLessThanOrEqual(0);
+  await checkLayoutOnce(page);
+  // (set through the DOM: the page's security policy rightly refuses injected <style>)
+  const set = (font: string) => page.evaluate((f) => document.body.style.setProperty("font-family", f, f ? "important" : ""), font);
+  for (const font of ["DejaVu Sans", "Liberation Sans", "monospace"]) {
+    await set(font);
+    await checkLayoutOnce(page);
+  }
+  await set("");
+}
+
+async function checkLayoutOnce(page: Page) {
+  const wide = await page.evaluate(() => {
+    const limit = document.documentElement.clientWidth;
+    const over = document.documentElement.scrollWidth - limit;
+    const culprits = over <= 0 ? [] : Array.from(document.querySelectorAll("body *"))
+      .filter((el) => el.getBoundingClientRect().right > limit + 0.5)
+      .map((el) => `${el.tagName.toLowerCase()}.${(el as HTMLElement).className} → ${Math.round(el.getBoundingClientRect().right)}px`)
+      .slice(0, 8);
+    return { over, culprits, font: getComputedStyle(document.body).fontFamily };
+  });
+  expect(wide, "page scrolls sideways").toEqual({ over: Math.min(wide.over, 0), culprits: [], font: wide.font });
   const small = await page.evaluate(() => Array.from(document.querySelectorAll("button, a.button, input:not([type=checkbox]):not(.hp), select, nav a"))
     .filter((el) => (el as HTMLElement).offsetParent !== null)
     .map((el) => ({ el: (el as HTMLElement).outerHTML.slice(0, 80), h: el.getBoundingClientRect().height }))
