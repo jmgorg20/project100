@@ -7,12 +7,11 @@ import types
 
 import pytest
 
-from autoedit import ai_edit, tracking
+from autoedit import ai_edit
 from autoedit.ai_plan import preset_plan, upgrade_plan, validate_plan
 from autoedit.config import load_config
 from autoedit.generation import Paths
 from autoedit.project import load_project, validate_project
-from autoedit.tracking import Point, Track
 from autoedit.words import load_transcript
 from tests import synthetic
 from tests.test_tracking import FakeLandmarker, make_fake_mediapipe  # noqa: F401  (stand-in MediaPipe)

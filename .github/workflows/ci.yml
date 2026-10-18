@@ -83,12 +83,8 @@ jobs:
         working-directory: desktop
         run: npm audit --omit=dev --audit-level=high
       - name: Secrets in the history
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7   # v2.3.9
         env: {GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"}
-      - name: Misconfigurations and vulnerable files
-        uses: aquasecurity/trivy-action@0.33.1
-        with: {scan-type: fs, scan-ref: ., severity: "CRITICAL,HIGH", ignore-unfixed: true, exit-code: "1",
-               skip-dirs: "desktop/node_modules"}
 
   containers:
     runs-on: ubuntu-24.04
@@ -104,12 +100,16 @@ jobs:
         run: |
           docker build -f deploy/Dockerfile.api -t autoedit-api:test .
           docker build -f deploy/Dockerfile.worker -t autoedit-worker:test .
-      - name: Scan the images
-        uses: aquasecurity/trivy-action@0.33.1
-        with: {image-ref: "autoedit-api:test", severity: "CRITICAL", ignore-unfixed: true, exit-code: "1"}
+      # Grype (Anchore): known vulnerabilities in the images' system and Python packages; actions are
+      # pinned by commit so a moved tag cannot change what runs here.
+      - name: Scan the API image
+        uses: anchore/scan-action@56be6c9e3b8c0693c06fe3e38d46b604aaa63180   # v7.4.1
+        with: {image: "autoedit-api:test", severity-cutoff: critical, only-fixed: true, fail-build: true,
+               output-format: table}
       - name: Scan the worker image
-        uses: aquasecurity/trivy-action@0.33.1
-        with: {image-ref: "autoedit-worker:test", severity: "CRITICAL", ignore-unfixed: true, exit-code: "1"}
+        uses: anchore/scan-action@56be6c9e3b8c0693c06fe3e38d46b604aaa63180   # v7.4.1
+        with: {image: "autoedit-worker:test", severity-cutoff: critical, only-fixed: true, fail-build: true,
+               output-format: table}
       - name: End to end in containers (the real engine)
         env: {AUTOEDIT_CONTAINER_TEST: "1"}
         run: python -m pytest -q tests/service/test_containers.py
