@@ -1,0 +1,14 @@
+/* The fonts the graphics templates use. All are free (SIL Open Font License): see fonts/OFL-*.txt */
+@font-face { font-family: "GfxInter"; font-weight: 100; src: url("fonts/Inter-Thin.otf"); }
+@font-face { font-family: "GfxInter"; font-weight: 400; src: url("fonts/Inter-Regular.otf"); }
+@font-face { font-family: "GfxInter"; font-weight: 500 600; src: url("fonts/Inter-Medium.otf"); }
+@font-face { font-family: "GfxInter"; font-weight: 700 800; src: url("fonts/Inter-Bold.otf"); }
+@font-face { font-family: "GfxInter"; font-weight: 900; src: url("fonts/Inter-Black.otf"); }
+@font-face { font-family: "GfxAnton"; src: url("fonts/Anton-Regular.ttf"); }
+@font-face { font-family: "GfxArchivo"; src: url("fonts/ArchivoBlack-Regular.ttf"); }
+@font-face { font-family: "GfxBebas"; src: url("fonts/BebasNeue-Regular.ttf"); }
+@font-face { font-family: "GfxBangers"; src: url("fonts/Bangers-Regular.ttf"); }
+@font-face { font-family: "GfxOswald"; font-weight: 200 700; src: url("fonts/Oswald.ttf"); }
+@font-face { font-family: "GfxPlayfair"; font-weight: 400 900; src: url("fonts/PlayfairDisplay.ttf"); }
+@font-face { font-family: "GfxCaveat"; font-weight: 400 700; src: url("fonts/Caveat.ttf"); }
+@font-face { font-family: "GfxMono"; font-weight: 100 800; src: url("fonts/JetBrainsMono.ttf"); }

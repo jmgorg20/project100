@@ -371,6 +371,47 @@ def add_grades(graph, current, project, fps, total_frames):
     return current
 
 
+def wipe_expression(t0, sweep, stop, direction, divider):
+    """FFmpeg `blend` expression for a before/after wipe. A = the picture as it was (first input),
+    B = the graded picture. The divider travels from one edge to `stop` (a fraction of the frame)
+    over `sweep` seconds, easing out, and stays there; the graded side is the one it has passed."""
+    horizontal = direction in ("right", "left")
+    axis, extent = ("X", "W") if horizontal else ("Y", "H")
+    travel = f"{extent}*{stop:g}*ld(0)"
+    pos = travel if direction in ("right", "down") else f"{extent}-{travel}"
+    graded = f"lt({axis},ld(1))" if direction in ("right", "down") else f"gt({axis},ld(1))"
+    pick = f"if({graded},B,A)"
+    if divider:
+        pick = f"if(gt(ld(0),0.001)*lt(abs({axis}-ld(1)),2.5),255,{pick})"
+    return (f"st(0,1-pow(1-clip((T-{t0:.4f})/{sweep:g},0,1),3));st(1,{pos});{pick}")
+
+
+def add_wipes(graph, current, project, fps):
+    """Before/after wipes: one side of a moving divider shows a colour grade (see wipe_expression)."""
+    k = 0
+    for track in visible_tracks(project, "effect"):
+        for clip in sorted(track["clips"], key=lambda c: c["start"]):
+            if clip["type"] != "wipe":
+                continue
+            f0, f1 = clip_frames(clip, fps)
+            if f1 <= f0:
+                continue
+            expr = wipe_expression(f0 / fps, float(clip.get("sweep", 0.8)),
+                                   float(clip.get("stop", 0.5)), clip.get("direction", "right"),
+                                   bool(clip.get("divider", True)))
+            on = f"enable='{frames_expression([(f0, f1)], fps)}'"
+            graph.add(f"[{current}]split[wipea{k}][wipeb{k}]")
+            graded(graph, f"wipeb{k}", f"wipeg{k}", clip["grade"], float(clip.get("intensity", 1.0)),
+                   f"wp{k}")
+            # blend does not use RGB values the way "screen" does, but gbrp keeps every plane the
+            # same size, so X / Y / W / H mean the same thing in all three planes
+            graph.add(f"[wipea{k}]format=gbrp[wipeo{k}]", f"[wipeg{k}]format=gbrp[wipef{k}]",
+                      f"[wipeo{k}][wipef{k}]blend=all_expr='{expr}':{on}[wipe{k}]")
+            current = f"wipe{k}"
+            k += 1
+    return current
+
+
 def triangle(t0, d):
     """0 at the start and end of [t0, t0 + d], 1 in the middle (FFmpeg expression in t)."""
     return f"max(0,1-abs(2*(t-{t0 + d / 2:.4f})/{d:.4f}))"
@@ -430,6 +471,18 @@ def add_trackfx(graph, current, layer, fps, total_frames):
               f"[{current}]format=gbrp[tfxbase]",
               "[tfxbase][tfx]blend=all_mode=screen:eof_action=pass[tfxout]")
     return "tfxout"
+
+
+def add_graphics(graph, current, layers, fps):
+    """Lay the drawn graphics (videos with transparency) over the picture, each for its frames."""
+    for k, layer in enumerate(layers):
+        idx = graph.add_input(["-i", layer["path"]])
+        f0, f1 = layer["f0"], layer["f1"]
+        graph.add(f"[{idx}:v]setpts=PTS-STARTPTS+{f0 / fps:.5f}/TB,format=rgba[gfx{k}]",
+                  f"[{current}][gfx{k}]overlay=x={layer['x']}:y={layer['y']}:eof_action=pass:"
+                  f"enable='{frames_expression([(f0, f1)], fps)}'[gfxout{k}]")
+        current = f"gfxout{k}"
+    return current
 
 
 def add_overlays(graph, current, project, media, base_dir, fps):
@@ -620,11 +673,12 @@ def add_audio_tracks(graph, project, media, base_dir, fps, dialog):
 # ---------------------------------------------------------------- the command
 
 def build_command(project, base_dir, output, ass_name=None, export=None, frame=None,
-                  trackfx=None):
+                  trackfx=None, graphics=None):
     """Return (input_args, filter_graph_text, output_args).
 
     `frame`: render only this frame number (0-based) to `output` as a picture.
     `trackfx`: the drawn tracked-effect video {"path", "f0", "f1"} (see trackfx.prepare_layer).
+    `graphics`: the drawn motion graphics (graphics.render_layers), laid over the picture.
     """
     export = {**DEFAULT_EXPORT, **(export or {})}
     fps = project["settings"]["fps"]
@@ -638,10 +692,13 @@ def build_command(project, base_dir, output, ass_name=None, export=None, frame=N
                                      with_audio)
     current = add_zooms(graph, current, project, fps)
     current = add_grades(graph, current, project, fps, total_frames)
+    current = add_wipes(graph, current, project, fps)
     current = add_fx(graph, current, project, fps)
     if trackfx:
         current = add_trackfx(graph, current, trackfx, fps, total_frames)
     current = add_overlays(graph, current, project, media, base_dir, fps)
+    if graphics:
+        current = add_graphics(graph, current, graphics, fps)
     if ass_name:
         graph.add(f"[{current}]subtitles={ass_name}:fontsdir=fonts[capout]")
         current = "capout"
@@ -694,12 +751,25 @@ def check_media_files(project, base_dir):
                           + "\n  ".join(missing))
 
 
+def prepare_graphics(project, base_dir, reporter=None, cancel=None, mode="require"):
+    """Make sure the project's motion graphics are drawn; return their layers for build_command."""
+    from . import graphics
+    if not graphics.graphic_clips(project):
+        return []
+    graphics.ensure_assets(project, base_dir, reporter, cancel, mode)
+    return graphics.render_layers(project, base_dir)
+
+
 def _run(project, output, base_dir, work_dir, fonts_folder, export, reporter, cancel,
-         keep_work, frame, description):
+         keep_work, frame, description, graphics_mode="require"):
     check_ffmpeg()
     check_project(project)
     base_dir = Path(base_dir or ".").resolve()
     check_media_files(project, base_dir)
+    from . import graphics as graphics_mod
+    gfx_layers = prepare_graphics(project, base_dir, reporter, cancel, graphics_mode)
+    # flash / whip / punch-in transitions that belong to graphics are real effect clips here
+    project = graphics_mod.expand_attachments(project)
     fonts_folder = Path(fonts_folder or PROJECT_DIR / "assets" / "fonts")
     own_work = work_dir is None
     job = Path(tempfile.mkdtemp(prefix="render-") if own_work else work_dir)
@@ -716,7 +786,7 @@ def _run(project, output, base_dir, work_dir, fonts_folder, export, reporter, ca
             (job / ass_name).write_text(ass_text, encoding="utf-8")
         layer = prepare_trackfx(project, base_dir, job, frame, cancel, reporter)
         inputs, graph, outputs = build_command(project, base_dir, part, ass_name, export, frame,
-                                               trackfx=layer)
+                                               trackfx=layer, graphics=gfx_layers)
         script = job / "filters.txt"
         script.write_text(graph, encoding="utf-8")
         fps = project["settings"]["fps"]

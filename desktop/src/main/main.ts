@@ -8,6 +8,7 @@ import { cleanVocabulary } from "../shared/captionEdit";
 import { backupPathFor } from "../shared/paths";
 import type { ContentType, EngineEvent, Job, JobRequest, Plan, Project, Provider, Settings } from "../shared/types";
 import { runEngine, type EngineConfig, type RunHandle } from "./engine";
+import { startGraphicsService, type GraphicsService } from "./graphics";
 import { HistoryStore } from "./historyStore";
 import { freeOutputPath, jobArgs, modelFor } from "./jobArgs";
 import { KeyStore } from "./keys";
@@ -42,8 +43,16 @@ const thumbsCache = new Map<string, unknown>();
 // engine always closes WanGP itself: a killed engine could leave WanGP running on the GPU.
 const ENGINE_STOP_GRACE_MS = 90_000;
 
+// The hidden-window graphics service the engine asks to draw motion graphics (see graphics.ts).
+let graphicsService: GraphicsService | null = null;
+
 function engineConfig(): EngineConfig {
-  return { python: settings.pythonPath, engineDir: settings.engineDir, env: keys.env(), graceMs: ENGINE_STOP_GRACE_MS };
+  const env: Record<string, string> = { ...keys.env() };
+  if (graphicsService) {
+    env.AUTOEDIT_GRAPHICS_URL = graphicsService.url;
+    env.AUTOEDIT_GRAPHICS_TOKEN = graphicsService.token;
+  }
+  return { python: settings.pythonPath, engineDir: settings.engineDir, env, graceMs: ENGINE_STOP_GRACE_MS };
 }
 
 function send(channel: string, payload: unknown): void {
@@ -433,6 +442,22 @@ function registerIpc(): void {
       return { error: (err as Error).message };
     }
   });
+  ipcMain.handle("graphics:regenerate", async (_e, projectPath: string, clipId: string, useAi: boolean, provider: Provider) => {
+    const args = ["graphics-regenerate", projectPath, "--clip", clipId];
+    if (useAi) args.push("--provider", provider, "--model", modelFor(settings, provider));
+    const r = await engineOnce(args);
+    if (r.error || !r.result) return { error: r.error ?? "No answer from the editor engine." };
+    try {
+      return { project: JSON.parse(fs.readFileSync(projectPath, "utf-8")), clip: r.result.clip };
+    } catch (err) {
+      return { error: (err as Error).message };
+    }
+  });
+  ipcMain.handle("graphics:check", async (_e, projectPath: string) => {
+    const r = await engineOnce(["graphics-check", projectPath]);
+    if (r.error || !r.result) return { error: r.error ?? "No answer from the editor engine.", issues: [] };
+    return { issues: r.result.issues ?? [] };
+  });
   ipcMain.handle("engine:check", async () => {
     const r = await engineOnce(["validate", path.join(settings.engineDir, "examples", "project.json")]);
     return r.error ? { ok: false, message: r.error } : { ok: true, message: "The editor engine is ready." };
@@ -486,6 +511,9 @@ app.whenReady().then(() => {
     },
   });
   registerIpc();
+  startGraphicsService()
+    .then((service) => (graphicsService = service))
+    .catch((err) => console.error(`The graphics service did not start: ${(err as Error).message}`));
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -505,5 +533,6 @@ app.on("before-quit", (event) => {
   queue.cancelAll();
   genTasks.forEach((handle) => handle.cancel());
   exportTasks.forEach((handle) => handle.cancel());
+  void graphicsService?.close();
   Promise.race([queue.whenIdle(), new Promise((r) => setTimeout(r, 15_000))]).then(() => app.quit());
 });

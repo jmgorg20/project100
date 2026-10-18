@@ -515,3 +515,39 @@ def test_config_yaml_and_defaults_agree_on_ai_settings():
     from autoedit.config import DEFAULTS
     on_disk = yaml.safe_load((PROJECT_DIR / "config.yaml").read_text(encoding="utf-8"))["ai"]
     assert on_disk == DEFAULTS["ai"]
+
+
+def test_ai_edit_with_motion_graphics_end_to_end(talk, cfg, monkeypatch):
+    """"Edit this like a professional promoter": the Director adds graphics (its own AI call,
+    here failing twice so the rule-based plan is used), and the video renders with them."""
+    from autoedit import director
+    from tests.gfx_helpers import chromium_available
+    tmp, video, photo, whisper = talk
+    fake, calls = scripted([photo_plan(cfg)])
+    monkeypatch.setattr(ai_edit, "ask_json", fake)
+    gfake, gcalls = scripted(["not json"])
+    monkeypatch.setattr(director, "ask_json", gfake)
+    rec = Recorder()
+    render = chromium_available()
+    result = ai_edit.ai_edit_video(video, cfg, "Edit this like a professional promoter", [photo],
+                                   reporter=rec, render=render)
+    assert "graphics" in rec.stages and len(gcalls) == 2
+    event = next(d for k, d in rec.events if k == "graphics")
+    assert event["style"] == "promoter" and event["fallback"]
+    project = load_project(result["project"])
+    gfx = [c for t in project["tracks"] if t["kind"] == "graphics" for c in t["clips"]]
+    assert gfx and all(c["director"]["style"] == "promoter" for c in gfx)
+    assert any(d.startswith("Motion graphics (Professional promoter)") for d in result["summary"]["details"])
+    if render:
+        assert Path(result["output"]).exists()
+
+
+def test_ai_edit_without_graphics_is_unchanged(talk, cfg, monkeypatch):
+    tmp, video, photo, whisper = talk
+    fake, calls = scripted([photo_plan(cfg)])
+    monkeypatch.setattr(ai_edit, "ask_json", fake)
+    rec = Recorder()
+    result = ai_edit.ai_edit_video(video, cfg, "fast", [photo], reporter=rec, render=False)
+    assert "graphics" not in rec.stages
+    project = load_project(result["project"])
+    assert not [t for t in project["tracks"] if t["kind"] == "graphics"]

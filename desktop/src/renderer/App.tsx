@@ -1,3 +1,4 @@
+import { GRAPHIC_STYLES } from "../shared/graphicsEdit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EstimateResult } from "../shared/api";
 import { canRedo, canUndo, currentVersion } from "../shared/history";
@@ -43,6 +44,7 @@ export function App() {
   const [jobs, setJobs] = useState<Record<string, Job>>({});
   const [histories, setHistories] = useState<Record<string, VideoHistory>>({});
   const [instruction, setInstruction] = useState("");
+  const [graphicsStyle, setGraphicsStyle] = useState("auto");
   const [followUp, setFollowUp] = useState("");
   const [estimate, setEstimate] = useState<EstimateResult | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -127,7 +129,7 @@ export function App() {
     api.addJobs(
       list.map((video) => ({
         video, photos, instruction: text, provider, auto, mode, planFile,
-        maxGenMinutes: limits?.minutes, maxAiClips: limits?.clips,
+        maxGenMinutes: limits?.minutes, maxAiClips: limits?.clips, graphics: graphicsStyle,
       })),
     );
 
@@ -297,6 +299,14 @@ export function App() {
               <option value="anthropic">Anthropic Claude (paid, your key)</option>
             </select>
           </div>
+          <label className="field small">
+            Motion graphics · Pop-up na salita at graphics
+            <select aria-label="Motion graphics" value={graphicsStyle} onChange={(e) => setGraphicsStyle(e.target.value)} data-testid="graphics-style">
+              {GRAPHIC_STYLES.map((g) => (
+                <option key={g.id} value={g.id}>{g.label} · {g.tl}</option>
+              ))}
+            </select>
+          </label>
           <details className="card" data-testid="gen-limits">
             <summary className="small">
               <strong>AI pictures &amp; clips</strong>{" "}

@@ -60,7 +60,7 @@ export interface TrackData {
 
 export interface Clip {
   id: string;
-  type: "video" | "image" | "zoom" | "grade" | "caption" | "audio" | "fx" | "trackfx";
+  type: "video" | "image" | "zoom" | "grade" | "caption" | "audio" | "fx" | "trackfx" | "graphic" | "wipe";
   start: number;
   duration: number;
   media?: string;
@@ -106,11 +106,50 @@ export interface Clip {
   words?: Word[];
   /** B-roll: where it came from (library, stock, AI). */
   broll?: BrollMeta;
+  // motion graphics (x / y are then the centre as fractions of the frame, 0-1)
+  template?: string;
+  params?: GraphicParams;
+  /** A flash / whip / punch-in on the picture when the graphic starts. */
+  attach?: { kind: AttachKind; intensity?: number };
+  /** A locked clip cannot be moved, changed or deleted (and the AI does not redo it). */
+  locked?: boolean;
+  /** Why the AI placed it (style, mood, the spoken words). */
+  director?: { style?: string; mood?: string; words?: string; importance?: number; reason?: string; kind?: string };
+  // before/after wipe
+  direction?: "right" | "left" | "down" | "up";
+  sweep?: number;
+  stop?: number;
+  divider?: boolean;
+}
+
+export type AttachKind = "flash" | "whip" | "punch";
+
+/** What a graphics template shows (see autoedit/graphics_catalog.json for what each one uses). */
+export interface GraphicParams {
+  text?: string;
+  text2?: string;
+  items?: string[];
+  number?: number;
+  prefix?: string;
+  suffix?: string;
+  image?: string;
+  emoji?: string;
+  icon?: string;
+  font?: string;
+  color?: string;
+  accent?: string;
+  bg?: string;
+  size?: number;
+  intensity?: number;
+  align?: "left" | "center" | "right";
+  case?: "" | "upper" | "lower" | "title";
+  angle?: number;
+  dir?: "left" | "right" | "up" | "down";
 }
 
 export interface Track {
   id: string;
-  kind: "video" | "overlay" | "effect" | "caption" | "audio";
+  kind: "video" | "overlay" | "effect" | "graphics" | "caption" | "audio";
   name?: string;
   role?: string;
   muted?: boolean;
@@ -297,6 +336,8 @@ export interface JobRequest {
   /** Per video: stop AI generation after this many minutes / make at most this many clips. */
   maxGenMinutes?: number;
   maxAiClips?: number;
+  /** Motion graphics: "auto" (when the instruction asks), "off", or a style name. */
+  graphics?: string;
 }
 
 export interface Job extends JobRequest {

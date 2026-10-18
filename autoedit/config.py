@@ -80,6 +80,12 @@ DEFAULTS = {
         "min_confidence": 0.5,
         "swap_hands": False,
     },
+    "graphics": {
+        "style": "auto",
+        "max_per_10s": None,
+        "track_face": True,
+        "min_font": 30,
+    },
     "broll": {
         "library_folder": "",
         "use_stock": True,
