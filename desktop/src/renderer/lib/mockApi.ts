@@ -409,6 +409,8 @@ export function createMockApi(): AppApi {
           return { id: `t${i + 1}`, type: "caption", start, duration, style: "bold_caps", words: words.map((x, k) => ({ text: x, start: Math.round(k * step * 1e4) / 1e4, end: Math.round((k + 0.9) * step * 1e4) / 1e4 })) };
         });
         p.tracks.splice(2, 0, { id: "graphics", kind: "graphics", name: "Graphics", clips: [{ id: "gx1", type: "graphic", template: "stamp", start: 3.0, duration: 1.2, params: { text: "500" }, x: 0.5, y: 0.3 }] });
+        // New words: the scenes come from them, not from the fixture's saved scene starts.
+        if (p.meta) delete (p.meta as Record<string, unknown>).storyboard;
         openedProjects.set(path, structuredClone(p));
         return { path, project: p, backup: path.replace(/\.project\.json$/, ".before-editing.project.json") };
       }

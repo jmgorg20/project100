@@ -475,8 +475,6 @@ def test_shake_and_glitch_move_the_picture(media):
 def test_grade_intensity_and_smooth_zoom(media):
     tmp, p = media
     p["media"].append(media_from_file(two_halves_video(tmp / "halves.mp4"), "halves"))
-    halves = [{"id": "h", "type": "video", "media": "halves", "start": 0.0, "duration": 2.0,
-               "in": 0.0, "out": 2.0}]
     full = fx_render(tmp, p, "bw", [{"id": "g", "type": "grade", "grade": "black_and_white",
                                      "start": 0, "duration": 2}])
     half = fx_render(tmp, p, "bw_half", [{"id": "g", "type": "grade", "grade": "black_and_white",

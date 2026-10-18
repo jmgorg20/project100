@@ -166,8 +166,8 @@ The engine version a worker reports is `AUTOEDIT_ENGINE_VERSION`, or the git com
 - **Retention:** uploads and results are deleted after `SERVICE_RETENTION_DAYS` (default 3; at most
   30), results also 24 hours after the first download; users can delete everything at once.
 - **Audit log** of admin and client actions; `/metrics` (admin token) for monitoring.
-- **CI:** tests on Postgres, `pip-audit`, `npm audit`, gitleaks (secrets in the history), Trivy (files
-  and images), and the container end-to-end test.
+- **CI:** tests on Postgres, `pip-audit`, `npm audit`, gitleaks (secrets in the history), Grype (the
+  container images), and the container end-to-end test.
 
 ## What was and was not tested · Ano ang nasubukan
 

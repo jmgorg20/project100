@@ -4,7 +4,6 @@ import shutil
 import time
 from pathlib import Path
 
-from . import PROJECT_DIR
 from .broll import broll_label
 from .captions import chunk_words, group_end_times
 from .config import project_path
