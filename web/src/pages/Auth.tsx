@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, get, post, type AuthConfig, type MfaNeeded, type Session } from "../api";
 import { go, query } from "../App";
+import { deviceId } from "../device";
 import { getLang, t } from "../i18n";
 
 const OAUTH_ERRORS: Record<string, [string, string]> = {
@@ -56,7 +57,9 @@ function Captcha({ config, onToken }: { config: AuthConfig | null; onToken: (tok
 
 function GoogleButton({ config, invite }: { config: AuthConfig | null; invite?: string }) {
   if (!config?.providers.includes("google")) return null;
-  const href = `/v1/auth/oauth/google/start${invite ? `?invite_code=${encodeURIComponent(invite)}` : ""}`;
+  const q = new URLSearchParams({ device_id: deviceId() });
+  if (invite) q.set("invite_code", invite);
+  const href = `/v1/auth/oauth/google/start?${q}`;
   return <a className="button ghost wide" href={href}>{t("withGoogle")}</a>;
 }
 
@@ -115,7 +118,7 @@ export function Signup() {
     setBusy(true);
     setError("");
     try {
-      await post("/v1/auth/signup", { ...form, captcha: captcha || undefined, locale: getLang() });
+      await post("/v1/auth/signup", { ...form, captcha: captcha || undefined, locale: getLang(), device_id: deviceId() || undefined });
       setSent(true);
     } catch (err) {
       setError(errorText(err));
@@ -170,7 +173,7 @@ export function Verify({ token, onDone }: { token: string; onDone: (s: Session) 
   useEffect(() => {
     if (started.current) return;                   // the link works once: never send it twice
     started.current = true;
-    post<Session | MfaNeeded>("/v1/auth/verify", { token })
+    post<Session | MfaNeeded>("/v1/auth/verify", { token, device_id: deviceId() || undefined })
       .then((r) => ("mfa_required" in r ? go(`/mfa/${r.ticket}`) : onDone(r)))
       .catch((err) => setError(errorText(err)));
   }, [token, onDone]);

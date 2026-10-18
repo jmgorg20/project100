@@ -119,6 +119,14 @@ a.job small { display: block; }
 .secret { font-size: 1.05rem; letter-spacing: 0.05em; overflow-wrap: anywhere; }
 pre { background: #0d0f13; padding: 0.75rem; border-radius: 8px; overflow-x: auto; }
 .danger-zone { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
+.banner-inline { background: #2a2f3b; border-radius: 8px; padding: 0.5rem 0.75rem; }
+.banner-inline.warn, .warn-card { border: 1px solid var(--warn); }
+.warn-card .button { margin-top: 0.5rem; }
+ul.plans { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.5rem; }
+li.plan { border: 1px solid var(--line); border-radius: 10px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-start; }
+li.plan.on { border-color: var(--accent); }
+li.plan .price { font-size: 1.1rem; font-weight: 700; }
+.meter { margin: 0.5rem 0; }
 .captcha { margin: 0.5rem 0; min-height: 65px; }
 
 @media (min-width: 640px) {

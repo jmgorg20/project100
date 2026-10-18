@@ -38,7 +38,7 @@ def main():
     url = f"http://127.0.0.1:{a.port}"
     settings = Settings(env="development", data_dir=str(data), secret_key="w" * 40, admin_token="a" * 40,
                         public_url=url, signup_mode="open", password_cost=10, monthly_minutes=60.0, signups_per_ip_hour=1000,
-                        logins_per_ip_minute=1000,
+                        logins_per_ip_minute=1000, billing="on", billing_provider="fake",
                         lease_seconds=30, claim_wait_seconds=1, chunk_mb=1, log_json=False, web_dir=str(ROOT / "web" / "dist"))
     app = create_app(settings)
     with app.state.db.tx() as t:

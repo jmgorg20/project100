@@ -160,3 +160,33 @@ export interface Project {
   name: string;
   jobs: number | null;
 }
+
+export interface PlanInfo {
+  id: string;
+  name: string;
+  name_tl: string | null;
+  description: string | null;
+  description_tl: string | null;
+  price_cents: number;
+  currency: string;
+  billing_interval: "month" | "year";
+  monthly_minutes: number;
+  storage_mb: number;
+}
+export interface Billing {
+  enabled: boolean;
+  mode: "off" | "trial" | "plan" | "locked";
+  reason: string | null;
+  status: string | null;
+  plan: PlanInfo | null;
+  trial_days_left: number | null;
+  current_period_end: number | null;
+  grace_until: number | null;
+  cancel_at_period_end: boolean;
+  usage: { minutes: number; minutes_limit: number; jobs: number; stored_bytes: number; storage_mb: number };
+  plans: PlanInfo[];
+  payments: { amount_cents: number; currency: string; status: string; occurred_at: number }[];
+  can_manage: boolean;
+  has_portal: boolean;
+  online_payment: boolean;
+}

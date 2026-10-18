@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, call, get, post, type Me, type Session } from "../api";
 import { go, type SessionProps } from "../App";
 import { getLang, setLang, t, useLang, type Lang } from "../i18n";
+import { BillingCard, useBilling } from "./Billing";
 
 interface Device {
   id: string;
@@ -26,6 +27,7 @@ export function Account({ session, refresh, setSession }: SessionProps) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const billing = useBilling();
 
   const loadDevices = () => get<{ sessions: Device[] }>("/v1/auth/sessions").then((r) => setDevices(r.sessions)).catch(() => undefined);
   useEffect(() => {
@@ -61,10 +63,12 @@ export function Account({ session, refresh, setSession }: SessionProps) {
         <button className="ghost" onClick={() => void signOut()}>{t("signOut")}</button>
       </div>
 
-      <div className="card">
-        <h2>{t("plan")}</h2>
-        <p className="muted">{t("planSoon", { min: me ? me.client.monthly_minutes.toFixed(0) : "…" })}</p>
-      </div>
+      {billing?.enabled ? <BillingCard /> : (
+        <div className="card">
+          <h2>{t("plan")}</h2>
+          <p className="muted">{t("planSoon", { min: me ? me.client.monthly_minutes.toFixed(0) : "…" })}</p>
+        </div>
+      )}
 
       <Workspace session={session} refresh={refresh} setSession={setSession} />
 
