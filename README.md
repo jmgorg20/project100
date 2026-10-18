@@ -426,6 +426,8 @@ project, the SaaS website, future projects): each with its own API key, presets,
 usage. Workers (a cloud CPU box, or your PC with WanGP as the GPU worker) connect **out** over HTTPS
 and pull signed jobs; no open ports at home. `python editor.py serve`, `python editor.py worker ...`,
 `python editor.py service-admin ...`; containers in `deploy/`. Guide: [docs/service.md](docs/service.md).
+Web-app accounts (invite-only sign-up, Google sign-in, two-step sign-in, organisations, roles,
+projects, database row-level security): [docs/accounts.md](docs/accounts.md).
 
 **For automation (Robot City) · Para sa automation.** The app only polishes; your workers post.
 `python editor.py polish talk.mp4 --preset viral_tiktok --format auto --out outbox --json` makes

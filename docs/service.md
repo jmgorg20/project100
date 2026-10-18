@@ -4,6 +4,9 @@
 project (JGG CITY), the SaaS website, and future projects. Each client has its **own API keys,
 presets, quotas, rate limit, webhooks, channel and usage report**. Nothing is copied per project.
 
+The SaaS web app's users, their organisations and sign-in are in [accounts.md](accounts.md); each
+organisation is a client here.
+
 *Iisang code at iisang engine. Ang service ang iisang API na ginagamit ng lahat ng client; bawat
 client ay may sariling API key, preset, quota, webhook at usage report.*
 
