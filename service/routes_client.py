@@ -46,8 +46,36 @@ def me(request: Request, client=Depends(require_client)):
 
 
 @router.get("/catalog")
-def catalog(client=Depends(require_client)):
-    return jobs.catalog(client)
+def catalog(request: Request, client=Depends(require_client)):
+    with request.app.state.db.tx() as t:
+        return jobs.catalog(client, t)
+
+
+@router.get("/presets")
+def my_presets(request: Request, client=Depends(require_client)):
+    """Your own presets (plain preset JSON: copy one from GET /v1/catalog's ids in autoedit/presets/)."""
+    with request.app.state.db.tx() as t:
+        return {"presets": jobs.own_presets(t, client["id"])}
+
+
+@router.put("/presets/{preset_id}")
+def put_preset(request: Request, preset_id: str, body: dict, client=Depends(require_client)):
+    with request.app.state.db.tx() as t:
+        try:
+            saved = jobs.save_own_preset(t, client["id"], preset_id, body)
+        except JobError as exc:
+            raise _err(exc)
+        clients.audit(t, f"client:{client['id']}", "preset.saved", preset_id)
+    return saved
+
+
+@router.delete("/presets/{preset_id}", status_code=204)
+def delete_preset(request: Request, preset_id: str, client=Depends(require_client)):
+    with request.app.state.db.tx() as t:
+        if not t.run("DELETE FROM client_presets WHERE client_id = ? AND id = ?", (client["id"], preset_id)):
+            raise ApiError(404, "not_found", "No such preset of yours.")
+        clients.audit(t, f"client:{client['id']}", "preset.deleted", preset_id)
+    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------- uploads (resumable, in chunks)

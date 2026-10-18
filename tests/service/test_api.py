@@ -400,3 +400,28 @@ def test_admin_release_gate_and_metrics(http):
     assert http.post("/v1/admin/releases/1.1.0/promote", headers=admin(http)).json() == {"stable_version": "1.1.0"}
     m = http.get("/metrics", headers=admin(http)).text
     assert "autoedit_requests_total" in m and "autoedit_workers_alive" in m
+
+
+def test_each_client_has_its_own_presets(http, video, app):
+    _, ha = new_client(http, "A")
+    _, hb = new_client(http, "B")
+    from autoedit import presets
+    mine = {k: v for k, v in presets.get("meme", {"presets_folder": ""}).items() if k != "builtin"}
+    mine.update({"id": "jgg_city_promo", "name": "JGG City promo", "grade": "warm"})
+    assert http.put("/v1/presets/jgg_city_promo", json={**mine, "grade": "sepia"}, headers=ha).status_code == 400
+    assert http.put("/v1/presets/other_id", json=mine, headers=ha).status_code == 400
+    assert http.put("/v1/presets/jgg_city_promo", json=mine, headers=ha).status_code == 200
+    ids_a = {p["id"] for p in http.get("/v1/catalog", headers=ha).json()["presets"]}
+    ids_b = {p["id"] for p in http.get("/v1/catalog", headers=hb).json()["presets"]}
+    assert "jgg_city_promo" in ids_a and "jgg_city_promo" not in ids_b
+    assert http.get("/v1/presets", headers=hb).json()["presets"] == {}
+    up_b = ready_upload(http, hb, video)
+    r = polish_job(http, hb, up_b["id"], preset="jgg_city_promo")
+    assert r.status_code == 400 and "Unknown preset" in r.json()["error"]["message"]      # B cannot use A's preset
+    up = ready_upload(http, ha, video)
+    job = polish_job(http, ha, up["id"], preset="jgg_city_promo").json()
+    wh, _ = new_worker(http)
+    payload = http.post("/v1/worker/claim", json={"wait": 0}, headers=wh).json()["payload"]
+    assert payload["job_id"] == job["id"] and payload["params"]["preset_body"]["grade"] == "warm"
+    assert http.delete("/v1/presets/jgg_city_promo", headers=hb).status_code == 404
+    assert http.delete("/v1/presets/jgg_city_promo", headers=ha).status_code == 204

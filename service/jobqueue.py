@@ -264,7 +264,7 @@ def reap(db, grace_seconds=60):
     done = []
     with db.tx(immediate=True) as t:
         rows = t.all("SELECT * FROM jobs WHERE status = 'running' AND (lease_expires_at < ? OR started_at + "
-                     "timeout_seconds + ? < ?)", (now(), grace_seconds, now()))
+                     "timeout_seconds + ? < ?)" + t.for_update, (now(), grace_seconds, now()))
         for job in rows:
             if job["lease_expires_at"] is not None and job["lease_expires_at"] < now():
                 _retry_or_fail(t, job, "The worker stopped answering; the job was given back to the queue.", True)

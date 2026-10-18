@@ -74,7 +74,8 @@ Every request: `Authorization: Bearer ak_...`. Errors are `{"error": {"code", "m
 | | |
 |---|---|
 | `GET /v1/me` | your limits, this month's usage, enabled features |
-| `GET /v1/catalog` | the presets and formats you can use |
+| `GET /v1/catalog` | the presets (built-in and your own) and formats you can use |
+| `GET /v1/presets`, `PUT /v1/presets/{id}`, `DELETE /v1/presets/{id}` | **your own presets** (plain preset JSON, the same format as `autoedit/presets/*.json`; a preset with a built-in id replaces it for you only; other clients never see yours) |
 | `POST /v1/uploads` `{filename, size, sha256?}` | start an upload; answers `chunk_size` |
 | `PUT /v1/uploads/{id}/chunk?offset=N` (raw bytes) | send the next piece; `Upload-Offset` = bytes received |
 | `GET /v1/uploads/{id}` | how much arrived (to resume after a broken connection) |

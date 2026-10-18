@@ -312,8 +312,9 @@ class Agent:
         p = payload.get("params") or {}
         out = folder / "out"
         base = list(self.engine_cmd) + ["--json", "--stdin-control"]
-        if self.config:
-            base += ["--config", str(self.config)]
+        config = self.job_config(folder, p)
+        if config:
+            base += ["--config", str(config)]
         if payload["kind"] == "polish":
             inputs = payload["inputs"]
             main = local[inputs["main"][0]]
@@ -351,6 +352,26 @@ class Agent:
         pfile = folder / "project.json"
         pfile.write_text(json.dumps(project, ensure_ascii=False), encoding="utf-8")
         return base + ["render", str(pfile), "--output", str(out / "video.mp4")], out
+
+    def job_config(self, folder, params):
+        """The engine config for this job: the worker's own, plus the client's preset if the job
+        uses one (written into this job's folder as a presets folder of one file)."""
+        body = params.get("preset_body")
+        if not body:
+            return self.config
+        import yaml
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", str(body.get("id", ""))):
+            raise WorkerError("The job's preset has a bad id.", retryable=False)
+        presets_dir = folder / "presets"
+        presets_dir.mkdir()
+        (presets_dir / f"{body['id']}.json").write_text(json.dumps(body), encoding="utf-8")
+        cfg = {}
+        if self.config:
+            cfg = yaml.safe_load(Path(self.config).read_text(encoding="utf-8")) or {}
+        cfg["presets_folder"] = str(presets_dir)
+        path = folder / "config.yaml"
+        path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+        return path
 
     def run_engine(self, payload, folder, local, state):
         cmd, out = self.command(payload, folder, local)

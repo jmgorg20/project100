@@ -149,8 +149,8 @@ def deliver_due(db, settings, limit=20, sender=None):
     sender = sender or send
     with db.tx(immediate=True) as t:
         due = t.all("SELECT d.*, w.url, w.secret FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id "
-                    "WHERE d.status = 'pending' AND d.next_attempt_at <= ? ORDER BY d.next_attempt_at LIMIT ?",
-                    (now(), limit))
+                    "WHERE d.status = 'pending' AND d.next_attempt_at <= ? ORDER BY d.next_attempt_at LIMIT ?"
+                    + t.for_update.replace(" FOR UPDATE", " FOR UPDATE OF d"), (now(), limit))
         for d in due:          # take them, so a second sender does not send them too
             t.run("UPDATE webhook_deliveries SET next_attempt_at = ? WHERE id = ?", (now() + 300, d["id"]))
     ok = 0

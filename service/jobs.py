@@ -31,11 +31,48 @@ class JobError(Exception):
         self.status = status
 
 
-def catalog(client=None):
-    """The presets and formats this client can use."""
+MAX_OWN_PRESETS = 50
+MAX_PRESET_BYTES = 8192
+
+
+def own_presets(t, client_id):
+    return {r["id"]: loads(r["body"], {}) for r in t.all("SELECT id, body FROM client_presets WHERE client_id = ? "
+                                                         "ORDER BY id", (client_id,))}
+
+
+def save_own_preset(t, client_id, preset_id, body):
+    """A client's own preset (same id as a built-in one = replaces it for this client)."""
+    from autoedit import presets
+    if not isinstance(body, dict) or body.get("id") != preset_id:
+        raise JobError("The preset must be a JSON object whose id is the same as in the address.")
+    if len(dumps(body)) > MAX_PRESET_BYTES:
+        raise JobError("The preset is too large.")
+    problems = presets.preset_problems(body, None)
+    if problems:
+        raise JobError("The preset has problems: " + "; ".join(problems[:3]))
+    exists = t.one("SELECT id FROM client_presets WHERE client_id = ? AND id = ?", (client_id, preset_id))
+    if not exists and int(t.value("SELECT COUNT(*) FROM client_presets WHERE client_id = ?", (client_id,), 0)) >= MAX_OWN_PRESETS:
+        raise JobError(f"At most {MAX_OWN_PRESETS} presets of your own.")
+    if exists:
+        t.run("UPDATE client_presets SET body = ?, updated_at = ? WHERE client_id = ? AND id = ?",
+              (dumps(body), now(), client_id, preset_id))
+    else:
+        t.insert("client_presets", {"client_id": client_id, "id": preset_id, "body": dumps(body),
+                                    "created_at": now(), "updated_at": now()})
+    return body
+
+
+def catalog(client=None, t=None):
+    """The presets (built-in and the client's own) and formats this client can use."""
     from autoedit import formats, presets
     allowed = loads(client.get("presets")) if client else None
     items = [p for p in presets.summary({"presets_folder": ""}) if allowed is None or p["id"] in allowed]
+    if client and t is not None:
+        mine = own_presets(t, client["id"])
+        items = [p for p in items if p["id"] not in mine]
+        for pid, body in mine.items():
+            items.append({k: body.get(k) for k in ("id", "name", "tl", "about", "about_tl", "format", "graphics")}
+                         | {"builtin": False, "own": True})
     return {"presets": items, "formats": formats.summary()}
 
 
@@ -65,10 +102,14 @@ def validate_polish(t, client, body):
     preset = body.get("preset") or client.get("default_preset")
     allowed = loads(client.get("presets"))
     known = {p["id"] for p in presets.summary({"presets_folder": ""})}
+    mine = own_presets(t, client["id"])
+    preset_body = None
     if preset is not None:
-        if preset not in known:
-            raise JobError(f"Unknown preset '{preset}'. Presets: {', '.join(sorted(known))}")
-        if allowed is not None and preset not in allowed:
+        if preset in mine:
+            preset_body = mine[preset]                    # the client's own preset
+        elif preset not in known:
+            raise JobError(f"Unknown preset '{preset}'. Presets: {', '.join(sorted(known | set(mine)))}")
+        elif allowed is not None and preset not in allowed:
             raise JobError(f"The preset '{preset}' is not enabled for you.", 403)
     fmt = body.get("format")
     specs = {f["id"]: f for f in formats.summary()}
@@ -87,7 +128,8 @@ def validate_polish(t, client, body):
     total = sum(len(v) for v in inputs.values() if isinstance(v, list))
     if total > MAX_INPUT_FILES or any(not isinstance(v, list) for v in inputs.values()):
         raise JobError(f"inputs must be lists of upload ids, at most {MAX_INPUT_FILES} files in all.")
-    effective_format = fmt if fmt is not None else (presets.get(preset, {"presets_folder": ""})["format"] if preset else None)
+    effective_format = fmt if fmt is not None else (
+        (preset_body or presets.get(preset, {"presets_folder": ""}))["format"] if preset else None)
     main_kinds = ("audio", "video") if effective_format == "voiceover_broll" else ("video",)
     main = _uploads(t, client, inputs["main"], main_kinds)
     resolved = {"main": [main[0]["id"]]}
@@ -118,6 +160,8 @@ def validate_polish(t, client, body):
     params = {"preset": preset, "format": fmt, "instruction": instruction, "items": [str(i) for i in items],
               "offsets": {k: float(v) for k, v in offsets.items()}, "provider": provider,
               "qc": body.get("qc", True) is not False, "retry": body.get("retry", True) is not False}
+    if preset_body is not None:
+        params["preset_body"] = preset_body
     return params, resolved, minutes, "gpu" if gpu else "cpu"
 
 

@@ -255,3 +255,35 @@ def test_end_to_end_with_the_real_engine(server, tmp_path, monkeypatch):
     assert a.run_once() == r.json()["id"]
     again = job_view(server, key, r.json()["id"])
     assert again["status"] == "succeeded", again
+
+
+def test_a_clients_own_preset_reaches_the_engine(server, video, tmp_path, monkeypatch):
+    import yaml
+    from autoedit import presets
+    log = tmp_path / "argv.json"
+    monkeypatch.setenv("AUTOEDIT_FAKE_ENGINE_LOG", str(log))
+    key, up, job, w = setup_job(server, video)
+    mine = {k: v for k, v in presets.get("meme", {"presets_folder": ""}).items() if k != "builtin"}
+    mine.update({"id": "jgg_promo", "name": "JGG promo"})
+    assert api(server, "PUT", "/v1/presets/jgg_promo", key, json=mine).status_code == 200
+    j = api(server, "POST", "/v1/jobs", key, json={"inputs": {"main": [up["id"]]}, "preset": "jgg_promo"}).json()
+    base = tmp_path / "base.yaml"
+    base.write_text("output: {encoder_speed: ultrafast}\n")
+    a = agent(server, w, tmp_path, monkeypatch, config=base)
+    seen = {}
+    real = a.job_config
+
+    def spy(folder, params):
+        path = real(folder, params)
+        if not params.get("preset_body"):
+            return path
+        seen["cfg"] = yaml.safe_load(path.read_text())
+        seen["preset"] = json.loads((Path(seen["cfg"]["presets_folder"]) / "jgg_promo.json").read_text())
+        return path
+    a.job_config = spy
+    assert a.run_once() == job["id"]               # the first job (no preset of its own)
+    assert job_view(server, key, job["id"])["status"] == "succeeded"
+    assert a.run_once() == j["id"]
+    assert seen["cfg"]["output"]["encoder_speed"] == "ultrafast" and seen["preset"]["name"] == "JGG promo"
+    assert "--preset=jgg_promo" in json.loads(log.read_text())
+
