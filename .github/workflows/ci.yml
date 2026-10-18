@@ -116,7 +116,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: pip install -r requirements-service.txt Pillow numpy PyYAML
+      - run: pip install -r requirements-service.txt Pillow numpy PyYAML pytest
       - name: Build the images
         run: |
           docker build -f deploy/Dockerfile.api -t autoedit-api:test .
