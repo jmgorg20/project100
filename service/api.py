@@ -1,7 +1,8 @@
 """The HTTP API (FastAPI). `python editor.py serve` runs it; see docs/service.md for every endpoint.
 
 Three kinds of caller, each with its own credentials:
-    clients  Authorization: Bearer ak_...   (their own jobs, uploads, webhooks and usage only)
+    clients  Authorization: Bearer ak_...   (their own jobs, uploads, webhooks and usage only), or
+             a signed-in web-app user acting in one of their organisations (session cookie)
     workers  Authorization: Bearer wk_...   (pull jobs, send progress and results)
     admin    Authorization: Bearer <SERVICE_ADMIN_TOKEN>
 Signed file links (/files/...) need no header; they expire after a few minutes.
@@ -20,7 +21,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from . import SERVICE_VERSION, janitor, security, webhooks
+from . import SERVICE_VERSION, janitor, mailer, security, webhooks
 from .clients import ClientError
 from .db import open_database
 from .jobqueue import QueueError
@@ -97,6 +98,7 @@ def background_loop(app, stop):
     while not stop.wait(2.0):
         try:
             webhooks.deliver_due(s.db, s.settings)
+            mailer.send_due(s.db, s.settings)
             if time.time() - last_janitor > 60:
                 janitor.run_once(s.db, s.storage, s.settings)
                 last_janitor = time.time()
@@ -126,6 +128,13 @@ def create_app(settings=None, storage=None):
                   openapi_url=None if settings.production else "/openapi.json")
     app.state.settings = settings
     app.state.db = open_database(settings)
+    rls = app.state.db.rls_status()
+    if (settings.require_rls or (settings.production and app.state.db.kind == "postgres")) and rls != "enforced":
+        raise RuntimeError("Row-level security does not apply: the service connects to Postgres as a superuser or "
+                           "a BYPASSRLS user. Connect as an ordinary user (deploy/postgres-init.sql).")
+    app.state.rls = rls
+    import requests
+    app.state.http = requests.Session()           # captcha and Google sign-in (replaced in tests)
     app.state.storage = storage or LocalStorage(settings.data_path / "files")
     app.state.signing_key = load_signing_key(settings)
     app.state.public_key = security.public_key_pem(app.state.signing_key)
@@ -135,7 +144,8 @@ def create_app(settings=None, storage=None):
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"],
-                           allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Upload-Offset"],
+                           allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Upload-Offset",
+                                          "X-CSRF-Token"],
                            expose_headers=["Upload-Offset", "Retry-After"], max_age=600)
 
     @app.middleware("http")
@@ -183,6 +193,12 @@ def create_app(settings=None, storage=None):
     async def api_error(request, exc):
         return error_response(exc.status, exc.code, exc.message, exc.headers)
 
+    from .accounts import AccountError
+
+    @app.exception_handler(AccountError)
+    async def account_error(request, exc):
+        return error_response(exc.status, exc.code, str(exc), exc.headers)
+
     for cls, code in ((ClientError, "client_error"), (QueueError, "queue_error"), (WebhookError, "webhook_error"),
                       (MediaError, "media_error"), (StorageError, "storage_error")):
         def handler(request, exc, code=code):
@@ -196,9 +212,11 @@ def create_app(settings=None, storage=None):
         return error_response(422, "invalid", "Invalid request: " + "; ".join(problems))
 
     from .routes_admin import router as admin_router
+    from .routes_auth import router as auth_router
     from .routes_client import router as client_router
     from .routes_files import router as files_router
     from .routes_worker import router as worker_router
+    app.include_router(auth_router)
     app.include_router(client_router)
     app.include_router(worker_router)
     app.include_router(admin_router)

@@ -5,10 +5,11 @@
   temporary: SERVICE_RETENTION_DAYS, and results also SERVICE_DELETE_AFTER_DOWNLOAD_HOURS after the
   first download); a "files.expiring" webhook goes out about a day before;
 - unfinished uploads older than a day are removed;
-- old rate counters are dropped.
+- old rate counters are dropped;
+- unconfirmed sign-ups (after 7 days), old one-time tokens and ended sessions are removed.
 """
 
-from . import jobqueue, ratelimit, webhooks
+from . import accounts, jobqueue, ratelimit, webhooks
 from .clients import audit
 from .db import now
 
@@ -48,6 +49,7 @@ def run_once(db, storage, settings):
     files = expire_files(db, storage)
     with db.tx() as t:
         ratelimit.cleanup(t)
+        accounts.cleanup(t)
         for job_id in reaped:
             job = t.one("SELECT * FROM jobs WHERE id = ?", (job_id,))
             if job and job["status"] in ("failed", "cancelled"):

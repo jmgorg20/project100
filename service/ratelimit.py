@@ -21,5 +21,5 @@ def peek(t, key, window=WINDOW):
     return int(t.value("SELECT count FROM rate_counters WHERE key = ? AND window_start = ?", (key, start), 0) or 0)
 
 
-def cleanup(t, older_than=3600):
+def cleanup(t, older_than=2 * 3600):
     return t.run("DELETE FROM rate_counters WHERE window_start < ?", (int(time.time() - older_than),))
