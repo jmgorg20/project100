@@ -6,7 +6,7 @@ desktop/src/shared/engine-data.json, and a test checks the copy is up to date.
 
 import dataclasses
 
-from . import captions, formats, overlays, render
+from . import captions, formats, overlays, presets, render
 from .grades import GRADES
 from .styles import STYLES
 
@@ -26,4 +26,5 @@ def ui_data():
         "grades": list(GRADES),
         "fps": [24, 25, 30, 50, 60],
         "formats": formats.summary(),
+        "presets": presets.summary({"presets_folder": ""}),     # built-in ones (yours: `presets`)
     }

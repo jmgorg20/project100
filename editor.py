@@ -132,7 +132,28 @@ def build_parser():
                     help="Voice-over with B-roll: the first file is your voice-over (audio), "
                          "the --input broll=FILE files go under it")
 
+    ai.add_argument("--preset", help="a ready-made look: viral_tiktok, cinematic_storytelling, "
+                                     "premium_ugc_ad, podcast_clips, faceless_automation, "
+                                     "calm_documentary, meme, or your own (`python editor.py presets`)")
+
     sub.add_parser("formats", help="list the video formats (Reaction, Listicle, Clone, ...)")
+    sub.add_parser("presets", help="list the presets (Viral TikTok, Cinematic Storytelling, ...)")
+
+    sb = sub.add_parser("storyboard", help="show a project as scenes (purpose, length, source, "
+                                           "words, transition, music/sounds, colour)")
+    sb.add_argument("project", help="a .project.json")
+    se = sub.add_parser("storyboard-edit", help="change one scene: lock / unlock it, change its "
+                                                "words, or give its graphics another look")
+    se.add_argument("project", help="a .project.json (saved in place)")
+    se.add_argument("--scene", required=True, help="the scene: s3 or 3")
+    act = se.add_mutually_exclusive_group(required=True)
+    act.add_argument("--lock", action="store_true", help="lock the scene (the AI and edits leave it)")
+    act.add_argument("--unlock", action="store_true", help="unlock the scene")
+    act.add_argument("--text", help="the scene's new words")
+    act.add_argument("--regenerate", action="store_true", help="another look for the scene's graphics")
+    se.add_argument("--provider", choices=["groq", "anthropic"], help="--regenerate: ask this AI "
+                                                                     "(default: simple rules, no AI call)")
+    se.add_argument("--model", help="AI model")
 
     gx = sub.add_parser("graphics", help="add motion graphics (pop-up words, cards, counters, "
                                          "arrows, emoji) to a project with the Director")
@@ -658,6 +679,63 @@ def cmd_formats(args, reporter):
     reporter.result(formats=items)
 
 
+def cmd_presets(args, reporter):
+    from autoedit import presets
+    items = presets.summary(load_config(args.config))
+    for p in items:
+        mine = "" if p["builtin"] else "  (yours)"
+        print(f"{p['id']:24} {p['name']:24} format: {p['format'] or 'from your words'}, "
+              f"graphics: {p['graphics']}{mine}")
+    reporter.result(presets=items)
+
+
+def print_storyboard(scenes):
+    for s in scenes:
+        lock = " 🔒" if s["locked"] else ""
+        extras = ", ".join(x for x in (
+            f"graphics: {', '.join(g['template'] for g in s['graphics'])}" if s["graphics"] else "",
+            f"B-roll: {', '.join(s['broll'])}" if s["broll"] else "",
+            f"music: {', '.join(s['music'])}" if s["music"] else "",
+            f"{s['sfx']} sound(s)" if s["sfx"] else "",
+            f"colour: {s['mood']}" if s["mood"] != "none" else "") if x)
+        print(f"{s['id']:>4} {s['start']:6.2f}-{s['end']:6.2f}s  {s['purpose_label']:<15} "
+              f"[{s['transition']}]{lock}  {s['text'][:70]}")
+        if extras:
+            print(f"{'':>6}{extras}")
+
+
+def cmd_storyboard(args, reporter):
+    from autoedit import storyboard
+    from autoedit.project import load_project
+    scenes = storyboard.scenes(load_project(args.project))
+    print_storyboard(scenes)
+    reporter.result(scenes=scenes)
+
+
+def cmd_storyboard_edit(args, reporter, cancel):
+    from autoedit import storyboard
+    from autoedit.ai_edit import provider_settings
+    from autoedit.project import load_project, save_project
+    path = Path(args.project).resolve()
+    project = load_project(path)
+    notes, changed = [], []
+    if args.lock or args.unlock:
+        project = storyboard.set_locked(project, args.scene, bool(args.lock))
+    elif args.text is not None:
+        project = storyboard.set_text(project, args.scene, args.text)
+    else:
+        cfg = load_config(args.config)
+        provider, model = provider_settings(cfg, args.provider, args.model) if args.provider else (None, None)
+        r = storyboard.regenerate(project, args.scene, cfg, provider, model, cancel=cancel)
+        project, notes, changed = r["project"], r["notes"], r["changed"]
+    save_project(project, path)
+    scenes = storyboard.scenes(project)
+    print_storyboard(scenes)
+    for n in notes:
+        print(f"  > {n}")
+    reporter.result(project=str(path), scenes=scenes, changed=changed, notes=notes)
+
+
 def cmd_ai_edit(args, reporter, cancel):
     from autoedit.ai_edit import ai_edit_video
     from autoedit.errors import Cancelled, EditorError
@@ -677,7 +755,12 @@ def cmd_ai_edit(args, reporter, cancel):
     plan = read_plan_file(args.plan_file) if args.plan_file else None
     previous = read_plan_file(args.previous_plan) if args.previous_plan else None
     inputs = format_inputs(args)
-    if args.voiceover or args.format == "voiceover_broll":
+    look = None
+    if args.preset:
+        from autoedit import presets
+        look = presets.get(args.preset, cfg)
+    if args.voiceover or args.format == "voiceover_broll" or \
+            (args.format is None and look and look["format"] == "voiceover_broll"):
         from autoedit.ai_edit import voiceover_edit
         if len(args.videos) != 1:
             raise EditorError("--voiceover takes one voice-over file.")
@@ -685,7 +768,8 @@ def cmd_ai_edit(args, reporter, cancel):
             raise EditorError("--voiceover needs B-roll: --input broll=FILE (repeat for more).")
         item = voiceover_edit(args.videos[0], inputs["broll"], cfg, instruction, args.provider,
                               args.model, render=not args.no_render, output=args.output,
-                              reporter=reporter, cancel=cancel, graphics=args.graphics)
+                              reporter=reporter, cancel=cancel, graphics=args.graphics,
+                              preset=args.preset)
         reporter.result(**item, video=str(args.videos[0]), ok=True)
         return
     results, failed = [], 0
@@ -698,7 +782,7 @@ def cmd_ai_edit(args, reporter, cancel):
                                  cancel=cancel, gen_paths=generation_paths(args),
                                  max_gen_minutes=args.max_generation_minutes,
                                  max_ai_clips=args.max_ai_clips, graphics=args.graphics,
-                                 format=args.format, inputs=inputs)
+                                 format=args.format, inputs=inputs, preset=args.preset)
             item.update(video=str(video), ok=True)
         except Cancelled:
             raise
@@ -1012,6 +1096,12 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_thumbs(args, reporter)
         elif args.command == "formats":
             cmd_formats(args, reporter)
+        elif args.command == "presets":
+            cmd_presets(args, reporter)
+        elif args.command == "storyboard":
+            cmd_storyboard(args, reporter)
+        elif args.command == "storyboard-edit":
+            cmd_storyboard_edit(args, reporter, cancel)
         elif args.command == "graphics":
             cmd_graphics(args, reporter, cancel)
         elif args.command == "graphics-regenerate":

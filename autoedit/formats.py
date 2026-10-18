@@ -738,6 +738,9 @@ def build_voiceover_project(audio, broll, cfg, words, name="Voice-over"):
     for n, c in enumerate(caps):
         c["id"] = f"t{n + 1}"
     p["tracks"][3]["clips"] = caps
+    if cfg.get("grade") and cfg["grade"] != "none":
+        p["tracks"][2]["clips"].append({"id": "g1", "type": "grade", "start": 0.0, "duration": round(total, 4),
+                                        "grade": str(cfg["grade"])})
     return p
 
 

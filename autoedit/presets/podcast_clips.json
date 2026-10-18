@@ -1,0 +1,19 @@
+{
+  "id": "podcast_clips",
+  "name": "Podcast Clips",
+  "tl": "Podcast clips",
+  "about": "Talking clip from a podcast: readable yellow captions, few graphics, gentle cuts, no music.",
+  "about_tl": "Clip mula sa podcast: madaling basahing dilaw na caption, kaunting graphics, banayad na cuts, walang music.",
+  "format": null,
+  "graphics": "minimal",
+  "density": 1,
+  "captions": {
+    "style": "yellow_pop"
+  },
+  "grade": "natural_clean",
+  "pacing": "relaxed",
+  "zoom": true,
+  "sfx": false,
+  "music": null,
+  "instruction": "Keep the speaker's full thought; only cut long pauses and filler words."
+}

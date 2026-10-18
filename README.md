@@ -109,6 +109,10 @@ Be aware of what has and has not been checked:
   measured on rendered frames; Clone and "green screen without a green screen" only with a
   **stand-in** person segmenter. **Not verified:** the real MediaPipe segmenter on real footage,
   real Taglish speech, Windows and speed. See [docs/formats.md](docs/formats.md).
+- **Storyboard and 7 presets:** the scenes, lock, word edits and regenerate checked to agree
+  between the engine and the app, presets' settings, music and sounds, and the app's storyboard
+  and preset menu (browser build, stand-in engine). **Not verified:** Windows/Electron, real
+  speech, how the presets look on your videos. See [docs/storyboard-presets.md](docs/storyboard-presets.md).
 - **AI pictures, clips and voice-over with WanGP** (quality tiers, hardware detection,
   tests, Compare, Auto mode's tier choice and fallback), tested **only against a stand-in
   for WanGP and a fake `nvidia-smi`**: there is no GPU on the test machine. See
@@ -404,6 +408,13 @@ Explainer, Yap or Voice-over with B-roll (or let the AI pick), add the files it 
 press **Edit with AI**. *Pumili ng format, idagdag ang hinihinging files, tapos Edit with AI.*
 Command line: `python editor.py ai-edit me.mp4 --format reaction --input source=clip.mp4`.
 Guide: [docs/formats.md](docs/formats.md).
+
+**Presets and the storyboard · Mga preset at storyboard.** Pick a **Preset** in the AI panel
+(Viral TikTok, Cinematic Storytelling, Premium UGC Ad, Podcast Clips, Faceless Automation, Calm
+Documentary, Meme). After the edit, press **Storyboard · Mga eksena** to see it as scenes: approve
+all and render, give one scene another look, replace its footage, change its words or lock it.
+*Tingnan ang mga eksena bago i-render.* Command line: `--preset viral_tiktok`,
+`python editor.py storyboard my.project.json`. Guide: [docs/storyboard-presets.md](docs/storyboard-presets.md).
 
 ### From the command line
 

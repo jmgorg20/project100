@@ -19,6 +19,8 @@ import { addCaption, addEmoji, correctCaptions, editWordText, setCaptionLook, se
 import { addFx, addGrade, addTransition, addZoom, setAudioSettings, speedRamp } from "../../shared/effectsEdit";
 import { addGraphic, addWipe, anotherLook, setClipLocked, setGraphic, setWipe } from "../../shared/graphicsEdit";
 import { ExportDialog } from "./ExportDialog";
+import { Storyboard } from "./Storyboard";
+import { freeze, setSceneLocked, setSceneText, type Scene } from "../../shared/storyboard";
 import { Inspector } from "./Inspector";
 import { LeftPanel } from "./LeftPanel";
 import { ProjectPanel } from "./ProjectPanel";
@@ -35,7 +37,9 @@ const MAX_PPS = 600;
 
 type SaveState = { state: "saved" | "saving" | "unsaved" | "error"; message?: string };
 
-export function Editor({ path, onClose }: { path: string; onClose: () => void }) {
+export function Editor({ path, onClose, startIn = "timeline" }: { path: string; onClose: () => void; startIn?: "timeline" | "storyboard" }) {
+  const [view, setView] = useState<"timeline" | "storyboard">(startIn);
+  const [sceneBusy, setSceneBusy] = useState<string | null>(null);
   const [opened, setOpened] = useState<OpenedProject | null>(null);
   const [history, setHistory] = useState<History<Project> | null>(null);
   const [draft, setDraft] = useState<Project | null>(null);
@@ -524,6 +528,35 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
     savedProject.current = histRef.current?.present ?? r.project;
   };
 
+  const regenerateScene = async (id: string, useAi: boolean) => {
+    const problem = await saveNow();
+    if (problem) return setToast(problem);
+    setSceneBusy(id);
+    const settings = await api.getSettings();
+    const r = await api.storyboardRegenerate(path, id, useAi, settings.provider);
+    setSceneBusy(null);
+    if (!r.project) return setToast(r.error ?? "Could not regenerate this scene.");
+    if (r.notes?.length) setToast(r.notes[0]);
+    savedProject.current = r.project;
+    if (histRef.current) commit(pushHistory(histRef.current, r.project));
+    savedProject.current = histRef.current?.present ?? r.project;
+  };
+
+  const replaceSceneFootage = async (scene: Scene) => {
+    const files = await api.pickMedia();
+    if (!files.length || !project) return;
+    const overlay = scene.clips.find((id) => findClip(project, id)?.track.kind === "overlay");
+    await brollFromFile(files[0], overlay ? { kind: "clip", clipId: overlay } : { kind: "new", at: scene.start, duration: scene.duration, position: "full" }, "file");
+  };
+
+  const approveAll = () => {
+    apply((p) => {
+      const q = freeze(p);
+      return { ...q, meta: { ...q.meta, storyboard: { ...(q.meta?.storyboard as object), approved: true } } };
+    });
+    setShowExport(true);
+  };
+
   const exactFrame = async () => {
     const problem = await saveNow();
     if (problem) {
@@ -580,6 +613,9 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
         <button className="btn small ghost" onClick={() => run("redo")} disabled={!history.future.length} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">↷</button>
         <span className={`save-state ${save.state}`} role="status" title={save.message} data-testid="save-state">{saveText}</span>
         <button className="btn small ghost" onClick={() => setShowHelp(true)} aria-label="Keyboard shortcuts">?</button>
+        <button className="btn small" onClick={() => setView((v) => (v === "storyboard" ? "timeline" : "storyboard"))} data-testid="toggle-storyboard" aria-pressed={view === "storyboard"}>
+          {view === "storyboard" ? "Timeline" : "Storyboard"}
+        </button>
         <button className="btn small primary" onClick={() => setShowExport(true)} data-testid="export">Export</button>
       </header>
 
@@ -681,6 +717,23 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
         />
       </aside>
 
+      {view === "storyboard" ? (
+        <section className="ed-timeline ed-storyboard">
+          <Storyboard
+            project={project}
+            actions={{
+              busyScene: sceneBusy,
+              onSeek: seek,
+              onLock: (id, locked) => apply((p) => setSceneLocked(p, id, locked)),
+              onText: (id, text) => apply((p) => setSceneText(p, id, text)),
+              onRegenerate: (id, useAi) => void regenerateScene(id, useAi),
+              onReplace: (scene) => void replaceSceneFootage(scene),
+              onApproveAll: approveAll,
+              onTimeline: () => setView("timeline"),
+            }}
+          />
+        </section>
+      ) : (
       <section className="ed-timeline" aria-label="Timeline">
         <div className="tl-toolbar">
           <button className="btn small" onClick={split} title="Split at the playhead (S)" data-testid="split">✂ Split</button>
@@ -713,6 +766,7 @@ export function Editor({ path, onClose }: { path: string; onClose: () => void })
           onTrackFlag={(id, flag, value) => apply((p) => setTrackFlag(p, id, flag, value))}
         />
       </section>
+      )}
 
       {toast && (
         <div className="toast" role="alert" data-testid="toast">

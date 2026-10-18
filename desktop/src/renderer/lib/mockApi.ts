@@ -8,7 +8,8 @@ import type {
   CompareResult, EngineEvent, TrackData, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Media, Plan, Project, Settings, Summary, Track, VideoHistory,
 } from "../../shared/types";
 import { CONTENT_TYPES } from "../../shared/types";
-import { anotherLook, templateMeta } from "../../shared/graphicsEdit";
+import { addGraphic, anotherLook, templateMeta } from "../../shared/graphicsEdit";
+import { findScene } from "../../shared/storyboard";
 
 interface Fixture {
   project: Project;
@@ -54,6 +55,7 @@ export function createMockApi(): AppApi {
     trackStarts: string[];
     trackDownloads: string[][];
     graphicsRegenerated: { clip: string; ai: boolean }[];
+    scenesRegenerated: { scene: string; ai: boolean }[];
   };
   w.vocabulary = { words: ["GCash", "Shopee"], corrections: [{ from: "g cash", to: "GCash" }] };
   w.recordings = [];
@@ -61,6 +63,8 @@ export function createMockApi(): AppApi {
   w.trackStarts = [];
   w.trackDownloads = [];
   w.graphicsRegenerated = [];
+  w.scenesRegenerated = [];
+  const openedProjects = new Map<string, Project>();
   // Tracking: ?track=none (MediaPipe not installed), ?track=models (installed, no model files), else ready.
   const trackMode = params.get("track") ?? "ready";
   const trackModels: TrackStatus["models"] = (["hand", "face", "pose"] as const).map((kind) => ({
@@ -268,7 +272,7 @@ export function createMockApi(): AppApi {
       params.get("scenario") === "parity" ? ["C:/Videos/parity.mp4"] : ["C:/Videos/demo_talk.mp4", "C:/Videos/demo_talk_2.mp4"],
     pickPhotos: async () => ["C:/Videos/github_logo.png"],
     pickFormatFiles: async (kinds) =>
-      kinds.includes("video") ? ["C:/Videos/reaction_source.mp4"] : kinds.includes("audio") ? ["C:/Videos/vo.wav"] : ["C:/Videos/background.png"],
+      kinds.includes("audio") ? ["C:/Videos/vo.wav"] : kinds.includes("video") ? ["C:/Videos/reaction_source.mp4"] : ["C:/Videos/background.png"],
     addJobs: async (requests) => {
       (window as unknown as { lastJobRequests: JobRequest[] }).lastJobRequests = requests;
       return enqueue(requests);
@@ -393,9 +397,25 @@ export function createMockApi(): AppApi {
       if (params.get("project") === "trackfx" && !w.savedProjects.some((x) => x.path === path)) {
         return { path, project: (await fetch("/fixtures/trackfx.project.json").then((r) => r.json())) as Project, backup: path.replace(/\.project\.json$/, ".before-editing.project.json") };
       }
+      if (params.get("project") === "storyboard" && !w.savedProjects.some((x) => x.path === path)) {
+        // The demo talk as three scenes (hook, numbers, call to action) with a graphic and B-roll.
+        const p = (await fetch("/fixtures/demo.project.json").then((r) => r.json())) as Project;
+        p.tracks[0].clips = [{ id: "v1", type: "video", media: "m1", start: 0, duration: 8, in: 0, out: 8 }];
+        p.tracks = p.tracks.filter((t) => t.kind !== "effect" || t.clips.every((c) => c.type !== "zoom"));
+        const lines: [number, number, string][] = [[0.1, 1.5, "Alam niyo ba ito?"], [1.7, 1.0, "Simple lang."], [2.8, 1.6, "Una, mag-budget ng 500 piso."], [4.5, 1.4, "Pangalawa, mag-ipon araw-araw."], [6.0, 1.8, "I-follow niyo ako para sa part two!"]];
+        p.tracks.find((t) => t.kind === "caption")!.clips = lines.map(([start, duration, text], i) => {
+          const words = text.split(" ");
+          const step = duration / words.length;
+          return { id: `t${i + 1}`, type: "caption", start, duration, style: "bold_caps", words: words.map((x, k) => ({ text: x, start: Math.round(k * step * 1e4) / 1e4, end: Math.round((k + 0.9) * step * 1e4) / 1e4 })) };
+        });
+        p.tracks.splice(2, 0, { id: "graphics", kind: "graphics", name: "Graphics", clips: [{ id: "gx1", type: "graphic", template: "stamp", start: 3.0, duration: 1.2, params: { text: "500" }, x: 0.5, y: 0.3 }] });
+        openedProjects.set(path, structuredClone(p));
+        return { path, project: p, backup: path.replace(/\.project\.json$/, ".before-editing.project.json") };
+      }
       if (params.get("project") === "broken") return { path, error: "The project file has problems:\n  - project.tracks[0] clip 'v1': unknown media 'nope'" };
       const saved = [...w.savedProjects].reverse().find((x) => x.path === path);
       const project = saved?.project ?? ((await fetch("/fixtures/demo.project.json").then((r) => r.json())) as Project);
+      openedProjects.set(path, structuredClone(project));
       return { path, project, backup: path.replace(/\.project\.json$/, ".before-editing.project.json") };
     },
     saveProject: async (path, project) => {
@@ -498,6 +518,30 @@ export function createMockApi(): AppApi {
       caps.clips.sort((a, b) => a.start - b.start);
       w.savedProjects.push({ path: projectPath, project });
       return { project, words: 2 };
+    },
+    storyboardRegenerate: async (projectPath, sceneId, useAi) => {
+      // Like the engine: another look for the scene's unlocked graphics (or one new pop-up word).
+      await wait(200 / speed);
+      // Like the engine, read the project file: the last save, else the file as it was opened.
+      const saved = [...w.savedProjects].reverse().find((x) => x.path === projectPath) ?? (openedProjects.has(projectPath) ? { project: openedProjects.get(projectPath)! } : undefined);
+      if (!saved) return { error: "The project was not saved." };
+      w.scenesRegenerated.push({ scene: sceneId, ai: useAi });
+      try {
+        let project = structuredClone(saved.project);
+        const scene = findScene(project, sceneId);
+        if (scene.locked) return { error: "This scene is locked. Unlock it first." };
+        if (scene.graphics.length) {
+          for (const g of scene.graphics) project = anotherLook(project, g.id);
+        } else {
+          const word = scene.text.split(/\s+/).sort((a, b) => b.length - a.length)[0] ?? "WOW";
+          const text = word.replace(/[^\p{L}\p{N}-]/gu, "").toUpperCase() || "WOW";
+          project = addGraphic(project, "pop-heavy", scene.start + 0.1, { text }).project;
+        }
+        w.savedProjects.push({ path: projectPath, project });
+        return { project, notes: [] };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
     },
     graphicsRegenerate: async (projectPath, clipId, useAi) => {
       await wait(200 / speed);

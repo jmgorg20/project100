@@ -610,6 +610,10 @@
         },
         "crop": {
           "$ref": "#/$defs/crop"
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       }
     },
@@ -653,6 +657,10 @@
         },
         "crop": {
           "$ref": "#/$defs/crop"
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       }
     },
@@ -765,6 +773,10 @@
               "maximum": 0.5
             }
           }
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       },
       "if": {
@@ -825,6 +837,10 @@
           "minimum": 0,
           "maximum": 3,
           "description": "Seconds to zoom in smoothly from 100% (0 = jump straight in, a punch-in)."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       }
     },
@@ -869,6 +885,10 @@
         },
         "intensity": {
           "$ref": "#/$defs/intensity"
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       }
     },
@@ -1034,6 +1054,10 @@
               }
             }
           }
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       }
     },
@@ -1092,6 +1116,10 @@
         },
         "speed": {
           "$ref": "#/$defs/speed"
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       }
     },
@@ -1175,6 +1203,10 @@
         },
         "intensity": {
           "$ref": "#/$defs/intensity"
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       }
     },
@@ -1428,6 +1460,10 @@
             "alpha"
           ],
           "description": "effect 'clip': black background added with screen blend (default), or a clip with its own alpha."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       },
       "if": {
@@ -1696,6 +1732,10 @@
         "divider": {
           "type": "boolean",
           "description": "Draw a thin white line at the divider (default true)."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
         }
       }
     }

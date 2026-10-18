@@ -90,6 +90,8 @@ DEFAULTS = {
         "library_folder": "",
         "use_stock": True,
     },
+    "music": {"folder": "assets/music"},
+    "presets_folder": "presets",
     "sfx": {
         "enabled": False,
         "volume": 0.4,

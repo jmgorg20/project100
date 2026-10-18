@@ -92,6 +92,12 @@ graphics:                     # motion graphics the AI edit adds (docs/graphics.
   track_face: true            # find the face (if tracking is set up) so graphics keep off it
   min_font: 30                # smallest text size (px on the 1080x1920 frame) before a warning
 
+music:                        # background music a preset may add (docs/presets.md)
+  folder: assets/music        # your own music files (that you may use); names say the mood,
+                              # e.g. upbeat_summer.mp3, calm_piano.mp3. None are bundled.
+
+presets_folder: presets       # your own presets (plain JSON); same id = replaces a built-in one
+
 broll:                        # B-roll the AI edit adds: your library, then free stock, then AI
   library_folder: ""          # a folder with your own clips/pictures; names = what they show
   use_stock: true             # Pexels/Pixabay, only if PEXELS_API_KEY / PIXABAY_API_KEY is set

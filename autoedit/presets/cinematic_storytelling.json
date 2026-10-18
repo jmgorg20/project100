@@ -1,0 +1,23 @@
+{
+  "id": "cinematic_storytelling",
+  "name": "Cinematic Storytelling",
+  "tl": "Cinematic na kuwento",
+  "about": "Slower pacing, small clean captions, teal-and-orange colour, few elegant graphics, cinematic music if you have some.",
+  "about_tl": "Mas mabagal, maliliit na malinis na caption, teal-orange na kulay, kaunting eleganteng graphics.",
+  "format": null,
+  "graphics": "luxury",
+  "density": 1,
+  "captions": {
+    "style": "minimal",
+    "size_scale": 0.9
+  },
+  "grade": "orange_teal",
+  "pacing": "relaxed",
+  "zoom": false,
+  "sfx": false,
+  "music": {
+    "mood": "cinematic",
+    "volume": 0.15
+  },
+  "instruction": "Let the story breathe: keep short pauses that add tension. Few zooms."
+}

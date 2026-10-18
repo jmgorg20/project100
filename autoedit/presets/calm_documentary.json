@@ -1,0 +1,22 @@
+{
+  "id": "calm_documentary",
+  "name": "Calm Documentary",
+  "tl": "Kalmadong dokumentaryo",
+  "about": "Calm and warm: classic captions, soft lower-thirds, slow pacing, gentle music if you have some.",
+  "about_tl": "Kalmado at mainit: classic na caption, malambot na lower-third, mabagal, banayad na music.",
+  "format": null,
+  "graphics": "calm_documentary",
+  "density": 1,
+  "captions": {
+    "style": "classic"
+  },
+  "grade": "warm",
+  "pacing": "relaxed",
+  "zoom": false,
+  "sfx": false,
+  "music": {
+    "mood": "calm",
+    "volume": 0.12
+  },
+  "instruction": "Calm, informative tone. Few cuts besides long pauses."
+}

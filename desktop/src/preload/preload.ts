@@ -66,6 +66,7 @@ const api: AppApi = {
   pickFolder: (title) => ipcRenderer.invoke("dialog:folder", title),
   saveRecording: (projectPath, data, extension) => ipcRenderer.invoke("media:saveRecording", projectPath, data, extension),
   retranscribe: (projectPath, start, end) => ipcRenderer.invoke("project:retranscribe", projectPath, start, end),
+  storyboardRegenerate: (projectPath, sceneId, useAi, provider) => ipcRenderer.invoke("storyboard:regenerate", projectPath, sceneId, useAi, provider),
   graphicsRegenerate: (projectPath, clipId, useAi, provider) => ipcRenderer.invoke("graphics:regenerate", projectPath, clipId, useAi, provider),
   graphicsCheck: (projectPath) => ipcRenderer.invoke("graphics:check", projectPath),
   onJobChanged: (callback) => listen<Job>("job:changed", callback),

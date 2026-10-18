@@ -794,5 +794,77 @@
     }
    ]
   }
+ ],
+ "presets": [
+  {
+   "id": "calm_documentary",
+   "name": "Calm Documentary",
+   "tl": "Kalmadong dokumentaryo",
+   "about": "Calm and warm: classic captions, soft lower-thirds, slow pacing, gentle music if you have some.",
+   "about_tl": "Kalmado at mainit: classic na caption, malambot na lower-third, mabagal, banayad na music.",
+   "format": null,
+   "graphics": "calm_documentary",
+   "builtin": true
+  },
+  {
+   "id": "cinematic_storytelling",
+   "name": "Cinematic Storytelling",
+   "tl": "Cinematic na kuwento",
+   "about": "Slower pacing, small clean captions, teal-and-orange colour, few elegant graphics, cinematic music if you have some.",
+   "about_tl": "Mas mabagal, maliliit na malinis na caption, teal-orange na kulay, kaunting eleganteng graphics.",
+   "format": null,
+   "graphics": "luxury",
+   "builtin": true
+  },
+  {
+   "id": "faceless_automation",
+   "name": "Faceless Automation",
+   "tl": "Faceless (walang mukha)",
+   "about": "Narration over your approved B-roll only: no stock search, no AI-made clips. Bold captions, calm music if you have some.",
+   "about_tl": "Narration sa ibabaw ng B-roll na inaprubahan mo lang: walang stock, walang AI clips. Bold na caption.",
+   "format": "voiceover_broll",
+   "graphics": "minimal",
+   "builtin": true
+  },
+  {
+   "id": "meme",
+   "name": "Meme",
+   "tl": "Meme",
+   "about": "Loud and funny: thick outlined captions, stickers and emoji, flashes and pops on the jokes.",
+   "about_tl": "Maingay at nakakatawa: makapal na outline na caption, stickers at emoji, flash at pop sa mga joke.",
+   "format": null,
+   "graphics": "meme",
+   "builtin": true
+  },
+  {
+   "id": "podcast_clips",
+   "name": "Podcast Clips",
+   "tl": "Podcast clips",
+   "about": "Talking clip from a podcast: readable yellow captions, few graphics, gentle cuts, no music.",
+   "about_tl": "Clip mula sa podcast: madaling basahing dilaw na caption, kaunting graphics, banayad na cuts, walang music.",
+   "format": null,
+   "graphics": "minimal",
+   "builtin": true
+  },
+  {
+   "id": "premium_ugc_ad",
+   "name": "Premium UGC Ad",
+   "tl": "Premium UGC Ad",
+   "about": "Clean, trustworthy product video: boxed captions, price and benefit cards, a clear call to action at the end.",
+   "about_tl": "Malinis at kapani-paniwalang product video: boxed caption, presyo at benefit cards, malinaw na call to action sa dulo.",
+   "format": null,
+   "graphics": "promoter",
+   "builtin": true
+  },
+  {
+   "id": "viral_tiktok",
+   "name": "Viral TikTok",
+   "tl": "Viral TikTok",
+   "about": "Fast cuts, big bold captions, punchy pop-up words with whooshes, high contrast, upbeat music if you have some.",
+   "about_tl": "Mabilis na cuts, malalaking caption, pop-up na salita na may whoosh, matingkad na kulay, masiglang music kung meron ka.",
+   "format": null,
+   "graphics": "promoter",
+   "builtin": true
+  }
  ]
 }
