@@ -199,7 +199,10 @@ def add_music(project, preset, cfg):
         at += d
     if track["clips"]:
         track["clips"][-1]["fade_out"] = round(min(1.5, track["clips"][-1]["duration"] / 2), 4)
-    return f"Music: {path.name} ({preset['music']['mood']})."
+        audio = project["settings"].setdefault("audio", {})
+        if not audio.get("ducking"):
+            audio["ducking"] = 0.6                     # quieter while you speak
+    return f"Music: {path.name} ({preset['music']['mood']}), quieter while you speak."
 
 
 def add_emphasis_sounds(project, cfg):

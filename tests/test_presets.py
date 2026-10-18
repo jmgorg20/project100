@@ -110,6 +110,7 @@ def test_music_is_picked_by_mood_and_laid_under_the_whole_video(tmp_path):
     music = [cl for t in p["tracks"] if t.get("role") == "music" for cl in t["clips"]]
     assert len(music) >= 3 and all(cl["volume"] == 0.12 for cl in music)
     assert music[-1]["fade_out"] > 0
+    assert p["settings"]["audio"]["ducking"] == 0.6                      # quieter while you speak
     assert abs(music[-1]["start"] + music[-1]["duration"] - max(
         cl["start"] + cl["duration"] for cl in p["tracks"][0]["clips"])) < 0.01
     assert validate_project(p) == []

@@ -54,6 +54,11 @@ See [docs/tracking.md](../docs/tracking.md).
 for. The list comes from the engine's `autoedit/formats/*.json`; after adding or changing one, run
 `npm run engine-data`. See [docs/formats.md](../docs/formats.md).
 
+**Presets and the storyboard:** a **Preset** menu in the AI panel, and **Storyboard** (after an
+AI edit, or in the editor's top bar) shows the edit as scenes. The scene logic is
+`src/shared/storyboard.ts`, kept equal to `autoedit/storyboard.py` by a test. See
+[docs/storyboard-presets.md](../docs/storyboard-presets.md).
+
 There is no installer yet (that is Phase 4).
 
 ## Tests

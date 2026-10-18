@@ -92,7 +92,12 @@ WanGP; then `ai_generated` is true and `tier` says which), or `file` (chosen by 
 [broll.md](broll.md).
 
 Tracks can be `muted` (sound off), `hidden` (picture off) and `locked` (an editing hint for
-the app; the renderer ignores it).
+the app; the renderer ignores it). Any clip can also be `locked` (the storyboard's **Lock scene**
+sets it): the app and the AI leave it as it is.
+
+`meta.storyboard` (optional): `starts`, the scene start times the storyboard keeps once you edit a
+scene, and `approved` (true after **Approve all**). `meta.preset` and `meta.format` name the preset
+and format an AI edit used. See [storyboard-presets.md](storyboard-presets.md).
 
 ## Timing rules (what you see is what renders)
 
