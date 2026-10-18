@@ -455,6 +455,17 @@ function registerIpc(): void {
       return { error: (err as Error).message };
     }
   });
+  ipcMain.handle("storyboard:regenerate", async (_e, projectPath: string, sceneId: string, useAi: boolean, provider: Provider) => {
+    const args = ["storyboard-edit", projectPath, "--scene", sceneId, "--regenerate"];
+    if (useAi) args.push("--provider", provider, "--model", modelFor(settings, provider));
+    const r = await engineOnce(args);
+    if (r.error || !r.result) return { error: r.error ?? "No answer from the editor engine." };
+    try {
+      return { project: JSON.parse(fs.readFileSync(projectPath, "utf-8")), notes: (r.result.notes as string[]) ?? [] };
+    } catch (err) {
+      return { error: (err as Error).message };
+    }
+  });
   ipcMain.handle("graphics:regenerate", async (_e, projectPath: string, clipId: string, useAi: boolean, provider: Provider) => {
     const args = ["graphics-regenerate", projectPath, "--clip", clipId];
     if (useAi) args.push("--provider", provider, "--model", modelFor(settings, provider));

@@ -7,6 +7,10 @@ import type { GenStatus, Job, JobMode, Plan, Provider, Settings, VideoHistory } 
 import { ConsentDialog, FrameDialog, SettingsDialog } from "./components/Dialogs";
 import { GenerationDialog } from "./components/GenerationDialog";
 import { FormatPicker, NO_FORMAT, formatRequest, missingRoles, type FormatChoice } from "./components/FormatPicker";
+import engineData from "../shared/engine-data.json";
+import type { PresetInfo } from "../shared/types";
+
+const PRESETS = (engineData as unknown as { presets: PresetInfo[] }).presets;
 import { Editor } from "./editor/Editor";
 import { PlanReview } from "./components/PlanReview";
 import { Player } from "./components/Player";
@@ -47,6 +51,7 @@ export function App() {
   const [instruction, setInstruction] = useState("");
   const [graphicsStyle, setGraphicsStyle] = useState("auto");
   const [formatChoice, setFormatChoice] = useState<FormatChoice>(NO_FORMAT);
+  const [preset, setPreset] = useState("");
   const [followUp, setFollowUp] = useState("");
   const [estimate, setEstimate] = useState<EstimateResult | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -56,6 +61,7 @@ export function App() {
   const [gen, setGen] = useState<GenStatus | null>(null);
   const [showGen, setShowGen] = useState(false);
   const [editorPath, setEditorPath] = useState<string | null>(null);
+  const [editorStart, setEditorStart] = useState<"timeline" | "storyboard">("timeline");
   const [genMounted, setGenMounted] = useState(false);
   const [genRunning, setGenRunning] = useState(false);
   // Per video (sent with each edit); start from the limits in the generation settings file.
@@ -136,6 +142,7 @@ export function App() {
         video, photos, instruction: text, provider, auto, mode, planFile,
         maxGenMinutes: limits?.minutes, maxAiClips: limits?.clips, graphics: graphicsStyle,
         ...formatRequest(formatChoice),
+        ...(preset ? { preset } : {}),
       })),
     );
 
@@ -171,7 +178,7 @@ export function App() {
   const [statusLabel, statusClass] = statusText(selectedJob, history);
 
   if (!settings) return null;
-  if (editorPath) return <Editor key={editorPath} path={editorPath} onClose={() => setEditorPath(null)} />;
+  if (editorPath) return <Editor key={editorPath} path={editorPath} startIn={editorStart} onClose={() => { setEditorPath(null); setEditorStart("timeline"); }} />;
   return (
     <div className="app" onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={onDrop}>
       <header className="topbar">
@@ -306,6 +313,27 @@ export function App() {
             </select>
           </div>
           <label className="field small">
+            Preset · Handang istilo
+            <select
+              aria-label="Preset"
+              value={preset}
+              data-testid="preset"
+              onChange={(e) => {
+                const id = e.target.value;
+                setPreset(id);
+                const p = PRESETS.find((x) => x.id === id);
+                // A preset made for a format (Faceless → Voice-over with B-roll) asks for its files.
+                if (p?.format && p.format !== "auto") setFormatChoice({ ...NO_FORMAT, format: p.format });
+              }}
+            >
+              <option value="">None · Wala</option>
+              {PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}{p.tl !== p.name ? ` · ${p.tl}` : ""}</option>
+              ))}
+            </select>
+            {PRESETS.find((p) => p.id === preset) && <span className="muted small" data-testid="preset-about">{PRESETS.find((p) => p.id === preset)!.about}</span>}
+          </label>
+          <label className="field small">
             Motion graphics · Pop-up na salita at graphics
             <select aria-label="Motion graphics" value={graphicsStyle} onChange={(e) => setGraphicsStyle(e.target.value)} data-testid="graphics-style">
               {GRAPHIC_STYLES.map((g) => (
@@ -378,6 +406,7 @@ export function App() {
                 <button className="btn small" disabled={!canUndo(history)} onClick={async () => { const h = await api.undo(history.video); setHistories((p) => ({ ...p, [h.video]: h })); }}>Undo AI edit</button>
                 <button className="btn small" disabled={!canRedo(history)} onClick={async () => { const h = await api.redo(history.video); setHistories((p) => ({ ...p, [h.video]: h })); }}>Redo</button>
                 <button className="btn small" onClick={() => { setInstruction(version.instruction); instructionRef.current?.focus(); }}>Redo with new instructions</button>
+                <button className="btn small" onClick={() => { setEditorStart("storyboard"); setEditorPath(version.projectFile); }} data-testid="open-storyboard" title="See the edit as scenes: approve, regenerate a scene, change words, lock">Storyboard · Mga eksena</button>
                 <button className="btn small primary" onClick={() => setEditorPath(version.projectFile)} data-testid="open-editor" title="Fix anything by hand: cut, move, speed, volume, framing">Edit on timeline · Buksan sa timeline</button>
               </div>
               <div className="row" style={{ marginTop: 12 }}>

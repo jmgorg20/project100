@@ -353,12 +353,25 @@ export interface JobRequest {
   maxAiClips?: number;
   /** Motion graphics: "auto" (when the instruction asks), "off", or a style name. */
   graphics?: string;
+  /** A preset (Viral TikTok, ...): its look is the default; an explicit format or graphics style wins. */
+  preset?: string;
   /** Video format id (Reaction, Listicle, ...) or "auto" (the AI picks); unset = from your words. */
   format?: string;
   /** The format's other files by role, e.g. { source: [...] }; Listicle items; start offsets. */
   formatInputs?: Record<string, string[]>;
   items?: string[];
   offsets?: Record<string, number>;
+}
+
+/** One preset, as `python editor.py ui-data` lists it. */
+export interface PresetInfo {
+  id: string;
+  name: string;
+  tl: string;
+  about: string;
+  about_tl: string;
+  format: string | null;
+  graphics: string;
 }
 
 /** One video format, as `python editor.py ui-data` lists it. */

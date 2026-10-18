@@ -23,7 +23,9 @@ export function jobArgs(job: Job, settings: Settings, files: { instructionFile: 
   if (job.maxAiClips !== undefined) args.push("--max-ai-clips", String(job.maxAiClips));
   if (settings.brollFolder) args.push("--broll-library", settings.brollFolder);
   if (!settings.useStock) args.push("--no-stock");
-  if (job.graphics) args.push("--graphics", job.graphics);
+  if (job.preset) args.push("--preset", job.preset);
+  // With a preset, "auto" graphics means the preset's own style (the engine then decides).
+  if (job.graphics && !(job.preset && job.graphics === "auto")) args.push("--graphics", job.graphics);
   if (job.format) args.push("--format", job.format);
   for (const [role, files] of Object.entries(job.formatInputs ?? {})) {
     for (const file of files) args.push("--input", `${role}=${file}`);

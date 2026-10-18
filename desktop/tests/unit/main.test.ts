@@ -106,6 +106,11 @@ describe("job arguments", () => {
       "--item", "Mag-ipon", "--item", "Mag-invest", "--offset", "source=1.5", "--photos", "/x.png",
     ]);
     expect(jobArgs(job({}), settings, files)).not.toContain("--format");
+    // A preset: "auto" graphics then means the preset's own style, so it is not sent.
+    const preset = jobArgs(job({ preset: "viral_tiktok", graphics: "auto" }), settings, files);
+    expect(preset).toEqual(expect.arrayContaining(["--preset", "viral_tiktok"]));
+    expect(preset).not.toContain("--graphics");
+    expect(jobArgs(job({ preset: "meme", graphics: "off" }), settings, files)).toEqual(expect.arrayContaining(["--preset", "meme", "--graphics", "off"]));
   });
 
   it("never reuses an output name", () => {

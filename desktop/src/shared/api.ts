@@ -207,6 +207,8 @@ export interface AppApi {
   /** Transcribe start-end (timeline seconds) again and replace the captions there (saves the project). */
   retranscribe(projectPath: string, start: number, end: number): Promise<{ project?: Project; words?: number; error?: string }>;
   /** Another look for one graphic (the engine saves the project): by rules, or asking the AI. */
+  /** Storyboard: another look for one scene's graphics (or new ones); the engine saves the project. */
+  storyboardRegenerate(projectPath: string, sceneId: string, useAi: boolean, provider: Provider): Promise<{ project?: Project; notes?: string[]; error?: string }>;
   graphicsRegenerate(projectPath: string, clipId: string, useAi: boolean, provider: Provider): Promise<{ project?: Project; error?: string }>;
   /** Graphics on the face, off the screen, on the captions, hard to read (before export). */
   graphicsCheck(projectPath: string): Promise<{ issues: GraphicsIssue[]; error?: string }>;
