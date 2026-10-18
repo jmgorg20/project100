@@ -139,6 +139,44 @@ def build_parser():
     sub.add_parser("formats", help="list the video formats (Reaction, Listicle, Clone, ...)")
     sub.add_parser("presets", help="list the presets (Viral TikTok, Cinematic Storytelling, ...)")
 
+    po = sub.add_parser("polish", help="polish one video for posting: AI edit with a preset and a "
+                                         "format, render, quality checks, JSON sidecar (no publishing)")
+    po.add_argument("video", metavar="input", help="the video (or, for faceless / voice-over, the voice-over)")
+    po.add_argument("--preset", help="a preset (`python editor.py presets`)")
+    po.add_argument("--format", help="a format (`python editor.py formats`) or auto (the AI picks)")
+    po.add_argument("--out", help="output folder (default from config.yaml, output: folder)")
+    po.add_argument("-i", "--instruction", default="", help="extra words for the AI edit")
+    po.add_argument("--input", action="append", default=[], metavar="ROLE=FILE",
+                    help="another file the format needs, e.g. broll=clip.mp4 (repeat for more)")
+    po.add_argument("--item", action="append", default=[], metavar="TEXT", help="Listicle/Ranking item")
+    po.add_argument("--offset", action="append", default=[], metavar="ROLE=SECONDS",
+                    help="start the second video this many seconds later")
+    po.add_argument("--provider", choices=["groq", "anthropic"], help="AI provider")
+    po.add_argument("--model", help="AI model")
+    po.add_argument("--no-qc", action="store_true", help="skip the quality checks")
+    po.add_argument("--no-retry", action="store_true", help="do not fix and render again when a check fails")
+    po.add_argument("--max-minutes", type=float, help="no retry after this many minutes (default 30)")
+
+    pw = sub.add_parser("polish-watch", help="polish every video dropped into an inbox folder "
+                                             "(outbox/ with a JSON sidecar, failed/ with logs)")
+    for flag, what in (("--inbox", "inbox"), ("--outbox", "outbox"), ("--failed", "failed"), ("--done", "done")):
+        pw.add_argument(flag, help=f"the {what} folder (default from config.yaml, polish:)")
+    pw.add_argument("--preset", help="preset for every video (a <name>.job.json can change it)")
+    pw.add_argument("--format", help="format for every video, or auto")
+    pw.add_argument("-i", "--instruction", default="", help="extra words for every AI edit")
+    pw.add_argument("--provider", choices=["groq", "anthropic"], help="AI provider")
+    pw.add_argument("--model", help="AI model")
+    pw.add_argument("--once", action="store_true", help="look once and stop (for schedulers)")
+    pw.add_argument("--settle", type=float, help="seconds a file must stop changing (default 10)")
+    pw.add_argument("--interval", type=float, help="seconds between looks (default 5)")
+    pw.add_argument("--no-qc", action="store_true", help="skip the quality checks")
+    pw.add_argument("--no-retry", action="store_true", help="no automatic fix and second render")
+    pw.add_argument("--max-minutes", type=float, help="no retry after this many minutes on one video")
+
+    qc_cmd = sub.add_parser("qc", help="objective quality checks on a rendered video and its project")
+    qc_cmd.add_argument("video", help="the MP4")
+    qc_cmd.add_argument("project", help="its .project.json")
+
     sb = sub.add_parser("storyboard", help="show a project as scenes (purpose, length, source, "
                                            "words, transition, music/sounds, colour)")
     sb.add_argument("project", help="a .project.json")
@@ -736,6 +774,58 @@ def cmd_storyboard_edit(args, reporter, cancel):
     reporter.result(project=str(path), scenes=scenes, changed=changed, notes=notes)
 
 
+def print_qc(report):
+    for c in report["checks"]:
+        mark = "OK  " if c["ok"] else ("FAIL" if c["severity"] == "error" else "WARN")
+        print(f"{mark} {c['label']:<30} {c['message']}")
+
+
+def cmd_polish(args, reporter, cancel):
+    from autoedit.polish import polish
+    cfg = load_config(args.config)
+    sidecar = polish(args.video, cfg, preset=args.preset, format=args.format, out_folder=args.out,
+                     instruction=args.instruction, provider=args.provider, model=args.model,
+                     inputs=format_inputs(args), reporter=reporter, cancel=cancel, check=not args.no_qc,
+                     retry=not args.no_retry, max_minutes=args.max_minutes)
+    if sidecar.get("qc"):
+        print_qc(sidecar["qc"])
+    print(f"{sidecar['status'].upper()}: {sidecar['output']}")
+    reporter.result(**sidecar)
+    if sidecar["status"] == "failed":
+        from autoedit.errors import EditorError
+        raise EditorError(sidecar.get("error") or "Quality checks failed.")
+
+
+def cmd_polish_watch(args, reporter, cancel):
+    from autoedit.config import project_path
+    from autoedit.polish_watch import Watcher
+    cfg = load_config(args.config)
+    p = cfg["polish"]
+    folder = lambda flag, key: Path(flag) if flag else project_path(p[key])  # noqa: E731
+    w = Watcher(cfg, folder(args.inbox, "inbox"), folder(args.outbox, "outbox"), folder(args.failed, "failed"),
+                folder(args.done, "done"), preset=args.preset, format=args.format, instruction=args.instruction,
+                provider=args.provider, model=args.model,
+                settle=args.settle if args.settle is not None else p["settle_seconds"], reporter=reporter,
+                cancel=cancel, check=not args.no_qc, retry=not args.no_retry,
+                max_minutes=args.max_minutes if args.max_minutes is not None else p["max_minutes"])
+    if args.once:
+        for note in w.recover():
+            print(note)
+        results = w.once()
+        reporter.result(items=results, inbox=str(w.inbox), outbox=str(w.outbox))
+        return
+    w.run(args.interval if args.interval is not None else p["interval_seconds"])
+
+
+def cmd_qc(args, reporter):
+    from autoedit import qc
+    from autoedit.project import load_project
+    path = Path(args.project).resolve()
+    report = qc.run(args.video, load_project(path), path.parent, load_config(args.config))
+    print_qc(report)
+    reporter.result(**report)
+
+
 def cmd_ai_edit(args, reporter, cancel):
     from autoedit.ai_edit import ai_edit_video
     from autoedit.errors import Cancelled, EditorError
@@ -1100,6 +1190,12 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_presets(args, reporter)
         elif args.command == "storyboard":
             cmd_storyboard(args, reporter)
+        elif args.command == "polish":
+            cmd_polish(args, reporter, cancel)
+        elif args.command == "polish-watch":
+            cmd_polish_watch(args, reporter, cancel)
+        elif args.command == "qc":
+            cmd_qc(args, reporter)
         elif args.command == "storyboard-edit":
             cmd_storyboard_edit(args, reporter, cancel)
         elif args.command == "graphics":

@@ -113,6 +113,11 @@ Be aware of what has and has not been checked:
   between the engine and the app, presets' settings, music and sounds, and the app's storyboard
   and preset menu (browser build, stand-in engine). **Not verified:** Windows/Electron, real
   speech, how the presets look on your videos. See [docs/storyboard-presets.md](docs/storyboard-presets.md).
+- **Polish command, watch folder and quality checks:** every check passes on a good video and
+  fails on one made with exactly that problem; the automatic fix; polish with the real AI edit
+  (stand-in AI); the watch folder (half-copied files, failures with logs, restarts, one job at a
+  time). **Not verified:** Windows file locking, Task Scheduler, real workers, long videos. See
+  [docs/polish.md](docs/polish.md).
 - **AI pictures, clips and voice-over with WanGP** (quality tiers, hardware detection,
   tests, Compare, Auto mode's tier choice and fallback), tested **only against a stand-in
   for WanGP and a fake `nvidia-smi`**: there is no GPU on the test machine. See
@@ -415,6 +420,14 @@ Documentary, Meme). After the edit, press **Storyboard · Mga eksena** to see it
 all and render, give one scene another look, replace its footage, change its words or lock it.
 *Tingnan ang mga eksena bago i-render.* Command line: `--preset viral_tiktok`,
 `python editor.py storyboard my.project.json`. Guide: [docs/storyboard-presets.md](docs/storyboard-presets.md).
+
+**For automation (Robot City) · Para sa automation.** The app only polishes; your workers post.
+`python editor.py polish talk.mp4 --preset viral_tiktok --format auto --out outbox --json` makes
+`talk.mp4` + `talk.json` (a sidecar with objective quality checks: size, length, valid MP4, sound
+sync, black frames, silence, clipping, safe area, face, missing files, caption timing).
+`python editor.py polish-watch --preset viral_tiktok` polishes everything dropped into
+`robot/inbox/` into `robot/outbox/` (`robot/failed/` with a log when something goes wrong); it is
+safe with half-copied files and restarts, and runs one video at a time. Guide: [docs/polish.md](docs/polish.md).
 
 ### From the command line
 
