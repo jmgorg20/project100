@@ -444,3 +444,31 @@ def test_each_client_has_its_own_presets(http, video, app):
     assert payload["job_id"] == job["id"] and payload["params"]["preset_body"]["grade"] == "warm"
     assert http.delete("/v1/presets/jgg_city_promo", headers=hb).status_code == 404
     assert http.delete("/v1/presets/jgg_city_promo", headers=ha).status_code == 204
+
+
+def test_the_web_app_route(settings, tmp_path):
+    import dataclasses
+    site = tmp_path / "site"
+    (site / "assets").mkdir(parents=True)
+    (site / "index.html").write_text("<div id=root></div>")
+    (site / "assets" / "app-123.js").write_text("console.log(1)")
+    (site / "sw.js").write_text("self")
+    (tmp_path / "secret.txt").write_text("not for you")
+    app = create_app(dataclasses.replace(settings, web_dir=str(site), captcha_provider="turnstile", captcha_secret="x"))
+    with TestClient(app, follow_redirects=False) as http:
+        assert http.get("/").headers["location"] == "/app/"
+        r = http.get("/app/")
+        assert r.status_code == 200 and "root" in r.text and r.headers["cache-control"] == "no-cache"
+        csp = r.headers["content-security-policy"]
+        assert "default-src 'self'" in csp and "https://challenges.cloudflare.com" in csp and "frame-ancestors 'none'" in csp
+        r = http.get("/app/assets/app-123.js")
+        assert r.headers["content-type"].startswith("text/javascript") and "immutable" in r.headers["cache-control"]
+        assert http.get("/app/sw.js").headers["service-worker-allowed"] == "/app/"
+        assert "root" in http.get("/app/some/page").text                         # app pages: the app
+        assert http.get("/app/assets/missing.js").status_code == 404
+        assert http.get("/app/missing.png").status_code == 404
+        for sneaky in ("/app/../secret.txt", "/app/%2e%2e/secret.txt", "/app/..%2fsecret.txt"):
+            r = http.get(sneaky)
+            assert "not for you" not in r.text, sneaky
+    with TestClient(create_app(dataclasses.replace(settings, web_dir=str(tmp_path / "nothing")))) as http:
+        assert http.get("/app/").json()["error"]["code"] == "not_built"

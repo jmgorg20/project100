@@ -98,6 +98,14 @@ def test_the_service_user_is_held_by_row_level_security(stack):
     assert requests.get(stack["url"] + "/readyz", timeout=10).json()["rls"] == "enforced"
 
 
+def test_the_web_app_is_served(stack):
+    r = requests.get(stack["url"] + "/app/", timeout=10)
+    assert r.status_code == 200 and '<div id="root">' in r.text
+    assert "default-src 'self'" in r.headers["content-security-policy"]
+    sw = requests.get(stack["url"] + "/app/sw.js", timeout=10)
+    assert sw.status_code == 200 and sw.headers["content-type"].startswith("text/javascript")
+
+
 def test_polish_in_containers(stack):
     from autoedit.cache import Cache
     from autoedit.words import load_transcript, save_transcript

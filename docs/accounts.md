@@ -159,4 +159,4 @@ Every `/v1` client endpoint in [docs/service.md](service.md) works with the sess
   for a key and a signed-in user; the production refusal; and the containers (Postgres with
   `postgres-init.sh`, the API as the ordinary user, `"rls": "enforced"`, a real polish job).
 - **Not tested:** real Google, real Turnstile / hCaptcha, a real mail server, real Supabase,
-  real phones and browsers other than the test client (the web app itself is the next step).
+  real phones and browsers (the web app and its browser tests: [web-app.md](web-app.md)).

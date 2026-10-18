@@ -428,6 +428,8 @@ and pull signed jobs; no open ports at home. `python editor.py serve`, `python e
 `python editor.py service-admin ...`; containers in `deploy/`. Guide: [docs/service.md](docs/service.md).
 Web-app accounts (invite-only sign-up, Google sign-in, two-step sign-in, organisations, roles,
 projects, database row-level security): [docs/accounts.md](docs/accounts.md).
+The web app for phones and PCs (installable PWA at `/app/`, English and Taglish):
+[docs/web-app.md](docs/web-app.md).
 
 **For automation (Robot City) · Para sa automation.** The app only polishes; your workers post.
 `python editor.py polish talk.mp4 --preset viral_tiktok --format auto --out outbox --json` makes
