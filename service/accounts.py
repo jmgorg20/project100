@@ -13,7 +13,7 @@ password and an unknown email.
 import re
 import secrets
 
-from . import clients, mailer, passwords, ratelimit, security, totp
+from . import billing, clients, mailer, passwords, ratelimit, security, totp
 from .db import dumps, loads, now
 
 
@@ -194,7 +194,7 @@ def _locale(value):
     return value if value in ("en", "tl") else None
 
 
-def signup(t, settings, email, password, name=None, invite_code=None, ip=None, locale=None):
+def signup(t, settings, email, password, name=None, invite_code=None, ip=None, locale=None, device_id=None):
     """Start a sign-up. Always answers the same (no hint whether the email has an account); the
     email says what to do next."""
     email, canon = normalize_email(email, settings)
@@ -222,7 +222,8 @@ def signup(t, settings, email, password, name=None, invite_code=None, ip=None, l
                            "mfa_secret": None, "mfa_enabled_at": None, "mfa_last_step": None, "locale": _locale(locale),
                            "invite_code_id": code_id, "signup_ip": ip, "created_at": now(), "updated_at": now(),
                            "last_login_at": None})
-    token = new_token(t, settings, "verify_email", uid, VERIFY_HOURS * 60)
+    token = new_token(t, settings, "verify_email", uid, VERIFY_HOURS * 60,
+                      {"device": device_id} if isinstance(device_id, str) and len(device_id) <= 100 else None)
     mailer.queue(t, email, "verify_email", link=_link(settings, "verify", token))
     clients.audit(t, f"user:{uid}", "user.signup", uid, {"invite_code": code_id}, ip)
     return {"status": "check_email"}
@@ -241,9 +242,9 @@ def resend_verification(t, settings, email):
     return {"status": "check_email"}
 
 
-def verify_email(t, settings, token):
+def verify_email(t, settings, token, device_id=None):
     """Confirm the email (the link in the sign-up email). Returns the user, who now has an
-    organisation of their own."""
+    organisation of their own (with the free trial, if this email and device never had one)."""
     row = use_token(t, settings, "verify_email", token)
     user = get_user(t, row["user_id"])
     if not user or user["status"] != "active":
@@ -251,15 +252,16 @@ def verify_email(t, settings, token):
     if not user["email_verified_at"]:
         t.update("users", user["id"], {"email_verified_at": now(), "updated_at": now()})
         clients.audit(t, f"user:{user['id']}", "user.verified", user["id"])
-    ensure_personal_org(t, settings, get_user(t, user["id"]))
+    ensure_personal_org(t, settings, get_user(t, user["id"]), [row["data"].get("device"), device_id])
     return get_user(t, user["id"])
 
 
-def ensure_personal_org(t, settings, user):
+def ensure_personal_org(t, settings, user, device_ids=()):
+    """The user's first workspace (it gets the free trial when billing is on)."""
     if t.value("SELECT COUNT(*) FROM memberships WHERE user_id = ?", (user["id"],), 0):
         return None
     label = user["name"] or user["email"].split("@")[0]
-    return create_org(t, settings, user, f"{label[:60]}'s workspace")
+    return create_org(t, settings, user, f"{label[:60]}'s workspace", personal=True, device_ids=device_ids)
 
 
 def update_profile(t, user, changes):
@@ -530,7 +532,7 @@ def mfa_disable(t, settings, user, session, password=None, code=None):
 
 # ---------------------------------------------------------------- Google (and other OpenID) sign-in
 
-def oauth_login(t, settings, provider, profile, invite_code=None, ip=None):
+def oauth_login(t, settings, provider, profile, invite_code=None, ip=None, device_id=None):
     """The user for a verified identity from `provider` (profile: sub, email, email_verified, name).
     Links to an account with the same email, or makes a new account (sign-up rules apply)."""
     subject, email = str(profile.get("sub") or ""), profile.get("email")
@@ -569,13 +571,13 @@ def oauth_login(t, settings, provider, profile, invite_code=None, ip=None):
         clients.audit(t, f"user:{uid}", "user.signup", uid, {"provider": provider, "invite_code": code_id}, ip)
     t.insert("user_identities", {"id": security.new_id("id_"), "user_id": user["id"], "provider": provider,
                                  "subject": subject, "email": email, "created_at": now()})
-    ensure_personal_org(t, settings, get_user(t, user["id"]))
+    ensure_personal_org(t, settings, get_user(t, user["id"]), [device_id])
     return get_user(t, user["id"]), created
 
 
 # ---------------------------------------------------------------- organisations
 
-def create_org(t, settings, user, name):
+def create_org(t, settings, user, name, personal=False, device_ids=()):
     owned = t.value("SELECT COUNT(*) FROM memberships WHERE user_id = ? AND role = 'owner'", (user["id"],), 0)
     if owned >= MAX_OWNED_ORGS:
         raise AccountError(f"You can own at most {MAX_OWNED_ORGS} organisations.", 403, "limit")
@@ -586,7 +588,8 @@ def create_org(t, settings, user, name):
     t.insert("memberships", {"id": security.new_id("mb_"), "client_id": org["id"], "user_id": user["id"],
                              "role": "owner", "created_at": now()})
     clients.audit(t, f"user:{user['id']}", "org.created", org["id"])
-    return org
+    billing.start(t, settings, org, user, personal=personal, device_ids=device_ids)
+    return clients.get_client(t, org["id"])
 
 
 def role_in(t, user_id, client_id):

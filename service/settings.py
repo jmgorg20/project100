@@ -97,6 +97,19 @@ class Settings:
     admin_require_mfa: bool = True           # staff need two-step sign-in for the admin pages
     require_rls: bool = False                # refuse to start unless Postgres row-level security applies
                                              # (always on in production)
+    # billing (the web app's organisations; API clients like JGG CITY are not billed here)
+    billing: str = "off"                     # off: no trial or plan limits | on
+    billing_provider: str = ""               # "" (plans given by the admin only) | paddle | fake (development)
+    billing_webhook_secret: str = ""         # the provider's webhook signing secret
+    paddle_api_key: str = ""
+    paddle_environment: str = "sandbox"      # sandbox | production
+    plans_file: str = ""                     # plans to load when there are none (default: service/default_plans.json)
+    trial_days: float = 7.0
+    trial_minutes: float = 30.0              # trial limits
+    trial_storage_mb: int = 2048
+    trial_concurrent_jobs: int = 1
+    trial_retention_days: float = 3.0
+    grace_days: float = 3.0                  # a failed payment keeps the plan this long
     # background loops in the API process (the janitor and the webhook sender)
     background: bool = True
     log_json: bool = True
@@ -164,6 +177,18 @@ class Settings:
                                 "SERVICE_SIGNUP_MODE=closed")
             if self.app_url and not self.app_url.startswith("https://"):
                 problems.append("SERVICE_APP_URL must start with https:// in production")
+        if self.billing not in ("off", "on"):
+            problems.append("SERVICE_BILLING must be off or on")
+        if self.billing_provider not in ("", "paddle", "fake"):
+            problems.append("SERVICE_BILLING_PROVIDER must be empty, paddle or fake")
+        if self.billing_provider == "fake" and self.production:
+            problems.append("SERVICE_BILLING_PROVIDER=fake is for development only")
+        if self.billing_provider == "paddle" and (not self.paddle_api_key or len(self.billing_webhook_secret) < 16):
+            problems.append("Paddle needs SERVICE_PADDLE_API_KEY and SERVICE_BILLING_WEBHOOK_SECRET")
+        if self.paddle_environment not in ("sandbox", "production"):
+            problems.append("SERVICE_PADDLE_ENVIRONMENT must be sandbox or production")
+        if self.trial_days < 0 or self.grace_days < 0:
+            problems.append("SERVICE_TRIAL_DAYS and SERVICE_GRACE_DAYS cannot be negative")
         if self.signup_mode not in ("invite", "open", "closed"):
             problems.append("SERVICE_SIGNUP_MODE must be invite, open or closed")
         if self.email_backend not in ("outbox", "smtp"):

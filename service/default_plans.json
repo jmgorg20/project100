@@ -1,0 +1,21 @@
+[
+  {
+    "id": "creator",
+    "name": "Creator",
+    "name_tl": "Creator",
+    "description": "300 minutes of video a month, 10 GB of storage, 2 videos at a time, files kept 7 days.",
+    "description_tl": "300 minuto ng video kada buwan, 10 GB na storage, 2 video sabay, 7 araw na naitatabi ang files.",
+    "price_cents": 900,
+    "currency": "USD",
+    "billing_interval": "month",
+    "monthly_minutes": 300,
+    "storage_mb": 10240,
+    "concurrent_jobs": 2,
+    "rate_per_minute": 120,
+    "gpu_allowed": false,
+    "retention_days": 7,
+    "provider_price_id": null,
+    "public": true,
+    "sort": 10
+  }
+]

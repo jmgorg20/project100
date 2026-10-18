@@ -17,6 +17,9 @@ service-admin commands:
     users [--q TEXT]                 web-app users        user-staff EMAIL [--off]   user-disable EMAIL [--enable]
     invite-create [--uses 1 --days 30 --note TEXT]   invite-codes   invite-revoke ID
     signups invite|open|closed|status    the switch for new sign-ups (closed = paused)
+    plans                            the plans (prices and limits)
+    plan-set ID key=value ...        create or change a plan, e.g. price_cents=900 provider_price_id=pri_...
+    grant ORG_ID PLAN_ID [--days N]  give a workspace a plan by hand (PLAN_ID none: take it away)
     janitor                          delete expired files, return stuck jobs (for a scheduler)
     status                           queue depth, workers, stable version
 """
@@ -166,6 +169,14 @@ def admin(argv):
     ir.add_argument("code_id")
     su = sub.add_parser("signups")
     su.add_argument("mode", choices=["invite", "open", "closed", "status"])
+    sub.add_parser("plans")
+    ps = sub.add_parser("plan-set")
+    ps.add_argument("plan_id")
+    ps.add_argument("changes", nargs="*", help="key=value")
+    gr = sub.add_parser("grant")
+    gr.add_argument("client_id")
+    gr.add_argument("plan_id")
+    gr.add_argument("--days", type=float)
     sub.add_parser("janitor")
     sub.add_parser("status")
     a = p.parse_args(argv)
@@ -186,7 +197,7 @@ def admin(argv):
         print(f"Saved {path} (keep it secret: SERVICE_SIGNING_KEY_FILE) and {path}.pub (give it to workers).")
         return 0
 
-    from . import accounts, clients, janitor, jobqueue
+    from . import accounts, billing, clients, janitor, jobqueue
     settings = _settings()
     db = _db(settings)
     actor = "admin-cli"
@@ -321,6 +332,23 @@ def admin(argv):
                     accounts.set_signup_mode(t, a.mode)
                     clients.audit(t, actor, "signups.mode", None, {"mode": a.mode})
                 print(f"New sign-ups: {accounts.signup_mode(t, settings)}")
+        elif a.cmd == "plans":
+            with db.tx() as t:
+                billing.ensure_plans(t, settings)
+                _print(billing.list_plans(t, public_only=False))
+        elif a.cmd == "plan-set":
+            changes = {}
+            for pair in a.changes:
+                k, _, v = pair.partition("=")
+                changes[k] = None if v in ("", "null", "none") else v
+            with db.tx() as t:
+                plan = billing.set_plan(t, settings, a.plan_id, changes)
+                clients.audit(t, actor, "plan.saved", a.plan_id, changes)
+            _print(plan)
+        elif a.cmd == "grant":
+            with db.tx() as t:
+                sub = billing.grant(t, settings, a.client_id, None if a.plan_id == "none" else a.plan_id, a.days, actor)
+            _print(sub)
         elif a.cmd == "janitor":
             from .storage import LocalStorage
             _print(janitor.run_once(db, LocalStorage(settings.data_path / "files"), settings))
@@ -328,7 +356,7 @@ def admin(argv):
             with db.tx() as t:
                 _print({"queues": jobqueue.queue_stats(t), "stable_version": jobqueue.get_setting(t, "stable_version"),
                         "workers": t.all("SELECT name, status, channel, engine_version, last_seen_at FROM workers")})
-    except (clients.ClientError, jobqueue.QueueError, accounts.AccountError) as exc:
+    except (clients.ClientError, jobqueue.QueueError, accounts.AccountError, billing.BillingError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     finally:
