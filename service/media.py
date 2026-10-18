@@ -17,6 +17,14 @@ IMAGE = {".jpg", ".jpeg", ".png", ".webp"}
 AUDIO = {".wav", ".mp3", ".m4a", ".aac"}
 PROJECT = {".json"}
 MAX_PROJECT_BYTES = 2 * 1024 * 1024
+# The demuxer is chosen from the extension, never guessed from the content: a text file named
+# .mp4 cannot be read as a playlist (HLS / concat) that would make FFmpeg open other files or URLs.
+DEMUXER = {".mp4": "mov", ".mov": "mov", ".m4v": "mov", ".3gp": "mov", ".m4a": "mov", ".mkv": "matroska",
+           ".webm": "matroska", ".jpg": "image2", ".jpeg": "image2", ".png": "image2", ".webp": "image2",
+           ".wav": "wav", ".mp3": "mp3", ".aac": "aac"}
+VIDEO_CODECS = {"h264", "hevc", "vp8", "vp9", "av1", "mpeg4", "prores", "mjpeg"}
+AUDIO_CODECS = {"aac", "mp3", "opus", "vorbis", "pcm_s16le", "pcm_s24le", "pcm_s32le", "pcm_f32le", "flac", "alac", "ac3"}
+IMAGE_CODECS = {"mjpeg", "png", "webp"}
 
 
 class MediaError(Exception):
@@ -38,9 +46,12 @@ def safe_filename(name):
     return cleaned[:120] or "file"
 
 
-def ffprobe(path, timeout=60):
+def ffprobe(path, timeout=60, demuxer=None):
     from autoedit.ffmpeg_tools import find_tool
-    cmd = [find_tool("ffprobe"), "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)]
+    cmd = [find_tool("ffprobe"), "-v", "error", "-protocol_whitelist", "file"]
+    if demuxer:
+        cmd += ["-f", demuxer] + (["-pattern_type", "none"] if demuxer == "image2" else [])
+    cmd += ["-print_format", "json", "-show_format", "-show_streams", str(path)]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -85,7 +96,7 @@ def check(path, filename, max_duration):
         if problems:
             raise MediaError("The project file has problems: " + "; ".join(problems[:3]))
         return {"kind": "project", "duration": None}
-    info = ffprobe(path)
+    info = ffprobe(path, demuxer=DEMUXER.get(Path(filename).suffix.lower()))
     streams = info.get("streams", [])
     video = [s for s in streams if s.get("codec_type") == "video"]
     audio = [s for s in streams if s.get("codec_type") == "audio"]
@@ -95,6 +106,10 @@ def check(path, filename, max_duration):
         moving = [s for s in video if (s.get("disposition") or {}).get("attached_pic") != 1]
         if not moving:
             raise MediaError("This file has no video picture.")
+        if moving[0].get("codec_name") not in VIDEO_CODECS:
+            raise MediaError(f"This video's format ({moving[0].get('codec_name')}) is not supported; use H.264 MP4.")
+        if audio and audio[0].get("codec_name") not in AUDIO_CODECS:
+            raise MediaError(f"This video's sound format ({audio[0].get('codec_name')}) is not supported.")
         if not duration:
             raise MediaError("The video's length could not be read.")
         if duration > max_duration:
@@ -103,15 +118,15 @@ def check(path, filename, max_duration):
         return {"kind": "video", "duration": duration, "width": v.get("width"), "height": v.get("height"),
                 "has_audio": bool(audio), "format": fmt.get("format_name")}
     if kind == "image":
-        if not video:
+        if not video or video[0].get("codec_name") not in IMAGE_CODECS:
             raise MediaError("This is not a picture.")
         v = video[0]
         if (v.get("width") or 0) * (v.get("height") or 0) > 80_000_000:
             raise MediaError("The picture is too big (more than 80 megapixels).")
         return {"kind": "image", "duration": None, "width": v.get("width"), "height": v.get("height"),
                 "format": fmt.get("format_name")}
-    if not audio:
-        raise MediaError("This file has no sound.")
+    if not audio or audio[0].get("codec_name") not in AUDIO_CODECS:
+        raise MediaError("This file has no sound in a supported format.")
     if duration and duration > max_duration:
         raise MediaError(f"The sound is too long; the limit is {max_duration / 60:.0f} min.")
     return {"kind": "audio", "duration": duration, "format": fmt.get("format_name")}

@@ -40,7 +40,10 @@ def require_client(request: Request):
         fail_key = _guard_failures(request, t)
         client = clients.authenticate(t, state.settings, token) if token else None
         if client is not None:
-            allowed, retry = ratelimit.hit(t, f"client:{client['id']}", int(client["rate_per_minute"]))
+            if request.url.path.endswith("/chunk"):     # file pieces: their own, higher limit
+                allowed, retry = ratelimit.hit(t, f"chunks:{client['id']}", max(600, 5 * int(client["rate_per_minute"])))
+            else:
+                allowed, retry = ratelimit.hit(t, f"client:{client['id']}", int(client["rate_per_minute"]))
     if client is None:
         _fail(request, fail_key)
         raise ApiError(401, "unauthorized", "A valid API key is needed (Authorization: Bearer ak_...).")

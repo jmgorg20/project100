@@ -37,6 +37,20 @@ ENV_PASS = ("PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP", "HOME"
 ENV_PREFIXES = ("AUTOEDIT_", "GROQ_", "ANTHROPIC_", "PEXELS_", "PIXABAY_", "WANGP_", "COMFYUI_")
 
 
+RESULT_KEYS = ("status", "qc", "retries", "opinions", "preset", "format", "instruction", "cost", "seconds",
+               "error", "started", "finished", "version", "tool")
+
+
+def scrub(value, folders):
+    """`value` with every mention of these folders replaced by "<worker>" (JSON round trip)."""
+    text = json.dumps(value, ensure_ascii=False)
+    for folder in folders:
+        for form in {str(folder), str(Path(folder).resolve()), str(folder).replace("\\", "/")}:
+            if form and len(form) > 3:
+                text = text.replace(json.dumps(form)[1:-1], "<worker>")
+    return json.loads(text)
+
+
 class WorkerError(Exception):
     def __init__(self, message, retryable=True):
         super().__init__(message)
@@ -161,13 +175,13 @@ class Agent:
             result, files = self.run_engine(payload, folder, local, state)
             if state["cancel"]:
                 raise WorkerError("Cancelled by the client.", retryable=False)
-            # never send local paths: the sidecar is rewritten without them
-            result = {k: v for k, v in result.items() if k not in ("input", "output", "project", "log")}
+            # never send local paths: only known sidecar fields, and any path of this machine is hidden
+            result = scrub({k: v for k, v in result.items() if k in RESULT_KEYS}, [folder, self.work_dir, PROJECT_DIR])
             if files.get("sidecar"):
                 public = folder / "sidecar.public.json"
                 public.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
                 files["sidecar"] = str(public)
-            uploaded = self.upload_outputs(job_id, files, local, payload)
+            uploaded = self.upload_outputs(job_id, files, local, payload, [folder, self.work_dir, PROJECT_DIR])
             cpu1 = child_cpu_seconds()
             wall = time.time() - started
             checks = {c.get("id"): c for c in (result.get("qc") or {}).get("checks", []) if isinstance(c, dict)}
@@ -240,7 +254,7 @@ class Agent:
         if sha and sha256_of(dest) != sha:
             raise WorkerError("An input file arrived damaged (checksum); will try again.")
 
-    def upload_outputs(self, job_id, files, local, payload):
+    def upload_outputs(self, job_id, files, local, payload, folders=()):
         """Upload the result files. The project's media paths become references the service knows
         (upload:<id> for the client's files, output:<id> for files made here), never local paths."""
         sent = {}
@@ -263,8 +277,13 @@ class Agent:
                 else:
                     m["path"] = f"missing:{Path(p).name}"
             project = Path(project).with_name("project.public.json")
-            project.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            project.write_text(json.dumps(scrub(data, folders), ensure_ascii=False), encoding="utf-8")
             files = {**files, "project": project}
+        if files.get("plan") and Path(files["plan"]).exists():
+            plan = Path(files["plan"]).with_name("plan.public.json")
+            plan.write_text(json.dumps(scrub(json.loads(Path(files["plan"]).read_text(encoding="utf-8")), folders),
+                                       ensure_ascii=False), encoding="utf-8")
+            files = {**files, "plan": plan}
         for name in ("video", "project", "plan", "sidecar"):
             if files.get(name) is not None and Path(files[name]).exists():
                 sent[name] = self._upload(job_id, name, Path(files[name]))["id"]
