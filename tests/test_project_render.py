@@ -334,8 +334,8 @@ def test_cli_cancel_from_the_app(media, how):
     if how == "cancel":
         proc.stdin.write("cancel\n")
         proc.stdin.flush()
-    else:
-        proc.stdin.close()
+    # "close": communicate() closes stdin (the app went away); closing it here first makes
+    # communicate() fail on Python 3.12 when it flushes the closed pipe
     out, _err = proc.communicate(timeout=60)
     assert proc.returncode == 130
     assert json.loads(out.splitlines()[-1]) == {"type": "cancelled"}
