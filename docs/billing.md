@@ -68,8 +68,8 @@ Minutes are counted per calendar month (UTC), the same as for API clients.
 ## Paddle (the payment provider) · Paddle
 
 Why Paddle: it is a "merchant of record". It takes the card, charges sales tax / VAT where needed,
-sends receipts, handles refunds and chargebacks, and pays you out (sellers in the Philippines are
-supported). No card data ever reaches your server.
+sends receipts, handles refunds and chargebacks, and pays you out. Check Paddle's list of supported
+seller countries and its approval rules before you start. No card data ever reaches your server.
 
 *Si Paddle ang tumatanggap ng card, nagbabayad ng tax at nagpapadala ng resibo. Walang card data sa
 server mo.*
