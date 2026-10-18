@@ -92,6 +92,15 @@ DEFAULTS = {
     },
     "music": {"folder": "assets/music"},
     "presets_folder": "presets",
+    "polish": {
+        "inbox": "robot/inbox",
+        "outbox": "robot/outbox",
+        "failed": "robot/failed",
+        "done": "robot/done",
+        "settle_seconds": 10,
+        "interval_seconds": 5,
+        "max_minutes": 30,
+    },
     "sfx": {
         "enabled": False,
         "volume": 0.4,

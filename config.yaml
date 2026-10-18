@@ -98,6 +98,15 @@ music:                        # background music a preset may add (docs/presets.
 
 presets_folder: presets       # your own presets (plain JSON); same id = replaces a built-in one
 
+polish:                       # `polish` and `polish-watch` (docs/polish.md): for the posting workers
+  inbox: robot/inbox          # drop videos here (and optionally <name>.job.json)
+  outbox: robot/outbox        # <name>.mp4 + <name>.project.json + <name>.json (written last)
+  failed: robot/failed        # the original + <name>.json (why) + <name>.log
+  done: robot/done            # originals of polished videos
+  settle_seconds: 10          # a file must stop changing this long before it is taken
+  interval_seconds: 5         # how often the inbox is checked
+  max_minutes: 30             # no automatic retry after this many minutes on one video
+
 broll:                        # B-roll the AI edit adds: your library, then free stock, then AI
   library_folder: ""          # a folder with your own clips/pictures; names = what they show
   use_stock: true             # Pexels/Pixabay, only if PEXELS_API_KEY / PIXABAY_API_KEY is set
