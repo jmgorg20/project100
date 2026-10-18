@@ -52,6 +52,13 @@ def main(argv):
                           "height": 640, "has_audio": True}],
                "tracks": [{"id": "main", "kind": "video", "clips": [{"id": "v1", "type": "video", "media": "m1",
                                                                      "start": 0, "duration": 2.0, "in": 0, "out": 2.0}]}]}
+    if os.environ.get("AUTOEDIT_FAKE_ENGINE_CAPTIONS") == "1":        # the web app's tests edit captions
+        lines = [(0.1, 0.9, "Alam niyo ba ito?"), (1.0, 0.9, "Simple lang.")]
+        project["tracks"].append({"id": "captions", "kind": "caption", "clips": [
+            {"id": f"t{i + 1}", "type": "caption", "start": a, "duration": d, "style": "bold_caps",
+             "words": [{"text": w, "start": round(k * d / len(text.split()), 4),
+                        "end": round((k + 0.9) * d / len(text.split()), 4)} for k, w in enumerate(text.split())]}
+            for i, (a, d, text) in enumerate(lines)]})
     pfile = out_dir / f"{source.stem}.project.json"
     pfile.write_text(json.dumps(project))
     (out_dir / f"{source.stem}.plan.json").write_text(json.dumps({"plan": {}, "photos": {"a.png": str(source)}}))

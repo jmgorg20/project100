@@ -267,6 +267,8 @@ def test_full_flow_with_signed_links(http, video, settings, app):
     assert r.status_code == 200 and r.content == content and "attachment" in r.headers["content-disposition"]
     after = http.get(f"/v1/jobs/{jid}", headers=h).json()["outputs"][0]
     assert after["expires_in_seconds"] <= settings.delete_after_download_hours * 3600 + 5   # download clock
+    egress_before = http.get("/v1/usage", headers=h).json()["usage"]["egress_bytes"]
+    assert egress_before == len(content)
     bad = out["url"].replace(settings.public_url, "").replace("?t=", "?t=1")
     assert http.get(bad).status_code == 403
     expired = security.sign_link(settings.secret_key, "out", out["id"], now() - 1)
@@ -277,6 +279,23 @@ def test_full_flow_with_signed_links(http, video, settings, app):
     assert http.delete(f"/v1/jobs/{jid}", headers=h).status_code == 204
     assert http.get(out["url"].replace(settings.public_url, "")).status_code == 410
     assert http.get(f"/v1/jobs/{jid}", headers=h).status_code == 404
+
+
+def test_preview_links_play_inline_and_count_only_the_bytes_sent(http, video, settings, app):
+    _, h = new_client(http)
+    up = ready_upload(http, h, video)
+    wh, _ = new_worker(http)
+    jid, content = run_fake_worker(http, wh, settings, app, polish_job(http, h, up["id"]).json()["id"])
+    [out] = http.get(f"/v1/jobs/{jid}", headers=h).json()["outputs"]
+    preview = out["preview_url"].replace(settings.public_url, "")
+    r = http.get(preview, headers={"Range": "bytes=0-99"})
+    assert r.status_code == 206 and r.content == content[:100] and r.headers["content-disposition"].startswith("inline")
+    r = http.get(preview, headers={"Range": f"bytes=-{len(content) // 2}"})
+    assert r.status_code == 206
+    usage = http.get("/v1/usage", headers=h).json()["usage"]
+    assert usage["egress_bytes"] == 100 + len(content) // 2                       # not the whole file each time
+    after = http.get(f"/v1/jobs/{jid}", headers=h).json()["outputs"][0]
+    assert after["expires_in_seconds"] > 86400                                    # watching is not downloading
 
 
 def test_worker_can_only_touch_its_running_job(http, video, settings, app):

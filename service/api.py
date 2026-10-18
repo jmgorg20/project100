@@ -215,10 +215,12 @@ def create_app(settings=None, storage=None):
     from .routes_auth import router as auth_router
     from .routes_client import router as client_router
     from .routes_files import router as files_router
+    from .routes_web import router as web_router
     from .routes_worker import router as worker_router
     app.include_router(auth_router)
     app.include_router(client_router)
     app.include_router(worker_router)
     app.include_router(admin_router)
     app.include_router(files_router)
+    app.include_router(web_router)
     return app

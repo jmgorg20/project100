@@ -143,11 +143,17 @@ def test_a_render_job_uses_earlier_results(server, video, tmp_path, monkeypatch)
     project = json.loads(requests.get(next(o for o in view["outputs"] if o["name"] == "project")["url"], timeout=30).content)
     video_out = next(o for o in view["outputs"] if o["name"] == "video")
     project["media"][0]["path"] = f"output:{video_out['id']}"
-    r = api(server, "POST", "/v1/jobs", key, json={"kind": "render", "project": project})
+    r = api(server, "POST", "/v1/jobs", key, json={"kind": "render", "project": project, "export": {"height": 4000}})
+    assert r.status_code == 400 and "export.height" in r.text
+    export = {"height": 1280, "fps": 25, "quality": "small"}                 # the web app's export choices
+    r = api(server, "POST", "/v1/jobs", key, json={"kind": "render", "project": project, "export": export})
     assert r.status_code == 201, r.text
+    monkeypatch.setenv("AUTOEDIT_FAKE_ENGINE_LOG", str(tmp_path / "argv.json"))
     assert a.run_once() == r.json()["id"]
     done = job_view(server, key, r.json()["id"])
     assert done["status"] == "succeeded" and [o["name"] for o in done["outputs"]] == ["video"]
+    argv = json.loads((tmp_path / "argv.json").read_text())
+    assert argv[-4:] == ["--height=1280", "--fps=25", "--crf=26", "--speed=fast"]
 
 
 def test_cancel_stops_the_engine(server, video, tmp_path, monkeypatch):

@@ -169,6 +169,34 @@ def media_refs(project):
     return [m.get("path", "") for m in project.get("media", [])]
 
 
+# Export choices for a render (the same as the desktop app's export dialog)
+EXPORT_HEIGHTS = (1920, 1280, 960)            # 1080x1920, 720x1280, 540x960
+EXPORT_FPS = (24, 25, 30, 50, 60)
+EXPORT_QUALITY = {"high": (18, "medium"), "standard": (21, "medium"), "small": (26, "fast"), "draft": (28, "veryfast")}
+
+
+def validate_export(value):
+    """{height, fps, quality} for a render job, each optional."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict) or set(value) - {"height", "fps", "quality"}:
+        raise JobError("export may have height, fps and quality.")
+    out = {}
+    if value.get("height") is not None:
+        if value["height"] not in EXPORT_HEIGHTS:
+            raise JobError(f"export.height must be one of {', '.join(map(str, EXPORT_HEIGHTS))}.")
+        out["height"] = int(value["height"])
+    if value.get("fps") is not None:
+        if value["fps"] not in EXPORT_FPS:
+            raise JobError(f"export.fps must be one of {', '.join(map(str, EXPORT_FPS))}.")
+        out["fps"] = int(value["fps"])
+    if value.get("quality") is not None:
+        if value["quality"] not in EXPORT_QUALITY:
+            raise JobError(f"export.quality must be one of {', '.join(EXPORT_QUALITY)}.")
+        out["quality"] = value["quality"]
+    return out
+
+
 def validate_render(t, client, body):
     from autoedit.project import validate_project
     project = body.get("project")
@@ -196,7 +224,11 @@ def validate_render(t, client, body):
     from autoedit.project import timeline_duration
     minutes = max(minutes, timeline_duration(project) / 60.0)
     clients.check_job_quota(t, client, minutes, False)
-    return {"project": project}, {"uploads": [u["id"] for u in ups], "outputs": outputs}, minutes, "cpu"
+    params = {"project": project}
+    export = validate_export(body.get("export"))
+    if export:
+        params["export"] = export
+    return params, {"uploads": [u["id"] for u in ups], "outputs": outputs}, minutes, "cpu"
 
 
 def create(t, settings, client, body, idempotency_key=None):
@@ -249,7 +281,9 @@ def view(t, settings, job, base_url):
     for o in outs:
         token = security.sign_link(settings.secret_key, "out", o["id"], exp)
         links.append({"id": o["id"], "name": o["name"], "size": o["size"], "sha256": o["sha256"],
-                      "content_type": o["content_type"], "url": f"{base_url}/files/out/{o['id']}?t={token}",
+                      "content_type": o["content_type"],
+                      "url": f"{base_url}/files/out/{o['id']}?t={token}&download=1",       # save (starts the clock)
+                      "preview_url": f"{base_url}/files/out/{o['id']}?t={token}",          # play in the page
                       "url_expires_at": int(exp), "expires_at": o["expires_at"],
                       "expires_in_seconds": max(0, int(o["expires_at"] - now()))})
     public_result = None

@@ -351,7 +351,17 @@ class Agent:
         out.mkdir()
         pfile = folder / "project.json"
         pfile.write_text(json.dumps(project, ensure_ascii=False), encoding="utf-8")
-        return base + ["render", str(pfile), "--output", str(out / "video.mp4")], out
+        cmd = base + ["render", str(pfile), "--output", str(out / "video.mp4")]
+        export = p.get("export") or {}
+        quality = {"high": (18, "medium"), "standard": (21, "medium"), "small": (26, "fast"),
+                   "draft": (28, "veryfast")}.get(export.get("quality"))
+        if export.get("height") in (1920, 1280, 960):
+            cmd.append(f"--height={int(export['height'])}")
+        if export.get("fps") in (24, 25, 30, 50, 60):
+            cmd.append(f"--fps={int(export['fps'])}")
+        if quality:
+            cmd += [f"--crf={quality[0]}", f"--speed={quality[1]}"]
+        return cmd, out
 
     def job_config(self, folder, params):
         """The engine config for this job: the worker's own, plus the client's preset if the job

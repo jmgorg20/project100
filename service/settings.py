@@ -72,6 +72,7 @@ class Settings:
     cost_gb_egress: float = 0.09
     # accounts (the SaaS web app)
     app_url: str = ""                        # the web app; empty: PUBLIC_URL + /app/
+    web_dir: str = ""                        # the built web app; empty: web/dist next to the code
     signup_mode: str = "invite"              # invite (an invite code is needed) | open | closed; the
                                              # admin switch (service-admin signups ...) overrides it
     email_backend: str = "outbox"            # outbox (files in DATA_DIR/outbox: development) | smtp
