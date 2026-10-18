@@ -203,9 +203,16 @@ def create(t, settings, client, body, idempotency_key=None):
     kind = body.get("kind", "polish")
     if kind not in KINDS:
         raise JobError(f"kind must be one of {', '.join(KINDS)}")
+    project_id = body.get("project_id")
+    if project_id is not None and (not isinstance(project_id, str) or not t.one(
+            "SELECT id FROM projects WHERE id = ? AND client_id = ?", (project_id, client["id"]))):
+        raise JobError("No such project.")
     params, inputs, minutes, queue = (validate_polish if kind == "polish" else validate_render)(t, client, body)
     job, created = jobqueue.enqueue(t, settings, client, kind, params, inputs, queue=queue, input_minutes=minutes,
                                     idempotency_key=(idempotency_key or None) and str(idempotency_key)[:100])
+    if created and (project_id or client.get("user_id")):
+        t.run("UPDATE jobs SET project_id = ?, user_id = ? WHERE id = ?", (project_id, client.get("user_id"), job["id"]))
+        job = t.one("SELECT * FROM jobs WHERE id = ?", (job["id"],))
     return job, created
 
 
@@ -253,5 +260,6 @@ def view(t, settings, job, base_url):
             "channel": job["channel"], "progress": job["progress"], "stage": job["stage"], "error": job["error"],
             "attempts": job["attempts"], "created_at": job["created_at"], "started_at": job["started_at"],
             "finished_at": job["finished_at"], "input_minutes": job["input_minutes"],
+            "project_id": job.get("project_id"),
             "params": loads(job["params"], {}), "inputs": loads(job["inputs"], {}),
             "result": public_result, "outputs": links}

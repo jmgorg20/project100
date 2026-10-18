@@ -321,13 +321,6 @@ def cancel_job(request: Request, job_id: str, client=Depends(require_client)):
         return jobs.view(t, s.settings, job, base_url(request))
 
 
-def _delete_job_files(t, storage, job):
-    for o in t.all("SELECT * FROM outputs WHERE job_id = ? AND deleted_at IS NULL", (job["id"],)):
-        storage.delete(o["path"])
-    t.run("UPDATE outputs SET deleted_at = ?, path = NULL WHERE job_id = ? AND deleted_at IS NULL", (now(), job["id"]))
-    storage.delete_job_folder(job["id"])
-
-
 @router.delete("/jobs/{job_id}", status_code=204)
 def delete_job(request: Request, job_id: str, client=Depends(require_client)):
     """Delete a job's results now (a running job is cancelled first)."""
@@ -336,7 +329,7 @@ def delete_job(request: Request, job_id: str, client=Depends(require_client)):
         job = _get_job(t, client, job_id)
         if job["status"] not in jobqueue.FINAL:
             jobqueue.cancel(t, job)
-        _delete_job_files(t, s.storage, job)
+        clients.delete_job_files(t, s.storage, job)
         t.run("UPDATE jobs SET deleted_at = ?, params = '{}', result = NULL WHERE id = ?", (now(), job_id))
         clients.audit(t, f"client:{client['id']}", "job.deleted", job_id)
     return Response(status_code=204)
@@ -347,20 +340,7 @@ def delete_my_data(request: Request, client=Depends(require_client)):
     """Delete every upload and result of this client now (jobs keep only their ids and times)."""
     s = request.app.state
     with s.db.tx() as t:
-        n_up = 0
-        for u in t.all("SELECT id FROM uploads WHERE client_id = ? AND status <> 'deleted'", (client["id"],)):
-            s.storage.delete(s.storage.upload_path(u["id"]))
-            n_up += 1
-        t.run("UPDATE uploads SET status = 'deleted', deleted_at = ?, path = NULL, filename = 'deleted', media = NULL "
-              "WHERE client_id = ? AND status <> 'deleted'", (now(), client["id"]))
-        n_jobs = 0
-        for j in t.all("SELECT * FROM jobs WHERE client_id = ? AND deleted_at IS NULL", (client["id"],)):
-            if j["status"] not in jobqueue.FINAL:
-                jobqueue.cancel(t, j)
-            _delete_job_files(t, s.storage, j)
-            n_jobs += 1
-        t.run("UPDATE jobs SET deleted_at = ?, params = '{}', result = NULL WHERE client_id = ? AND deleted_at IS NULL",
-              (now(), client["id"]))
+        n_up, n_jobs = clients.delete_client_files(t, s.storage, client["id"])
         clients.audit(t, f"client:{client['id']}", "data.deleted", client["id"], {"uploads": n_up, "jobs": n_jobs})
     return {"deleted_uploads": n_up, "deleted_jobs": n_jobs}
 

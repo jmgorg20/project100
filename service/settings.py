@@ -70,6 +70,32 @@ class Settings:
     cost_gpu_second: float = 0.0004
     cost_gb_month: float = 0.021
     cost_gb_egress: float = 0.09
+    # accounts (the SaaS web app)
+    app_url: str = ""                        # the web app; empty: PUBLIC_URL + /app/
+    signup_mode: str = "invite"              # invite (an invite code is needed) | open | closed; the
+                                             # admin switch (service-admin signups ...) overrides it
+    email_backend: str = "outbox"            # outbox (files in DATA_DIR/outbox: development) | smtp
+    email_from: str = "AutoEdit <no-reply@example.com>"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_tls: str = "starttls"               # starttls | ssl
+    session_days: float = 30.0               # a sign-in lasts at most this long
+    session_idle_days: float = 14.0          # ... and ends after this long unused
+    password_cost: int = 15                  # scrypt cost (log2 n); 15 = 32 MB per check
+    captcha_provider: str = ""               # "" | turnstile | hcaptcha (sign-up, password reset, login after failures)
+    captcha_secret: str = ""
+    captcha_site_key: str = ""
+    oauth_google_client_id: str = ""         # Google sign-in (both empty: off)
+    oauth_google_client_secret: str = ""
+    blocked_email_domains: list = field(default_factory=list)   # on top of the built-in disposable list
+    signups_per_ip_hour: int = 5
+    logins_per_ip_minute: int = 10
+    login_failures_per_account: int = 10     # then that account's sign-in pauses for 15 minutes
+    admin_require_mfa: bool = True           # staff need two-step sign-in for the admin pages
+    require_rls: bool = False                # refuse to start unless Postgres row-level security applies
+                                             # (always on in production)
     # background loops in the API process (the janitor and the webhook sender)
     background: bool = True
     log_json: bool = True
@@ -77,6 +103,10 @@ class Settings:
     @property
     def production(self):
         return self.env in ("production", "staging")
+
+    @property
+    def app_link(self):
+        return (self.app_url or self.public_url.rstrip("/") + "/app/").rstrip("/") + "/"
 
     @property
     def data_path(self):
@@ -128,5 +158,26 @@ class Settings:
                 problems.append("SERVICE_ALLOW_PRIVATE_WEBHOOKS must be off in production")
             if "*" in self.cors_origins:
                 problems.append("SERVICE_CORS_ORIGINS must list the sites, not *")
+            if self.signup_mode != "closed" and self.email_backend != "smtp":
+                problems.append("SERVICE_EMAIL_BACKEND must be smtp in production (sign-up emails), or "
+                                "SERVICE_SIGNUP_MODE=closed")
+            if self.app_url and not self.app_url.startswith("https://"):
+                problems.append("SERVICE_APP_URL must start with https:// in production")
+        if self.signup_mode not in ("invite", "open", "closed"):
+            problems.append("SERVICE_SIGNUP_MODE must be invite, open or closed")
+        if self.email_backend not in ("outbox", "smtp"):
+            problems.append("SERVICE_EMAIL_BACKEND must be outbox or smtp")
+        if self.email_backend == "smtp" and not self.smtp_host:
+            problems.append("SERVICE_SMTP_HOST is needed for SERVICE_EMAIL_BACKEND=smtp")
+        if self.smtp_tls not in ("starttls", "ssl"):
+            problems.append("SERVICE_SMTP_TLS must be starttls or ssl")
+        if self.captcha_provider not in ("", "turnstile", "hcaptcha"):
+            problems.append("SERVICE_CAPTCHA_PROVIDER must be empty, turnstile or hcaptcha")
+        if self.captcha_provider and not self.captcha_secret:
+            problems.append("SERVICE_CAPTCHA_SECRET is needed with SERVICE_CAPTCHA_PROVIDER")
+        if bool(self.oauth_google_client_id) != bool(self.oauth_google_client_secret):
+            problems.append("Google sign-in needs both SERVICE_OAUTH_GOOGLE_CLIENT_ID and _SECRET")
+        if not 10 <= self.password_cost <= 20:
+            problems.append("SERVICE_PASSWORD_COST must be between 10 and 20")
         if problems:
             raise SettingsError("Service settings problems:\n  - " + "\n  - ".join(problems))

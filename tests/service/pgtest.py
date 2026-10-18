@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 
 def _bin(name):
@@ -76,13 +77,26 @@ class TempPostgres:
         self.reason = "the test Postgres did not answer"
         return False
 
+    APP_ROLE = "autoedit_test_app"
+
     def fresh_database(self):
-        """A new empty database; returns its URL."""
+        """A new empty database owned by an ordinary user (not a superuser, no BYPASSRLS), as in
+        production, so the row-level security policies apply in the tests. Returns its URL (as that
+        user). Falls back to the given user if it cannot make roles."""
         import psycopg
         name = f"t{time.time_ns()}"
+        parts = urlsplit(self.url)
         with psycopg.connect(self.url, autocommit=True) as conn:
-            conn.execute(f'CREATE DATABASE "{name}"')
-        return self.url.rsplit("/", 1)[0] + "/" + name
+            try:
+                if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (self.APP_ROLE,)).fetchone():
+                    conn.execute(f"CREATE ROLE {self.APP_ROLE} LOGIN PASSWORD '{self.APP_ROLE}' NOSUPERUSER "
+                                 "NOBYPASSRLS NOCREATEDB NOCREATEROLE")
+                conn.execute(f'CREATE DATABASE "{name}" OWNER {self.APP_ROLE}')
+            except psycopg.Error:
+                conn.execute(f'CREATE DATABASE "{name}"')
+                return urlunsplit(parts._replace(path="/" + name))
+        host = parts.netloc.rsplit("@", 1)[-1]
+        return urlunsplit(parts._replace(netloc=f"{self.APP_ROLE}:{self.APP_ROLE}@{host}", path="/" + name))
 
     def stop(self):
         if self.dir and getattr(self, "_pg_ctl", None):

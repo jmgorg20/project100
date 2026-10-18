@@ -16,7 +16,7 @@ import json
 import secrets
 import time
 
-KEY_KINDS = ("ak", "wk")         # ak = client API key, wk = worker token
+KEY_KINDS = ("ak", "wk", "ss")   # ak = client API key, wk = worker token, ss = user session
 
 
 class SecurityError(Exception):
@@ -56,6 +56,11 @@ def key_matches(full, stored_hash, secret_key):
         return False
     kind, prefix, secret = parsed
     return hmac.compare_digest(_mac(secret_key, f"{kind}:{prefix}:{secret}"), stored_hash or "")
+
+
+def hash_token(secret_key, purpose, token):
+    """The stored form of a one-time token (email links, invitations, invite codes)."""
+    return _mac(secret_key, f"{purpose}:{token}")
 
 
 def token_matches(given, expected):

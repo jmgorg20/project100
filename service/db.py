@@ -2,9 +2,17 @@
 
 All SQL is written once, in a portable subset (`?` placeholders, TEXT ids, DOUBLE PRECISION epoch
 seconds, INTEGER 0/1 for true/false, JSON as TEXT). Schema changes are numbered files in
-service/migrations/, applied in order and recorded in schema_migrations.
+service/migrations/, applied in order and recorded in schema_migrations; a file named
+`NNNN_name.postgres.sql` is applied on Postgres only (row-level security).
+
+Tenant isolation in the database (Postgres): every transaction says whose rows it may touch with
+`SELECT set_config('app.tenant', ...)`. Requests authenticated as a client (API key or a user in an
+organisation) set TENANT to that client's id, and the row-level security policies then hide and
+protect every other client's rows even if a query forgot its `client_id = ?` filter. Everything
+else (workers, admin, the janitor) runs as '*' (all rows). See migrations/0004_rls.postgres.sql.
 """
 
+import contextvars
 import json
 import queue
 import re
@@ -15,6 +23,18 @@ from contextlib import contextmanager
 from pathlib import Path
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+SYSTEM = "*"
+TENANT = contextvars.ContextVar("autoedit_tenant", default=SYSTEM)
+
+
+@contextmanager
+def tenant(client_id):
+    """Run the block as `client_id` (row-level security on Postgres)."""
+    token = TENANT.set(client_id or SYSTEM)
+    try:
+        yield
+    finally:
+        TENANT.reset(token)
 
 
 class DatabaseError(Exception):
@@ -152,6 +172,7 @@ class Database:
             conn = self._pg_connect()
         healthy = True
         try:
+            conn.execute("SELECT set_config('app.tenant', %s, true)", (TENANT.get(),))
             yield Tx(self, conn)
             conn.commit()
         except BaseException:
@@ -188,7 +209,7 @@ class Database:
             t.run("CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at DOUBLE PRECISION)")
             done = {r["name"] for r in t.all("SELECT name FROM schema_migrations")}
             for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
-                if path.stem in done:
+                if path.stem in done or (path.stem.endswith(".postgres") and self.kind != "postgres"):
                     continue
                 for statement in split_sql(path.read_text(encoding="utf-8")):
                     t.run(statement)
@@ -199,6 +220,15 @@ class Database:
     def ping(self):
         with self.tx() as t:
             return t.value("SELECT 1") == 1
+
+    def rls_status(self):
+        """'enforced' when the row-level security policies apply to our database user (Postgres, a
+        user that is neither superuser nor BYPASSRLS), 'bypassed' when they do not, 'none' on SQLite."""
+        if self.kind != "postgres":
+            return "none"
+        with self.tx() as t:
+            row = t.one("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        return "bypassed" if not row or row["rolsuper"] or row["rolbypassrls"] else "enforced"
 
 
 def split_sql(text):
