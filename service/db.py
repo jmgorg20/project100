@@ -146,14 +146,17 @@ class Database:
     @contextmanager
     def tx(self, immediate=False):
         """A transaction: committed when the block ends, rolled back on an exception.
-        `immediate`: SQLite takes the write lock at once (needed for claim-style read-then-write)."""
+        `immediate` is kept for callers that need the lock at once (SQLite now always takes it)."""
         if self.kind == "sqlite":
             conn = self._memory or self._sqlite_connect()
             lock = self._lock if self._memory else None
             if lock:
                 lock.acquire()
             try:
-                conn.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
+                # Always IMMEDIATE on SQLite: a deferred transaction that reads and then writes fails at
+                # once ("database is locked") if another connection wrote in between, instead of waiting.
+                # SQLite has one writer anyway; this is development and tests (production is Postgres).
+                conn.execute("BEGIN IMMEDIATE")
                 try:
                     yield Tx(self, conn)
                     conn.execute("COMMIT")

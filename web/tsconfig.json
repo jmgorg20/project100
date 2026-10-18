@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["node"],
+    "paths": { "@shared/*": ["../desktop/src/shared/*"] }
+  },
+  "include": ["src", "tests", "vite.config.ts", "playwright.config.ts", "../desktop/src/shared/storyboard.ts",
+              "../desktop/src/shared/captionEdit.ts"]
+}
