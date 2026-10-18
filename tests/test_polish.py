@@ -320,7 +320,7 @@ def test_cli_polish_watch_once_and_polish(tmp_path, cfg):
     assert run.returncode != 0 and "broken.mp4" in (run.stderr + run.stdout)
 
 
-def test_polish_a_real_ai_edit_end_to_end(talk, cfg, monkeypatch):
+def test_polish_a_real_ai_edit_end_to_end(talk, cfg, monkeypatch):  # noqa: F811  (the fixture)
     """The real AI edit (stand-in AI and Whisper) with a preset, the real render and the real
     checks: a synthetic talking video comes out clean."""
     from tests.test_ai import photo_plan, scripted
