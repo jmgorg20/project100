@@ -3,10 +3,24 @@
 # GPU workers (WanGP / ComfyUI) normally run on the owner's Windows PC with the same agent:
 # see docs/service.md ("A worker on your PC"). No model weights are in this image.
 ARG BASE=ubuntu:24.04
-# Offline / air-gapped builds can bring Playwright's browsers (the version playwright-core 1.56.1
-# wants): docker build --build-context pwbrowsers=/path/to/ms-playwright ... Otherwise they are
-# downloaded during the build.
+ARG NODE_IMAGE=node:22-bookworm-slim
+ARG PLAYWRIGHT_VERSION=1.64.1
+# PLAYWRIGHT_VERSION picks the Chromium that draws the graphics (1.64.1: Chromium 156; keep it
+# current, the image scan in CI fails on known critical browser vulnerabilities). Offline /
+# air-gapped builds can bring the browsers that version wants:
+#   docker build --build-context pwbrowsers=/path/to/ms-playwright --build-arg PLAYWRIGHT_VERSION=...
+# Otherwise they are downloaded during the build.
 FROM scratch AS pwbrowsers
+
+# Node 22 (the version the graphics renderer is tested with) and playwright-core, without npm and
+# its many packages in the final image.
+FROM ${NODE_IMAGE} AS node
+ARG PLAYWRIGHT_VERSION
+WORKDIR /graphics
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -f /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi \
+ && npm install --no-save --no-package-lock --no-audit --no-fund "playwright-core@${PLAYWRIGHT_VERSION}"
+
 FROM ${BASE}
 
 ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
@@ -22,7 +36,7 @@ RUN --mount=type=secret,id=extra_ca,required=false \
       && cat /run/secrets/extra_ca >> /etc/ssl/certs/ca-certificates.crt \
       && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources; fi \
  && apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates python3 python3-venv ffmpeg nodejs npm \
+ && apt-get install -y --no-install-recommends ca-certificates python3 python3-venv ffmpeg \
       fonts-noto-color-emoji fontconfig \
  && if [ -f /usr/local/share/ca-certificates/extra-ca.crt ]; then update-ca-certificates; fi \
  && rm -rf /var/lib/apt/lists/* \
@@ -34,16 +48,17 @@ COPY requirements-worker.txt ./
 RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -f /run/secrets/extra_ca ]; then export PIP_CERT=/etc/ssl/certs/ca-certificates.crt; fi \
  && pip install -r requirements-worker.txt
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY desktop/graphics ./desktop/graphics
+COPY --from=node /graphics/node_modules ./desktop/graphics/node_modules
 COPY --from=pwbrowsers . /opt/pw-browsers
 RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -f /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi \
  && cd desktop/graphics \
- && npm install --no-save --no-package-lock --no-audit --no-fund playwright-core@1.56.1 \
  && if [ -z "$(ls -A /opt/pw-browsers 2>/dev/null)" ]; then \
       node node_modules/playwright-core/cli.js install --with-deps chromium; \
     else node node_modules/playwright-core/cli.js install-deps chromium; fi \
- && npm cache clean --force && rm -rf /var/lib/apt/lists/* /root/.npm
+ && rm -rf /var/lib/apt/lists/*
 COPY editor.py config.yaml ./
 COPY autoedit ./autoedit
 COPY service ./service
