@@ -1,0 +1,115 @@
+# Tests, security scans and container checks on every push and pull request.
+# Nothing here needs a secret: tests use stand-in AI answers and a throwaway Postgres.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_PASSWORD: ci, POSTGRES_USER: ci, POSTGRES_DB: ci}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-retries 20
+    env:
+      AUTOEDIT_TEST_PG_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: System packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fonts-noto-color-emoji
+      - name: Python packages
+        run: |
+          grep -v faster-whisper requirements.txt > /tmp/req.txt
+          pip install -r /tmp/req.txt -r requirements-service.txt ruff pip-audit
+      - name: Chromium for the graphics tests
+        working-directory: desktop
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Lint
+        run: ruff check --select F,E9 autoedit service tests editor.py
+      - name: Tests
+        run: python -m pytest -q --junitxml=pytest-report.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: pytest-report, path: pytest-report.xml}
+
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      matrix: {node: ["22", "24"]}
+    defaults: {run: {working-directory: desktop}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "${{ matrix.node }}"}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pip install -r ../requirements-service.txt Pillow numpy
+      - run: npm ci && npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npx vitest run
+      - run: npm run test:ui
+
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Python dependency vulnerabilities
+        run: pip install pip-audit && pip-audit -r requirements-service.txt -r requirements-worker.txt
+      - name: Node dependency vulnerabilities (shipped code)
+        working-directory: desktop
+        run: npm audit --omit=dev --audit-level=high
+      - name: Secrets in the history
+        uses: gitleaks/gitleaks-action@v2
+        env: {GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"}
+      - name: Misconfigurations and vulnerable files
+        uses: aquasecurity/trivy-action@0.33.1
+        with: {scan-type: fs, scan-ref: ., severity: "CRITICAL,HIGH", ignore-unfixed: true, exit-code: "1",
+               skip-dirs: "desktop/node_modules"}
+
+  containers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: [python]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pip install -r requirements-service.txt Pillow numpy PyYAML
+      - name: Build the images
+        run: |
+          docker build -f deploy/Dockerfile.api -t autoedit-api:test .
+          docker build -f deploy/Dockerfile.worker -t autoedit-worker:test .
+      - name: Scan the images
+        uses: aquasecurity/trivy-action@0.33.1
+        with: {image-ref: "autoedit-api:test", severity: "CRITICAL", ignore-unfixed: true, exit-code: "1"}
+      - name: Scan the worker image
+        uses: aquasecurity/trivy-action@0.33.1
+        with: {image-ref: "autoedit-worker:test", severity: "CRITICAL", ignore-unfixed: true, exit-code: "1"}
+      - name: End to end in containers (the real engine)
+        env: {AUTOEDIT_CONTAINER_TEST: "1"}
+        run: python -m pytest -q tests/service/test_containers.py

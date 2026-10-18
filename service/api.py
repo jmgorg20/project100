@@ -43,9 +43,23 @@ def error_response(status, code, message, headers=None):
     return JSONResponse({"error": {"code": code, "message": message}}, status_code=status, headers=headers or {})
 
 
+def trusted_proxy(peer, settings):
+    """True when the direct peer is one of SERVICE_TRUSTED_PROXIES (addresses or CIDR ranges)."""
+    import ipaddress
+    for entry in settings.trusted_proxies:
+        if peer == entry:
+            return True
+        try:
+            if ipaddress.ip_address(peer) in ipaddress.ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def client_ip(request, settings):
     peer = request.client.host if request.client else ""
-    if peer in settings.trusted_proxies:
+    if trusted_proxy(peer, settings):
         forwarded = request.headers.get("x-forwarded-for", "")
         if forwarded:
             return forwarded.split(",")[0].strip()
@@ -54,7 +68,7 @@ def client_ip(request, settings):
 
 def is_https(request, settings):
     peer = request.client.host if request.client else ""
-    if peer in settings.trusted_proxies and request.headers.get("x-forwarded-proto"):
+    if trusted_proxy(peer, settings) and request.headers.get("x-forwarded-proto"):
         return request.headers["x-forwarded-proto"].split(",")[0].strip() == "https"
     return request.url.scheme == "https"
 

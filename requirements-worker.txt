@@ -1,0 +1,9 @@
+# A worker machine: the engine (without the large local transcription model) + the worker agent.
+# Local transcription (faster-whisper) is optional: add it if this worker should transcribe offline.
+PyYAML>=6.0
+requests>=2.32
+Pillow>=10.0
+numpy>=1.24
+jsonschema>=4.18
+anthropic>=1.15
+cryptography>=45

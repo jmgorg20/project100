@@ -243,3 +243,9 @@ generation_templates/*
 !generation_templates/README.txt
 /vocabulary.json
 /models/
+
+# The headless service: local data, deploy secrets and env files
+/service-data/
+/deploy/.env
+/deploy/secrets/
+*.pem

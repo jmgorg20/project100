@@ -1,0 +1,19 @@
+# HTTPS in front of the API (Let's Encrypt certificates, renewed automatically).
+# Set API_DOMAIN in deploy/.env (e.g. api.example.com) and point its DNS at the server.
+{$API_DOMAIN:localhost} {
+	encode gzip
+	request_body {
+		max_size 64MB
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+	}
+	reverse_proxy api:8787 {
+		header_up X-Forwarded-Proto {scheme}
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+}

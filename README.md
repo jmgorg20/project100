@@ -421,6 +421,12 @@ all and render, give one scene another look, replace its footage, change its wor
 *Tingnan ang mga eksena bago i-render.* Command line: `--preset viral_tiktok`,
 `python editor.py storyboard my.project.json`. Guide: [docs/storyboard-presets.md](docs/storyboard-presets.md).
 
+**The service (integration API) · Ang service.** One engine, one API for every client (the partner
+project, the SaaS website, future projects): each with its own API key, presets, quotas, webhooks and
+usage. Workers (a cloud CPU box, or your PC with WanGP as the GPU worker) connect **out** over HTTPS
+and pull signed jobs; no open ports at home. `python editor.py serve`, `python editor.py worker ...`,
+`python editor.py service-admin ...`; containers in `deploy/`. Guide: [docs/service.md](docs/service.md).
+
 **For automation (Robot City) · Para sa automation.** The app only polishes; your workers post.
 `python editor.py polish talk.mp4 --preset viral_tiktok --format auto --out outbox --json` makes
 `talk.mp4` + `talk.json` (a sidecar with objective quality checks: size, length, valid MP4, sound

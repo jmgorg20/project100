@@ -1,0 +1,10 @@
+# Engine settings for a worker container (read-only image): everything it writes goes under /work.
+work_folder: /work/engine
+output:
+  folder: /work/output
+  encoder_speed: veryfast
+ai:
+  cache_folder: /work/cache
+presets_folder: ""
+transcription:
+  vocabulary_file: /work/vocabulary.json
