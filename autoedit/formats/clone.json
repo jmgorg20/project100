@@ -1,0 +1,49 @@
+{
+  "id": "clone",
+  "name": "Clone yourself",
+  "tl": "Clone ng sarili",
+  "about": "You two or three times in one frame. Record the takes separately with the camera NOT moving; you are cut out of each extra take and laid over the first.",
+  "about_tl": "Dalawa o tatlo ka sa iisang frame. I-record nang hiwalay ang bawat take nang HINDI gumagalaw ang camera.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "takes",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "multiple": true,
+      "max": 2,
+      "label": "Your other takes (same camera position)",
+      "tl": "Ang iba mong take (parehong puwesto ng camera)"
+    }
+  ],
+  "keywords": [
+    "clone",
+    "clones",
+    "twins",
+    "kambal",
+    "dalawa ako"
+  ],
+  "edit": {
+    "cuts": false
+  },
+  "captions": {},
+  "graphics": {},
+  "instruction": "",
+  "steps": [
+    {
+      "op": "cutouts",
+      "role": "takes",
+      "mask": "person"
+    }
+  ]
+}

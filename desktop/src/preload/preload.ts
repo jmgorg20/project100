@@ -20,6 +20,7 @@ const api: AppApi = {
   clearKey: (provider) => ipcRenderer.invoke("keys:clear", provider),
   pickVideos: () => ipcRenderer.invoke("dialog:videos"),
   pickPhotos: () => ipcRenderer.invoke("dialog:photos"),
+  pickFormatFiles: (kinds, multiple) => ipcRenderer.invoke("dialog:formatFiles", kinds, multiple),
   addJobs: (requests) => ipcRenderer.invoke("jobs:add", requests),
   listJobs: () => ipcRenderer.invoke("jobs:list"),
   cancelJob: (id) => ipcRenderer.invoke("jobs:cancel", id),

@@ -13,7 +13,7 @@ export function TrackSetup({ status, onStatus, onClose }: { status: TrackStatus;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const missing = status.models.filter((m) => !m.present && (m.kind !== "pose"));
+  const missing = status.models.filter((m) => !m.present && m.kind !== "pose" && m.kind !== "segment");
   const download = async () => {
     setBusy(true);
     setError("");

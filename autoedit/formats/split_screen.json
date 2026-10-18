@@ -1,0 +1,46 @@
+{
+  "id": "split_screen",
+  "name": "Split screen",
+  "tl": "Hati ang screen",
+  "about": "Two videos stacked: the other one on top, you below.",
+  "about_tl": "Dalawang video: ang isa sa itaas, ikaw sa ibaba.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "second",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "The other video",
+      "tl": "Ang isa pang video"
+    }
+  ],
+  "keywords": [
+    "split screen",
+    "split-screen",
+    "hati"
+  ],
+  "edit": {},
+  "captions": {
+    "zone": "divider"
+  },
+  "graphics": {},
+  "instruction": "",
+  "steps": [
+    {
+      "op": "layout",
+      "type": "split",
+      "with": "second",
+      "ratio": 0.5
+    }
+  ]
+}

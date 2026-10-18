@@ -6,6 +6,7 @@ import { formatCost } from "../shared/planItems";
 import type { GenStatus, Job, JobMode, Plan, Provider, Settings, VideoHistory } from "../shared/types";
 import { ConsentDialog, FrameDialog, SettingsDialog } from "./components/Dialogs";
 import { GenerationDialog } from "./components/GenerationDialog";
+import { FormatPicker, NO_FORMAT, formatRequest, missingRoles, type FormatChoice } from "./components/FormatPicker";
 import { Editor } from "./editor/Editor";
 import { PlanReview } from "./components/PlanReview";
 import { Player } from "./components/Player";
@@ -45,6 +46,7 @@ export function App() {
   const [histories, setHistories] = useState<Record<string, VideoHistory>>({});
   const [instruction, setInstruction] = useState("");
   const [graphicsStyle, setGraphicsStyle] = useState("auto");
+  const [formatChoice, setFormatChoice] = useState<FormatChoice>(NO_FORMAT);
   const [followUp, setFollowUp] = useState("");
   const [estimate, setEstimate] = useState<EstimateResult | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -125,11 +127,15 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targets.join("|"), provider]);
 
+  // Voice-over with B-roll has no video of you: the chosen voice-over is what gets edited.
+  const voiceover = formatChoice.format === "voiceover_broll" ? formatChoice.inputs.voiceover?.[0] : undefined;
+  const formatBlocked = missingRoles(formatChoice).length > 0;
   const startJobs = (list: string[], mode: JobMode, text: string, planFile?: string) =>
     api.addJobs(
       list.map((video) => ({
         video, photos, instruction: text, provider, auto, mode, planFile,
         maxGenMinutes: limits?.minutes, maxAiClips: limits?.clips, graphics: graphicsStyle,
+        ...formatRequest(formatChoice),
       })),
     );
 
@@ -307,6 +313,7 @@ export function App() {
               ))}
             </select>
           </label>
+          <FormatPicker value={formatChoice} onChange={setFormatChoice} />
           <details className="card" data-testid="gen-limits">
             <summary className="small">
               <strong>AI pictures &amp; clips</strong>{" "}
@@ -339,8 +346,8 @@ export function App() {
           )}
           <button
             className="btn primary"
-            disabled={!targets.length}
-            onClick={() => startJobs(targets, "new", instruction)}
+            disabled={formatBlocked || (!targets.length && !voiceover)}
+            onClick={() => startJobs(voiceover ? [voiceover] : targets, "new", instruction)}
             data-testid="run"
           >
             {targets.length > 1 ? `Edit ${targets.length} videos with AI` : redoing ? "Redo with these instructions" : "Edit with AI"}

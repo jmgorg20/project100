@@ -1,0 +1,51 @@
+{
+  "id": "ranking",
+  "name": "Ranking / countdown",
+  "tl": "Ranking / countdown",
+  "about": "A countdown: big numbers flip in (#5, #4... #1) with a sound on each.",
+  "about_tl": "Countdown: malalaking numero (#5, #4... #1) na may tunog bawat isa.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "items",
+      "kinds": [
+        "text"
+      ],
+      "required": false,
+      "multiple": true,
+      "label": "The items, best last (optional)",
+      "tl": "Ang mga item, ang pinakamaganda sa huli"
+    }
+  ],
+  "keywords": [
+    "ranking",
+    "countdown",
+    "rank",
+    "top 5",
+    "top 10",
+    "number one",
+    "pinaka"
+  ],
+  "edit": {},
+  "captions": {},
+  "graphics": {
+    "style": "minimal"
+  },
+  "instruction": "",
+  "steps": [
+    {
+      "op": "items",
+      "template": "rank-number",
+      "countdown": true,
+      "sfx": "ding"
+    }
+  ]
+}

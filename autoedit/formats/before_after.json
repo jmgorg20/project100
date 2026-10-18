@@ -1,0 +1,37 @@
+{
+  "id": "before_after",
+  "name": "Before / after",
+  "tl": "Bago at pagkatapos",
+  "about": "A wipe shows the change: one side as it was, the other with a colour look, with BEFORE / AFTER labels.",
+  "about_tl": "May wipe na nagpapakita ng pagbabago: isang panig gaya ng dati, ang kabila may kulay, may BEFORE / AFTER na label.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    }
+  ],
+  "keywords": [
+    "before and after",
+    "before/after",
+    "before after",
+    "bago at pagkatapos",
+    "transformation"
+  ],
+  "edit": {},
+  "captions": {},
+  "graphics": {},
+  "instruction": "",
+  "steps": [
+    {
+      "op": "wipe",
+      "grade": "orange_teal",
+      "seconds": 3.0,
+      "tags": true
+    }
+  ]
+}

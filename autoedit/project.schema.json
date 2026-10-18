@@ -553,7 +553,7 @@
             "type",
             "screen"
           ],
-          "description": "Combine with a screen recording that started at the same moment.",
+          "description": "Combine with another video: a screen recording (split: it on top), the video you react to (pip: it fills the screen, you small), or a second video. `offset`: the other video's time = this clip's time + offset.",
           "properties": {
             "type": {
               "enum": [
@@ -563,6 +563,39 @@
             },
             "screen": {
               "$ref": "#/$defs/id"
+            },
+            "ratio": {
+              "type": "number",
+              "minimum": 0.3,
+              "maximum": 0.7,
+              "description": "split: the share of the height for the other video (default 0.6)."
+            },
+            "corner": {
+              "enum": [
+                "top_left",
+                "top_right",
+                "bottom_left",
+                "bottom_right"
+              ],
+              "description": "pip: where you sit (default top_left)."
+            },
+            "size": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 0.6,
+              "description": "pip: your width as a share of the frame (default 0.33)."
+            },
+            "border": {
+              "$ref": "#/$defs/color"
+            },
+            "animated": {
+              "type": "boolean",
+              "description": "pip: the border colour cycles."
+            },
+            "offset": {
+              "type": "number",
+              "minimum": -3600,
+              "maximum": 3600
             }
           }
         },
@@ -703,6 +736,35 @@
         },
         "broll": {
           "$ref": "#/$defs/broll"
+        },
+        "mask": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "description": "Cut out part of the picture: `person` (found by a person segmentation model) or `chroma` (a green / blue screen keyed out).",
+          "properties": {
+            "type": {
+              "enum": [
+                "person",
+                "chroma"
+              ]
+            },
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "similarity": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 0.6
+            },
+            "blend": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.5
+            }
+          }
         }
       },
       "if": {

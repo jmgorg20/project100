@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Video format",
+  "description": "A video format: which files it needs, its edit and caption defaults, and the generic steps that turn the edit into the format. See autoedit/formats.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "tl",
+    "about",
+    "about_tl",
+    "inputs",
+    "keywords",
+    "steps"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z_]{2,32}$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "tl": {
+      "type": "string"
+    },
+    "about": {
+      "type": "string"
+    },
+    "about_tl": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "kinds",
+          "required",
+          "label",
+          "tl"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "pattern": "^[a-z_]{2,24}$"
+          },
+          "kinds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "enum": [
+                "video",
+                "image",
+                "audio",
+                "text"
+              ]
+            }
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "multiple": {
+            "type": "boolean"
+          },
+          "max": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "label": {
+            "type": "string"
+          },
+          "tl": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "edit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preset": {
+          "type": "string"
+        },
+        "silence_threshold": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 30
+        },
+        "zoom": {
+          "type": "boolean"
+        },
+        "cuts": {
+          "type": "boolean"
+        }
+      }
+    },
+    "captions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "type": "string"
+        },
+        "zone": {
+          "enum": [
+            "lower",
+            "center",
+            "top",
+            "divider"
+          ]
+        },
+        "words_per_line": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      }
+    },
+    "graphics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "instruction": {
+      "type": "string"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "layout",
+              "broll_files",
+              "reactions",
+              "items",
+              "wipe",
+              "versus",
+              "callouts",
+              "cutouts",
+              "background",
+              "voiceover_broll"
+            ]
+          },
+          "type": {
+            "enum": [
+              "split",
+              "pip"
+            ]
+          },
+          "with": {
+            "type": "string",
+            "pattern": "^[a-z_]{2,24}$"
+          },
+          "role": {
+            "type": "string",
+            "pattern": "^[a-z_]{2,24}$"
+          },
+          "broll": {
+            "type": "string",
+            "pattern": "^[a-z_]{2,24}$"
+          },
+          "audio": {
+            "type": "string",
+            "pattern": "^[a-z_]{2,24}$"
+          },
+          "screenshots": {
+            "type": "string",
+            "pattern": "^[a-z_]{2,24}$"
+          },
+          "ratio": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 0.7
+          },
+          "corner": {
+            "enum": [
+              "top_left",
+              "top_right",
+              "bottom_left",
+              "bottom_right"
+            ]
+          },
+          "size": {
+            "type": "number",
+            "minimum": 0.2,
+            "maximum": 0.6
+          },
+          "border": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "animated": {
+            "type": "boolean"
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "every": {
+            "type": "number",
+            "minimum": 1
+          },
+          "seconds": {
+            "type": "number",
+            "minimum": 0.5
+          },
+          "template": {
+            "type": "string"
+          },
+          "countdown": {
+            "type": "boolean"
+          },
+          "sfx": {
+            "enum": [
+              "pop",
+              "ding",
+              "whoosh",
+              "tick"
+            ]
+          },
+          "grade": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "boolean"
+          },
+          "mask": {
+            "enum": [
+              "person",
+              "chroma",
+              "auto"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

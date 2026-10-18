@@ -1,0 +1,57 @@
+{
+  "id": "yap",
+  "name": "Yap",
+  "tl": "Yap (tuloy-tuloy na kwento)",
+  "about": "Fast and dense: tight cuts, two-three words of captions at a time in the middle, B-roll every few seconds.",
+  "about_tl": "Mabilis: dikit-dikit na cuts, 2-3 salita ng captions sa gitna, B-roll bawat ilang segundo.",
+  "inputs": [
+    {
+      "role": "main",
+      "kinds": [
+        "video"
+      ],
+      "required": true,
+      "label": "You talking",
+      "tl": "Ikaw na nagsasalita"
+    },
+    {
+      "role": "broll",
+      "kinds": [
+        "video",
+        "image"
+      ],
+      "required": false,
+      "multiple": true,
+      "label": "B-roll (optional)",
+      "tl": "B-roll (kung meron)"
+    }
+  ],
+  "keywords": [
+    "yap",
+    "storytime",
+    "story time",
+    "kwento",
+    "chika",
+    "fast cuts",
+    "dense captions"
+  ],
+  "edit": {
+    "preset": "fast",
+    "silence_threshold": 0.15,
+    "zoom": true
+  },
+  "captions": {
+    "zone": "center",
+    "words_per_line": 3
+  },
+  "graphics": {},
+  "instruction": "Yap format: keep it fast. Add B-roll every 4 to 6 seconds where the speaker mentions something visual.",
+  "steps": [
+    {
+      "op": "broll_files",
+      "role": "broll",
+      "every": 4.5,
+      "seconds": 2.2
+    }
+  ]
+}

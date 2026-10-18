@@ -41,7 +41,7 @@ python editor.py graphics-catalog                                          (list
 You can change the numbers in `autoedit/director_styles.py`, or the limit only with
 `graphics: max_per_10s:` in `config.yaml`.
 
-## The template library · Ang mga template (42)
+## The template library · Ang mga template (47)
 
 All of them are made in this app (HTML/CSS drawn by Chromium), with free fonts (SIL Open Font
 License, in `desktop/graphics/fonts`). Emoji use your computer's emoji font.
@@ -56,6 +56,8 @@ License, in `desktop/graphics/fonts`). Emoji use your computer's emoji font.
 - **Numbers:** counter, percent bar, price tag, checklist, star rating
 - **Pointers:** arrow, circle, scribble underline
 - **Fun:** emoji pop, emoji burst, hearts, warning banner, sticker, before/after tags
+- **Formats** (used by the video formats, see [formats.md](formats.md)): numbered list item, rank
+  number, A vs B split card, callout box, screenshot frame
 
 In the editor: **Graphics** tab → search, filter by mood, ★ favourites (kept on this PC), and
 **Add** puts one at the playhead. Each card shows the template moving.
@@ -121,7 +123,7 @@ in the page (a little lighter), so place and timing match the export.
 ## What was and was not verified
 
 **Verified (automatically, on Linux):**
-- All 42 templates drawn by a real Chromium: not empty, centred where x/y say, same pixels on
+- All 47 templates drawn by a real Chromium: not empty, centred where x/y say, same pixels on
   every run (up to tiny anti-aliasing differences), going in and out, within the frame, with
   Taglish text, *ñ*, emoji and very long words (no word breaks in normal sentences).
 - Compositing measured on the rendered pixels: a graphic appears exactly on its frames and where

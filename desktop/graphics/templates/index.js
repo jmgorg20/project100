@@ -4,3 +4,4 @@ import "./cards.js";
 import "./data.js";
 import "./pointers.js";
 import "./fun.js";
+import "./formats.js";

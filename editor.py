@@ -119,6 +119,20 @@ def build_parser():
     ai.add_argument("--graphics", help="motion graphics: auto (when the instruction asks), off, "
                                        "or a style: promoter, calm_documentary, meme, news, "
                                        "luxury, minimal (default from config.yaml, graphics:)")
+    ai.add_argument("--format", help="video format: auto (the AI picks), or one of "
+                                     "`python editor.py formats` (e.g. reaction, listicle)")
+    ai.add_argument("--input", action="append", default=[], metavar="ROLE=FILE",
+                    help="another file the format needs, e.g. source=clip.mp4, screen=rec.mp4, "
+                         "takes=take2.mp4 (repeat for more)")
+    ai.add_argument("--item", action="append", default=[], metavar="TEXT",
+                    help="Listicle/Ranking item text, in order (repeat for each item)")
+    ai.add_argument("--offset", action="append", default=[], metavar="ROLE=SECONDS",
+                    help="start the second video this many seconds later (negative: earlier)")
+    ai.add_argument("--voiceover", action="store_true",
+                    help="Voice-over with B-roll: the first file is your voice-over (audio), "
+                         "the --input broll=FILE files go under it")
+
+    sub.add_parser("formats", help="list the video formats (Reaction, Listicle, Clone, ...)")
 
     gx = sub.add_parser("graphics", help="add motion graphics (pop-up words, cards, counters, "
                                          "arrows, emoji) to a project with the Director")
@@ -194,7 +208,7 @@ def build_parser():
     sub.add_parser("track-status", help="can this PC track hands/face? (MediaPipe + models)")
     tm = sub.add_parser("track-models", help="the MediaPipe model files tracking needs: shows "
                                              "what they are, and downloads them only if you say so")
-    tm.add_argument("--download", nargs="+", choices=["hand", "face", "pose"],
+    tm.add_argument("--download", nargs="+", choices=["hand", "face", "pose", "segment"],
                     help="download these models into models/tracking/")
     tm.add_argument("--yes", action="store_true", help="yes, download them (you read the model pages)")
     th = sub.add_parser("thumbs", help="small pictures along a video for the timeline (cached)")
@@ -613,6 +627,37 @@ def read_plan_file(path):
     return data["plan"] if isinstance(data, dict) and "plan" in data else data
 
 
+def format_inputs(args):
+    """--input role=file, --item text and --offset role=seconds as the format engine's inputs."""
+    from autoedit.errors import EditorError
+    inputs = {}
+    for pair in args.input:
+        role, sep, path = pair.partition("=")
+        if not sep or not role.strip() or not path.strip():
+            raise EditorError(f"--input needs ROLE=FILE, e.g. source=clip.mp4 (got '{pair}').")
+        inputs.setdefault(role.strip(), []).append(path.strip())
+    if args.item:
+        inputs["items"] = list(args.item)
+    for pair in args.offset:
+        role, sep, value = pair.partition("=")
+        try:
+            inputs.setdefault("offsets", {})[role.strip()] = float(value)
+        except ValueError:
+            raise EditorError(f"--offset needs ROLE=SECONDS, e.g. source=1.5 (got '{pair}').")
+        if not sep:
+            raise EditorError(f"--offset needs ROLE=SECONDS (got '{pair}').")
+    return inputs
+
+
+def cmd_formats(args, reporter):
+    from autoedit import formats
+    items = formats.summary()
+    for f in items:
+        roles = ", ".join(("" if i["required"] else "optional ") + i["role"] for i in f["inputs"])
+        print(f"{f['id']:16} {f['name']:24} needs: {roles}")
+    reporter.result(formats=items)
+
+
 def cmd_ai_edit(args, reporter, cancel):
     from autoedit.ai_edit import ai_edit_video
     from autoedit.errors import Cancelled, EditorError
@@ -631,6 +676,18 @@ def cmd_ai_edit(args, reporter, cancel):
         instruction = Path(args.instruction_file).read_text(encoding="utf-8-sig")
     plan = read_plan_file(args.plan_file) if args.plan_file else None
     previous = read_plan_file(args.previous_plan) if args.previous_plan else None
+    inputs = format_inputs(args)
+    if args.voiceover or args.format == "voiceover_broll":
+        from autoedit.ai_edit import voiceover_edit
+        if len(args.videos) != 1:
+            raise EditorError("--voiceover takes one voice-over file.")
+        if not inputs.get("broll"):
+            raise EditorError("--voiceover needs B-roll: --input broll=FILE (repeat for more).")
+        item = voiceover_edit(args.videos[0], inputs["broll"], cfg, instruction, args.provider,
+                              args.model, render=not args.no_render, output=args.output,
+                              reporter=reporter, cancel=cancel, graphics=args.graphics)
+        reporter.result(**item, video=str(args.videos[0]), ok=True)
+        return
     results, failed = [], 0
     for index, video in enumerate(args.videos):
         reporter.event("item", index=index, total=len(args.videos), video=str(Path(video)))
@@ -640,7 +697,8 @@ def cmd_ai_edit(args, reporter, cancel):
                                  previous_plan=previous, plan=plan, reporter=reporter,
                                  cancel=cancel, gen_paths=generation_paths(args),
                                  max_gen_minutes=args.max_generation_minutes,
-                                 max_ai_clips=args.max_ai_clips, graphics=args.graphics)
+                                 max_ai_clips=args.max_ai_clips, graphics=args.graphics,
+                                 format=args.format, inputs=inputs)
             item.update(video=str(video), ok=True)
         except Cancelled:
             raise
@@ -952,6 +1010,8 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_peaks(args, reporter)
         elif args.command == "thumbs":
             cmd_thumbs(args, reporter)
+        elif args.command == "formats":
+            cmd_formats(args, reporter)
         elif args.command == "graphics":
             cmd_graphics(args, reporter, cancel)
         elif args.command == "graphics-regenerate":

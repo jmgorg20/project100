@@ -68,7 +68,7 @@ def check_project(project, base_dir=".", cfg=None):
         frect = face.rect(t0, t1)
         if frect is not None:
             covered = zones.overlap_area(box, frect) / max(1.0, zones.area(frect))
-            if covered > FACE_OVERLAP and meta["category"] != "pointer":
+            if covered > FACE_OVERLAP and meta["category"] != "pointer" and not meta.get("covers"):
                 tag = "" if face.known else " (the face was not tracked: a typical position was assumed)"
                 issues.append(_issue(clip, "face", f"{what} covers the speaker's face{approx}{tag}.",
                                      f"Natatakpan ng {what} ang mukha{approx}."))

@@ -267,6 +267,8 @@ export function createMockApi(): AppApi {
     pickVideos: async () =>
       params.get("scenario") === "parity" ? ["C:/Videos/parity.mp4"] : ["C:/Videos/demo_talk.mp4", "C:/Videos/demo_talk_2.mp4"],
     pickPhotos: async () => ["C:/Videos/github_logo.png"],
+    pickFormatFiles: async (kinds) =>
+      kinds.includes("video") ? ["C:/Videos/reaction_source.mp4"] : kinds.includes("audio") ? ["C:/Videos/vo.wav"] : ["C:/Videos/background.png"],
     addJobs: async (requests) => {
       (window as unknown as { lastJobRequests: JobRequest[] }).lastJobRequests = requests;
       return enqueue(requests);

@@ -75,7 +75,22 @@ export interface Clip {
   fade_out?: number;
   /** Reframe for "fill": zoom (1-4) and which part stays in view (0 = left/top, 1 = right/bottom). */
   crop?: { zoom?: number; x?: number; y?: number };
-  layout?: { type: "split" | "pip"; screen: string };
+  /** A second video beside you (split) or in a corner window (pip); see autoedit/formats. */
+  layout?: {
+    type: "split" | "pip";
+    screen: string;
+    /** split: the other video's share of the height (0.3-0.7). */
+    ratio?: number;
+    corner?: "top_left" | "top_right" | "bottom_left" | "bottom_right";
+    /** pip: your window's width as a share of the frame (0.2-0.6). */
+    size?: number;
+    border?: string;
+    animated?: boolean;
+    /** Seconds the second video starts later (negative: earlier). */
+    offset?: number;
+  };
+  /** Overlay: cut the person out (Clone, Green screen) or key out a colour. */
+  mask?: { type: "person" | "chroma"; color?: string; similarity?: number; blend?: number };
   // overlay
   x?: number;
   y?: number;
@@ -338,6 +353,22 @@ export interface JobRequest {
   maxAiClips?: number;
   /** Motion graphics: "auto" (when the instruction asks), "off", or a style name. */
   graphics?: string;
+  /** Video format id (Reaction, Listicle, ...) or "auto" (the AI picks); unset = from your words. */
+  format?: string;
+  /** The format's other files by role, e.g. { source: [...] }; Listicle items; start offsets. */
+  formatInputs?: Record<string, string[]>;
+  items?: string[];
+  offsets?: Record<string, number>;
+}
+
+/** One video format, as `python editor.py ui-data` lists it. */
+export interface FormatInfo {
+  id: string;
+  name: string;
+  tl: string;
+  about: string;
+  about_tl: string;
+  inputs: { role: string; kinds: string[]; required: boolean; multiple?: boolean; max?: number; label: string; tl: string }[];
 }
 
 export interface Job extends JobRequest {

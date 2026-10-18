@@ -145,4 +145,41 @@ test.describe("graphics templates", () => {
     await select.selectOption("promoter");
     await expect(select).toHaveValue("promoter");
   });
+
+  test("the AI panel's video format menu asks for the format's files and sends them", async ({ page }) => {
+    await page.goto("/?mock=1&consent=1");
+    await page.getByRole("button", { name: "Add videos" }).click();
+    const select = page.getByTestId("format-select");
+    await expect(select.locator("option")).toHaveCount(15);       // from my words, AI picks, 13 formats
+    await select.selectOption("reaction");
+    await expect(page.getByTestId("format-about")).toContainText("small window");
+    await expect(page.getByTestId("format-missing")).toContainText("The video you react to");
+    await expect(page.getByTestId("run")).toBeDisabled();
+    await page.getByRole("button", { name: "Choose: The video you react to" }).click();
+    await expect(page.getByTestId("format-role-source")).toContainText("reaction_source.mp4");
+    await expect(page.getByTestId("format-missing")).toHaveCount(0);
+    await page.getByLabel("Second video offset").fill("1.5");
+    await page.screenshot({ path: `${SHOTS}/p5-format-picker.png` });
+    await page.getByTestId("run").click();
+    const requests = await page.evaluate(() => (window as unknown as { lastJobRequests: unknown[] }).lastJobRequests);
+    expect(requests[0]).toMatchObject({
+      format: "reaction", formatInputs: { source: ["C:/Videos/reaction_source.mp4"] }, offsets: { source: 1.5 },
+    });
+  });
+
+  test("Listicle items go with the job, and no format sends nothing extra", async ({ page }) => {
+    await page.goto("/?mock=1&consent=1");
+    await page.getByRole("button", { name: "Add videos" }).click();
+    await page.getByTestId("format-select").selectOption("listicle");
+    await expect(page.getByTestId("format-picker").getByRole("button", { name: /^Choose/ })).toHaveCount(0);
+    await page.getByTestId("format-items").fill("Mag-ipon\n\nMag-invest");
+    await page.getByTestId("run").click();
+    let requests = await page.evaluate(() => (window as unknown as { lastJobRequests: Record<string, unknown>[] }).lastJobRequests);
+    expect(requests[0]).toMatchObject({ format: "listicle", items: ["Mag-ipon", "Mag-invest"] });
+    await page.goto("/?mock=1&consent=1");
+    await page.getByRole("button", { name: "Add videos" }).click();
+    await page.getByTestId("run").click();
+    requests = await page.evaluate(() => (window as unknown as { lastJobRequests: Record<string, unknown>[] }).lastJobRequests);
+    expect(requests[0].format).toBeUndefined();
+  });
 });

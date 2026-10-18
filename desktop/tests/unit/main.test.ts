@@ -96,6 +96,16 @@ describe("job arguments", () => {
     const limited = jobArgs(job({ maxGenMinutes: 12, maxAiClips: 0, photos: ["/x.png"] }), settings, files);
     expect(limited.slice(-6)).toEqual(["--max-generation-minutes", "12", "--max-ai-clips", "0", "--photos", "/x.png"]);
     expect(jobArgs(job({}), settings, files)).not.toContain("--max-ai-clips");
+    // Video formats: the format, its files by role, list items and the second video's offset.
+    const fmt = jobArgs(job({
+      format: "reaction", formatInputs: { source: ["C:/v/clip.mp4"], takes: ["/t1.mp4", "/t2.mp4"] },
+      items: ["Mag-ipon", " ", "Mag-invest "], offsets: { source: 1.5, second: 0 }, photos: ["/x.png"],
+    }), settings, files);
+    expect(fmt.slice(-16)).toEqual([
+      "--format", "reaction", "--input", "source=C:/v/clip.mp4", "--input", "takes=/t1.mp4", "--input", "takes=/t2.mp4",
+      "--item", "Mag-ipon", "--item", "Mag-invest", "--offset", "source=1.5", "--photos", "/x.png",
+    ]);
+    expect(jobArgs(job({}), settings, files)).not.toContain("--format");
   });
 
   it("never reuses an output name", () => {

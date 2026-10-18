@@ -50,6 +50,10 @@ See [docs/tracking.md](../docs/tracking.md).
 [docs/graphics.md](../docs/graphics.md). (If you edit a template in `graphics/`, run
 `npm run graphics-catalog`.)
 
+**Video formats:** pick one under **Video format** in the AI panel and choose the files it asks
+for. The list comes from the engine's `autoedit/formats/*.json`; after adding or changing one, run
+`npm run engine-data`. See [docs/formats.md](../docs/formats.md).
+
 There is no installer yet (that is Phase 4).
 
 ## Tests
