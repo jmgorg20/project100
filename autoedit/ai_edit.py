@@ -87,6 +87,13 @@ instruction, describing the edit.
 Output the JSON object only."""
 
 
+
+def work_name(path):
+    """A short, safe folder name for a video's work files (long names would push the files inside
+    past Windows' 260-character limit)."""
+    from .graphics import safe_filename
+    return safe_filename(Path(path).stem, 40)
+
 def mmss(seconds):
     seconds = max(0, int(round(seconds)))
     return f"{seconds // 60}:{seconds % 60:02d}"
@@ -440,7 +447,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
     if look:
         plan_instruction = pre.instruction_for(look, plan_instruction)
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
-    job_dir = project_path(cfg["work_folder"]) / f"{video.stem}-ai-{time.strftime('%Y%m%d-%H%M%S')}"
+    job_dir = project_path(cfg["work_folder"]) / f"{work_name(video)}-ai-{time.strftime('%Y%m%d-%H%M%S')}"
     job_dir.mkdir(parents=True, exist_ok=True)
     out_folder = project_path(cfg["output"]["folder"])
     output = Path(output).resolve() if output else unique_output_path(out_folder, video.stem)
@@ -671,7 +678,7 @@ def voiceover_edit(audio, broll, cfg, instruction="", provider=None, model=None,
     if look:
         cfg["style"] = look["captions"]["style"]           # the preset's captions win
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
-    job_dir = project_path(cfg["work_folder"]) / f"{audio.stem}-vo-{time.strftime('%Y%m%d-%H%M%S')}"
+    job_dir = project_path(cfg["work_folder"]) / f"{work_name(audio)}-vo-{time.strftime('%Y%m%d-%H%M%S')}"
     job_dir.mkdir(parents=True, exist_ok=True)
     out_folder = project_path(cfg["output"]["folder"])
     output = Path(output).resolve() if output else unique_output_path(out_folder, audio.stem)

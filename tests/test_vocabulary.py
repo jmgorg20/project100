@@ -138,8 +138,8 @@ def test_corrections_also_fix_transcripts_saved_before(tmp_path):
     cfg["transcription"]["vocabulary_file"] = str(vocab)
     cache = Cache(tmp_path / "cache")
     video = synthetic.make_video(tmp_path / "talk.mp4")
-    t = cfg["transcription"]
-    key = f"{cache.fingerprint(video)}-{t['provider']}-{t['groq_model']}-{cfg['language']}"
+    from autoedit.ai_edit import transcript_key
+    key = transcript_key(video, cfg, cache)
     cache.put("transcripts", key, {"language": "tl", "words": [
         {"word": "sa", "start": 0, "end": 0.2}, {"word": "g", "start": 0.3, "end": 0.4},
         {"word": "cash", "start": 0.45, "end": 0.8}]})

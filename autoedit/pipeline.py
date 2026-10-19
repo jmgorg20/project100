@@ -4,6 +4,7 @@ import shutil
 import time
 from pathlib import Path
 
+from .graphics import safe_filename
 from .broll import broll_label
 from .captions import chunk_words, group_end_times
 from .config import project_path
@@ -44,7 +45,7 @@ def edit_video(video, cfg, transcript=None, plan=None, screen=None, layout=None,
     started = time.time()
     video = Path(video).resolve()
     work_root = project_path(cfg["work_folder"])
-    job_dir = work_root / f"{video.stem}-{time.strftime('%Y%m%d-%H%M%S')}"
+    job_dir = work_root / f"{safe_filename(video.stem, 40)}-{time.strftime('%Y%m%d-%H%M%S')}"
     out_folder = project_path(cfg["output"]["folder"])
     output = Path(output).resolve() if output else unique_output_path(out_folder, video.stem)
     try:
@@ -118,7 +119,7 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
           f"grade {cfg['grade']}, preset {cfg['preset']}, layout {layout})")
 
     job_dir = Path(job_dir) if job_dir else \
-        project_path(cfg["work_folder"]) / f"{video.stem}-{time.strftime('%Y%m%d-%H%M%S')}"
+        project_path(cfg["work_folder"]) / f"{safe_filename(video.stem, 40)}-{time.strftime('%Y%m%d-%H%M%S')}"
     job_dir.mkdir(parents=True, exist_ok=True)
     out_folder = project_path(cfg["output"]["folder"])
 

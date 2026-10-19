@@ -420,7 +420,7 @@ export function App() {
 
           {selectedActive?.status === "running" && selectedActive.summary && <SummaryCard summary={selectedActive.summary} title="What the AI is doing" />}
           {(selectedJob?.warnings?.length ?? 0) > 0 && (
-            <ul className="muted small" data-testid="job-warnings">
+            <ul className="muted small job-warnings" data-testid="job-warnings" style={{ overflowWrap: "anywhere", userSelect: "text" }}>
               {selectedJob!.warnings!.map((w, i) => <li key={i}>⚠ {w}</li>)}
             </ul>
           )}
@@ -428,7 +428,7 @@ export function App() {
           {selectedJob?.status === "failed" && (
             <div className="card" role="alert">
               <h3>That did not work</h3>
-              <p className="error" style={{ whiteSpace: "pre-wrap" }}>{selectedJob.error}</p>
+              <p className="error" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", userSelect: "text" }} data-testid="job-error">{selectedJob.error}</p>
               <button className="btn small" onClick={() => startJobs([selectedJob.video], selectedJob.mode, selectedJob.instruction, selectedJob.planFile)}>Try again</button>
             </div>
           )}

@@ -23,7 +23,7 @@ NS = types.SimpleNamespace
 def talk(tmp_path, monkeypatch):
     video = synthetic.make_video(tmp_path / "talk.mp4", width=360, height=640)
     words = load_transcript(synthetic.make_transcript(tmp_path / "talk.json"))
-    monkeypatch.setattr(ai_edit, "transcribe", lambda *a: words)
+    monkeypatch.setattr(ai_edit, "transcribe", lambda *a, **k: words)
     cfg = load_config()
     cfg["output"].update(folder=str(tmp_path / "out"), encoder_speed="ultrafast")
     cfg["work_folder"] = str(tmp_path / "work")

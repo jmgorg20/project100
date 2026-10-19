@@ -44,21 +44,38 @@ export async function replaceFile(part, out, tries = 20) {
   }
 }
 
+/** FFmpeg's exit code as Windows reports it (4294967274) made readable (-22: invalid argument). */
+export function exitText(code) {
+  if (code === null) return "it was stopped";
+  const signed = code > 0x7fffffff ? code - 0x100000000 : code;
+  const meaning = { [-22]: "invalid argument", [-2]: "file or folder not found", [-13]: "permission denied", [-28]: "disk full" };
+  return `exit code ${signed}${meaning[signed] ? `: ${meaning[signed]}` : ""}`;
+}
+
 /** An FFmpeg process that takes PNG frames on stdin and writes an FFV1 (lossless, alpha) video. */
 export function openSink(ffmpeg, out, fps) {
   const part = `${out}.part.mkv`;
+  let frames = 0;
   const args = ["-y", "-hide_banner", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(fps), "-c:v", "png", "-i", "-", "-c:v", "ffv1", "-level", "3", "-pix_fmt", "bgra", part];
   const proc = spawn(ffmpeg, args, { stdio: ["pipe", "ignore", "pipe"] });
   let err = "";
   proc.stderr.on("data", (d) => { err += d; });
   const done = new Promise((ok, fail) => {
     proc.on("error", fail);
-    proc.on("close", (code) => (code === 0 ? ok() : fail(new Error(`ffmpeg failed (${code}): ${err.slice(-400)}`))));
+    proc.on("close", (code) => (code === 0 ? ok() : fail(new Error(`FFmpeg could not write ${part} (${exitText(code)}): ${err.slice(-400).trim()}`))));
     proc.stdin.on("error", () => {});
   });
+  done.catch(() => {});   // an aborted graphic: its FFmpeg is stopped on purpose (finish() still reports)
   return {
-    write: (buf) => new Promise((ok) => { if (proc.stdin.write(buf)) ok(); else proc.stdin.once("drain", ok); }),
-    async finish() { proc.stdin.end(); await done; await replaceFile(part, out); },
+    write: (buf) => {
+      if (!buf || !buf.length) return Promise.reject(new Error(`an empty frame for ${out}`));
+      frames++;
+      return new Promise((ok) => { if (proc.stdin.write(buf)) ok(); else proc.stdin.once("drain", ok); });
+    },
+    async finish() {
+      if (!frames) { try { proc.kill(); } catch { /* gone */ } throw new Error(`no frames were drawn for ${out}`); }
+      proc.stdin.end(); await done; await replaceFile(part, out);
+    },
     abort() { try { proc.stdin.destroy(); proc.kill(); } catch { /* already gone */ } },
   };
 }

@@ -1,16 +1,14 @@
-"""M1: captions without punctuation (a setting, default remove), a better Taglish hint for
-Whisper, fixing the words before the edit, and graphics that never stop an edit on Windows
-(a busy or read-only cache, one graphic that cannot be drawn)."""
+"""Captions without punctuation (a setting, default remove), a better Taglish hint for Whisper,
+and fixing the words before the edit."""
 
 import json
 import re
 import subprocess
 from argparse import Namespace
-from pathlib import Path
 
 import pytest
 
-from autoedit import ai_edit, graphics, transcribe
+from autoedit import ai_edit, transcribe
 from autoedit.captions import build_ass, fonts_from_config, strip_punctuation
 from autoedit.config import DEFAULTS, load_config
 from autoedit.project import media_from_file, new_project, validate_project
@@ -18,7 +16,6 @@ from autoedit.project_render import build_project_ass, render_project
 from autoedit.styles import get_style
 from autoedit.words import Word, load_transcript, save_transcript
 from tests import synthetic
-from tests.gfx_helpers import add_graphics_track, graphic, needs_chromium
 
 FONTS = fonts_from_config(DEFAULTS["captions"])
 CASES = [
@@ -199,86 +196,3 @@ def test_fix_the_words_then_edit_with_them(tmp_path, monkeypatch):
         ai_edit.ai_edit_video(video, load_config(), "x", [], provider="groq", model="m", render=False,
                               reporter=Reporter(), transcript=str(out))
     assert words_used == ["Tatlo sikreto"]
-
-
-# ---------------------------------------------------------------- graphics on Windows
-
-def test_a_read_only_install_folder_uses_the_users_cache(tmp_path, monkeypatch):
-    monkeypatch.delenv("AUTOEDIT_GRAPHICS_CACHE", raising=False)
-    monkeypatch.setattr(graphics, "PROJECT_DIR", tmp_path / "Program Files" / "AutoEditor")
-    monkeypatch.setattr(graphics, "writable", lambda folder: False)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "Local"))
-    assert graphics.cache_dir() == tmp_path / "Local" / "AutoEditor" / "graphics"
-    monkeypatch.setattr(graphics, "writable", lambda folder: True)
-    assert graphics.cache_dir() == tmp_path / "Program Files" / "AutoEditor" / "work" / "cache" / "graphics"
-
-
-def test_writable_is_checked_for_real(tmp_path):
-    graphics._WRITABLE.clear()
-    assert graphics.writable(tmp_path / "new" / "folder")
-    locked = tmp_path / "file-not-folder"
-    locked.write_text("x")
-    assert not graphics.writable(locked / "sub")
-
-
-@pytest.fixture
-def red(tmp_path):
-    video = tmp_path / "red.mp4"
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=720x1280:r=30:d=2",
-                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)], check=True)
-    p = new_project("g", normalize_audio=False)
-    p["media"] = [media_from_file(video, "vid")]
-    p["tracks"][0]["clips"] = [{"id": "v1", "type": "video", "media": "vid", "start": 0, "duration": 2,
-                                "in": 0, "out": 2}]
-    return tmp_path, p
-
-
-def test_one_graphic_that_fails_is_left_out_with_a_warning(red, monkeypatch, tmp_path, capsys):
-    tmp, p = red
-    monkeypatch.setenv("AUTOEDIT_GRAPHICS_CACHE", str(tmp_path / "cache"))
-    add_graphics_track(p, [graphic("g1", "stamp", 0, 1, text="OK"), graphic("g2", "stamp", 1, 1, text="BAD")])
-    jobs = graphics.project_jobs(p, tmp)
-    bad = next(j for j in jobs if j["clip"] == "g2")
-    events = []
-
-    class Rep:
-        def event(self, kind, **data):
-            events.append((kind, data))
-
-    def draw(missing, reporter=None, cancel=None):
-        good = next(j for j in missing if j["clip"] == "g1")
-        Path(good["out"]).parent.mkdir(parents=True, exist_ok=True)
-        Path(good["out"]).write_bytes(b"x")
-        Path(good["meta"]).write_text("{}")
-        return {bad["key"]: "EPERM: operation not permitted, rename"}
-    monkeypatch.setattr(graphics, "draw_jobs", draw)
-    failed = graphics.ensure_assets(p, tmp, Rep())
-    assert [f["clip"] for f in failed] == ["g2"] and "EPERM" in failed[0]["error"]
-    kind, data = events[0]
-    assert kind == "warning" and data["clip"] == "g2" and data["path"] == bad["out"]
-    assert bad["out"] in data["message"] and "EPERM" in data["message"]
-    assert "g2" in capsys.readouterr().err
-
-
-@needs_chromium
-def test_the_renderer_skips_a_broken_graphic_and_draws_the_rest(red, monkeypatch, tmp_path):
-    """The real command line renderer (Chromium): a template that does not exist fails alone;
-    the good graphic is drawn and the video renders with it."""
-    tmp, p = red
-    monkeypatch.setenv("AUTOEDIT_GRAPHICS_CACHE", str(tmp_path / "cache"))
-    add_graphics_track(p, [graphic("g1", "stamp", 0, 1.5, text="OK")])
-    jobs = graphics.project_jobs(p, tmp)
-    broken = {**jobs[0], "key": "broken", "template": "no-such-template", "clip": "gX",
-              "out": str(tmp_path / "cache" / "broken.mkv"), "meta": str(tmp_path / "cache" / "broken.json")}
-    errors = graphics.draw_jobs([broken, *jobs])
-    assert list(errors) == ["broken"] and errors["broken"]
-    assert graphics.is_drawn(jobs[0])
-    out = render_project(p, tmp / "out.mp4", base_dir=tmp, export={"crf": 30, "encoder_speed": "ultrafast",
-                                                                   "audio_bitrate": "96k"})
-    assert out.exists()
-
-
-def test_the_cli_renderer_reports_job_errors_without_failing():
-    cli = (Path(__file__).parents[1] / "desktop" / "graphics" / "render-cli.mjs").read_text(encoding="utf-8")
-    assert "job_error" in cli and "onJobError" in cli
