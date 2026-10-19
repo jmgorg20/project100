@@ -430,7 +430,8 @@ Web-app accounts (invite-only sign-up, Google sign-in, two-step sign-in, organis
 projects, database row-level security): [docs/accounts.md](docs/accounts.md).
 The web app for phones and PCs (installable PWA at `/app/`, English and Taglish):
 [docs/web-app.md](docs/web-app.md). Plans, the 7-day free trial and payments (Paddle):
-[docs/billing.md](docs/billing.md).
+[docs/billing.md](docs/billing.md). The owner's admin pages (money, costs per video against
+revenue, users, sign-ups, plans): [docs/admin.md](docs/admin.md).
 
 **For automation (Robot City) · Para sa automation.** The app only polishes; your workers post.
 `python editor.py polish talk.mp4 --preset viral_tiktok --format auto --out outbox --json` makes

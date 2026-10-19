@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,4 +79,17 @@ async function checkLayoutOnce(page: Page) {
     .map((el) => ({ el: (el as HTMLElement).outerHTML.slice(0, 80), h: el.getBoundingClientRect().height }))
     .filter((x) => x.h < 43.5));
   expect(small, "controls smaller than 44px").toEqual([]);
+}
+
+/** A 6-digit authenticator code (RFC 6238, SHA-1, 30 s) for a base32 secret; `step` 1 = the next code. */
+export function totp(secret: string, step = 0): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const ch of secret.replace(/\s+/g, "").toUpperCase()) bits += alphabet.indexOf(ch).toString(2).padStart(5, "0");
+  const key = Buffer.from(bits.match(/.{8}/g)!.map((b) => parseInt(b, 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000) + step));
+  const mac = createHmac("sha1", key).update(counter).digest();
+  const o = mac[mac.length - 1] & 0x0f;
+  return String((mac.readUInt32BE(o) & 0x7fffffff) % 1_000_000).padStart(6, "0");
 }

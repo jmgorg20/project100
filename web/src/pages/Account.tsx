@@ -60,7 +60,10 @@ export function Account({ session, refresh, setSession }: SessionProps) {
         {me && (
           <p className="muted" data-testid="usage">{t("usage")}: {me.usage.input_minutes.toFixed(1)} / {me.client.monthly_minutes.toFixed(0)} min · {me.usage.jobs}</p>
         )}
-        <button className="ghost" onClick={() => void signOut()}>{t("signOut")}</button>
+        <div className="row wrap">
+          <button className="ghost" onClick={() => void signOut()}>{t("signOut")}</button>
+          {session.user.is_admin && <a className="button ghost" href="#/admin" data-testid="admin-link">Admin</a>}
+        </div>
       </div>
 
       {billing?.enabled ? <BillingCard /> : (

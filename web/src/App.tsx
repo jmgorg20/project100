@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ApiError, get, setCsrf, type Session } from "./api";
 import { setLang, t, useLang } from "./i18n";
 import { Account, AcceptInvite } from "./pages/Account";
+import { Admin } from "./pages/Admin";
 import { Forgot, Login, MfaStep, Reset, Signup, Verify } from "./pages/Auth";
 import { History } from "./pages/History";
 import { JobPage } from "./pages/Job";
@@ -76,6 +77,11 @@ export function App() {
   }, []);
 
   const page = route[0] ?? "";
+  // someone just made staff: the admin pages re-read the session once
+  const staleAdmin = page === "admin" && session && !session.user.is_admin;
+  useEffect(() => {
+    if (staleAdmin) void refresh();
+  }, [staleAdmin, refresh]);
   let body: ReactNode;
   if (session === undefined) {
     body = <p className="muted center">{t("loading")}</p>;
@@ -95,6 +101,7 @@ export function App() {
     if (page === "jobs" && route[1]) body = <JobPage id={route[1]} {...props} />;
     else if (page === "jobs") body = <History {...props} />;
     else if (page === "account") body = <Account {...props} />;
+    else if (page === "admin" && session.user.is_admin) body = <Admin />;
     else if (page === "invite") body = <AcceptInvite token={route[1] ?? ""} {...props} />;
     else body = <NewVideo {...props} />;
   }
