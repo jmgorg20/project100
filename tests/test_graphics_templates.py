@@ -37,7 +37,7 @@ def test_catalog_matches_the_template_files():
 def test_every_template_declares_what_it_needs(meta):
     assert meta["name"] and meta["tl"] and meta["category"]
     assert meta["moods"] and set(meta["moods"]) <= set(CAT["moods"])
-    assert meta["inputs"] and all(i["type"] in ("text", "number", "image", "list") for i in meta["inputs"])
+    assert meta["inputs"] and all(i["type"] in ("text", "number", "image", "images", "list") for i in meta["inputs"])
     assert meta["minDuration"] <= meta["duration"] <= meta["maxDuration"]
     assert 0 <= meta["anchor"]["x"] <= 1 and 0 <= meta["anchor"]["y"] <= 1
     assert meta["zone"] in ("any", "center", "lower", "upper", "side")

@@ -41,7 +41,7 @@ python editor.py graphics-catalog                                          (list
 You can change the numbers in `autoedit/director_styles.py`, or the limit only with
 `graphics: max_per_10s:` in `config.yaml`.
 
-## The template library · Ang mga template (47)
+## The template library · Ang mga template (63)
 
 All of them are made in this app (HTML/CSS drawn by Chromium), with free fonts (SIL Open Font
 License, in `desktop/graphics/fonts`). Emoji use your computer's emoji font.
@@ -65,6 +65,43 @@ In the editor: **Graphics** tab → search, filter by mood, ★ favourites (kept
 Text tips: write `*word*` to make that word stand out (bigger, another colour, a box). Long
 Taglish words are never broken in the middle; the text gets smaller first. Only a single word too
 long for the box, even at the smallest size, is broken (and the export check says so).
+
+### The editorial set (Premium Editorial Viral) · Ang editorial na set
+
+Sixteen templates for the PREMIUM EDITORIAL VIRAL look: cream paper, ink text, serif headlines,
+one terracotta accent, soft shadows, rounded corners, calm motion. **Only the editorial style
+uses them** (the other looks never pick them); you can add any of them by hand from the Graphics tab.
+
+| Template | What it shows |
+|---|---|
+| `editorial-headline` | magazine headline: kicker label, rule, issue number (`number`), serif words that arrive one by one, `*word*` in italic accent |
+| `subtitle-card` | a cream rounded subtitle card; the spoken word lights up, `*word*` gets a marker |
+| `kinetic-words` | big words that pop in one at a time (sans + italic serif mix), no card |
+| `marker-highlight` | a sentence on paper; a marker pen sweeps over the `*keyword*` |
+| `screenshot-collage` | 2–4 of **your** screenshots floating at angles, one after another (`images`) |
+| `mosaic-grid` | a 2×2 / 3×2 / 3×3 grid of your pictures, tile by tile; `number` = a tile to focus at the end |
+| `search-bar` | a search bar that types the query, then suggestion rows (`items`) |
+| `ui-panel` | a floating app window: rows whose switches turn on one by one, a progress bar |
+| `editorial-checklist` | a paper checklist; each item is ticked in turn, with a count (2/3) |
+| `countdown-timer` | a digital countdown from `number` seconds to 0 with a draining ring |
+| `storyboard-doc` | a storyboard page: scene frames from your pictures with their captions (`items`) |
+| `phone-mockup` | a generic phone (no brand) showing your screenshot, floating in |
+| `logo-badge` | **your** logo (`image`, required) in a rounded tile with a name |
+| `screenshot-montage` | one card that slides through your screenshots, with dots |
+| `palette-card` | colour swatches with their hex codes (`items` = `#rrggbb`; can be taken from your picture) |
+| `profile-card` | a social profile: your photo or initials, name, handle, a Follow button that turns to Following |
+
+**Your pictures only.** `image` / `images` are media of your project (your screenshots, photos,
+logo). Without them a plain numbered placeholder is drawn; nothing is downloaded or made up, and
+no real person or brand is bundled.
+
+**Timed to the words (`cues`).** Every template whose parts appear one after another (words,
+items, steps, pictures) takes `cues`: the seconds, from the graphic's start, when each part
+should appear. The Director sets them from the spoken words, so each part lands on the word that
+names it. Without cues the parts are spread evenly.
+
+**Caption style 14, `editorial_card`.** Ink text on a cream rounded card (with a soft shadow)
+behind each caption group; the spoken word in terracotta.
 
 ## Editing a graphic · Pag-edit
 
@@ -123,7 +160,7 @@ in the page (a little lighter), so place and timing match the export.
 ## What was and was not verified
 
 **Verified (automatically, on Linux):**
-- All 47 templates drawn by a real Chromium: not empty, centred where x/y say, same pixels on
+- All 63 templates (47 + the 16 editorial ones) drawn by a real Chromium: not empty, centred where x/y say, same pixels on
   every run (up to tiny anti-aliasing differences), going in and out, within the frame, with
   Taglish text, *ñ*, emoji and very long words (no word breaks in normal sentences).
 - Compositing measured on the rendered pixels: a graphic appears exactly on its frames and where

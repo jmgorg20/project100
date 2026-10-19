@@ -33,10 +33,10 @@ def dialogue_lines(ass):
     return [l for l in ass.splitlines() if l.startswith("Dialogue:")]
 
 
-def test_there_are_13_styles_with_unique_numbers_and_names():
-    assert len(STYLES) == 13
-    assert [s.number for s in STYLES] == list(range(1, 14))
-    assert len({s.name for s in STYLES}) == 13
+def test_there_are_14_styles_with_unique_numbers_and_names():
+    assert len(STYLES) == 14
+    assert [s.number for s in STYLES] == list(range(1, 15))
+    assert len({s.name for s in STYLES}) == 14
 
 
 def test_get_style_by_number_or_name():
@@ -169,3 +169,33 @@ def test_every_style_renders_with_ffmpeg(style, tmp_path):
     assert len(pixels) == 1080 * 1920
     bright = sum(1 for p in pixels[::7] if p > 100)
     assert bright > 200, "no caption text visible"
+
+
+def test_editorial_card_draws_a_cream_rounded_card_behind_each_group(tmp_path):
+    """Style 14: one cream card (with a soft shadow) behind the whole caption group, ink text on it,
+    rounded corners (the card's own corner stays the background colour)."""
+    style = get_style("editorial_card")
+    ass = build_ass(sample_words(), style, FONTS, fonts_folder=FONTS_DIR)
+    assert r"\p1" in ass and "E6EFF4" in ass.upper()               # a drawn card in the cream colour
+    (tmp_path / "c.ass").write_text(ass, encoding="utf-8")
+    fonts = tmp_path / "fonts"
+    fonts.mkdir()
+    for f in FONTS_DIR.glob("*.otf"):
+        (fonts / f.name).write_bytes(f.read_bytes())
+    result = subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=0x2040a0:s=1080x1920:d=2:r=10",
+         "-vf", "subtitles=c.ass:fontsdir=fonts", "-ss", "0.45", "-frames:v", "1",
+         "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        cwd=tmp_path, capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+    import numpy as np
+    img = np.frombuffer(result.stdout, np.uint8).reshape(1920, 1080, 3).astype(int)
+    cream = (abs(img[..., 0] - 0xF4) < 8) & (abs(img[..., 1] - 0xEF) < 8) & (abs(img[..., 2] - 0xE6) < 8)
+    assert cream.sum() > 20000, "no cream card"
+    ys, xs = np.nonzero(cream)
+    corner = img[ys.min(), xs.min()]
+    assert not (abs(corner - [0xF4, 0xEF, 0xE6]) < 8).all()       # the corner is rounded off
+    inside = img[ys.min():ys.max(), xs.min():xs.max()]
+    ink = (inside.max(axis=2) < 60).sum()
+    assert ink > 500, "no dark text on the card"

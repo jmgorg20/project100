@@ -5,3 +5,4 @@ import "./data.js";
 import "./pointers.js";
 import "./fun.js";
 import "./formats.js";
+import "./editorial.js";

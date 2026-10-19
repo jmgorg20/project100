@@ -42,7 +42,7 @@ export const MOODS = ["hype", "calm", "urgent", "funny", "serious", "money", "te
 export const BASE_DEFAULTS = {
   text: "", text2: "", items: [], number: 0, prefix: "", suffix: "", image: "", emoji: "", icon: "",
   font: "", color: "#ffffff", accent: "#ffd23f", bg: "#111827",
-  size: 1, intensity: 0.7, align: "center", case: "", angle: 0, dir: "right",
+  size: 1, intensity: 0.7, align: "center", case: "", angle: 0, dir: "right", images: [], cues: [],
 };
 
 export const registry = new Map();
@@ -52,7 +52,7 @@ export function defineTemplate(meta, build) {
   if (!meta || !meta.id) throw new Error("a template needs an id");
   if (registry.has(meta.id)) throw new Error(`duplicate template id ${meta.id}`);
   const full = {
-    version: 1, tl: meta.name, category: "text", moods: [], inputs: [{ key: "text", type: "text", required: true }],
+    version: 1, tl: meta.name, category: "text", moods: [], styles: [], inputs: [{ key: "text", type: "text", required: true }],
     duration: 2, minDuration: 0.8, maxDuration: 8, zone: "any", anchor: { x: 0.5, y: 0.5 },
     box: { w: 600, h: 200 }, pad: 60, fields: ["text", "font", "color", "accent", "size", "intensity"],
     bg: false, words: false, maxChars: 40, minFont: 28, numRange: null, covers: false, defaults: {}, sample: {}, ...meta,
@@ -101,7 +101,32 @@ export function resolveParams(meta, given = {}) {
   p.prefix = String(p.prefix ?? "").slice(0, 8);
   p.suffix = String(p.suffix ?? "").slice(0, 12);
   p.emoji = String(p.emoji ?? "").slice(0, 16);
+  p.images = (Array.isArray(p.images) ? p.images : []).filter((x) => typeof x === "string" && x).slice(0, 9);
+  p.cues = (Array.isArray(p.cues) ? p.cues : []).map(Number).filter((x) => Number.isFinite(x) && x >= 0).slice(0, 24).sort((a, b) => a - b);
   return p;
+}
+
+/**
+ * When each of `n` parts (words, items, steps, pictures) of a graphic appears, in seconds from its
+ * start. With `p.cues` (the Director's times of the spoken words) the parts follow the speech;
+ * parts without a cue continue at the same pace; with no cues at all they are spread evenly
+ * between `from` and `to`. Always n non-decreasing times inside [0, dur - 0.15].
+ */
+export function cueTimes(p, n, dur, { from = 0.3, to = null } = {}) {
+  const last = Math.max(0, dur - 0.15);
+  const end = Math.min(last, to === null ? dur * 0.6 : to);
+  const even = (a, b, k) => Array.from({ length: k }, (_, i) => (k <= 1 ? a : a + ((b - a) * i) / (k - 1)));
+  if (n <= 0) return [];
+  const cues = (p && Array.isArray(p.cues) ? p.cues : []).filter((x) => x <= last);
+  let out;
+  if (!cues.length) out = even(Math.min(from, end), end, n);
+  else if (cues.length >= n) out = cues.slice(0, n);
+  else {
+    const step = cues.length > 1 ? (cues[cues.length - 1] - cues[0]) / (cues.length - 1) : Math.max(0.2, (end - cues[0]) / n);
+    out = cues.slice();
+    while (out.length < n) out.push(out[out.length - 1] + Math.max(0.12, step));
+  }
+  return out.map((x) => clamp(x, 0, last));
 }
 
 // ---------------------------------------------------------------- math and easing
@@ -207,6 +232,7 @@ export const ICONS = {
   eye: [["path", { d: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" }], ["circle", { cx: 12, cy: 12, r: 3 }]],
   globe: [["circle", { cx: 12, cy: 12, r: 9 }], ["path", { d: "M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" }]],
   cart: [["path", { d: "M3 4h3l2.5 11h10L21 7H7" }], ["circle", { cx: 10, cy: 19, r: 1.5 }], ["circle", { cx: 17, cy: 19, r: 1.5 }]],
+  search: [["circle", { cx: 10.5, cy: 10.5, r: 6.5 }], ["path", { d: "M15.5 15.5L21 21" }]],
 };
 export const ICON_KEYS = Object.keys(ICONS);
 

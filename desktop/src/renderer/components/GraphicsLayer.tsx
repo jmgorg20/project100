@@ -8,10 +8,10 @@ import { graphicsAt, wipeAt } from "../../shared/graphicsEdit";
 import type { Clip, Media, Project } from "../../shared/types";
 import { CANVAS, gradeCss } from "../lib/timeline";
 
-function GraphicView({ clip, time, imageUrl, selected, onSelect }: { clip: Clip; time: number; imageUrl?: string; selected: boolean; onSelect?: (id: string) => void }) {
+function GraphicView({ clip, time, imageUrl, imageUrls, selected, onSelect }: { clip: Clip; time: number; imageUrl?: string; imageUrls?: string[]; selected: boolean; onSelect?: (id: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const inst = useRef<GraphicInstance | null>(null);
-  const params = JSON.stringify({ ...(clip.params ?? {}), image: imageUrl ?? undefined });
+  const params = JSON.stringify({ ...(clip.params ?? {}), image: imageUrl ?? undefined, images: imageUrls ?? undefined });
   useLayoutEffect(() => {
     const el = host.current;
     if (!el) return;
@@ -64,7 +64,9 @@ export function GraphicsLayer({ project, time, media, mediaUrl, selection, onSel
     <div className="graphics-layer" data-testid="graphics-layer">
       {clips.map((c) => {
         const m = c.params?.image ? media.get(c.params.image) : undefined;
-        return <GraphicView key={c.id} clip={c} time={time} imageUrl={m ? mediaUrl(m.path) : undefined} selected={Boolean(selection?.includes(c.id))} onSelect={onSelect} />;
+        // a list of the user's pictures (collage, mosaic, montage...): media ids become file URLs
+        const urls = (c.params?.images ?? []).map((id) => media.get(id)).filter((x): x is Media => Boolean(x)).map((x) => mediaUrl(x.path));
+        return <GraphicView key={c.id} clip={c} time={time} imageUrl={m ? mediaUrl(m.path) : undefined} imageUrls={c.params?.images ? urls : undefined} selected={Boolean(selection?.includes(c.id))} onSelect={onSelect} />;
       })}
     </div>
   );
