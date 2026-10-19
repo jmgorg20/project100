@@ -347,7 +347,7 @@ def talk(tmp_path, cfg, monkeypatch):
     photo = synthetic.make_image(tmp_path / "github_logo.png")
     calls = []
 
-    def fake_transcribe(video_path, cfg_, job_dir):
+    def fake_transcribe(video_path, cfg_, job_dir, *a, **k):
         calls.append(video_path)
         return load_transcript(transcript)
 
