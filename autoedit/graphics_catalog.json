@@ -53,7 +53,8 @@
   "link",
   "eye",
   "globe",
-  "cart"
+  "cart",
+  "search"
  ],
  "templates": [
   {
@@ -68,6 +69,7 @@
     "money",
     "funny"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -129,6 +131,7 @@
     "playful",
     "luxury"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -194,6 +197,7 @@
     "playful",
     "hype"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -250,6 +254,7 @@
     "news",
     "warning"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -319,6 +324,7 @@
     "money",
     "news"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "items",
@@ -392,6 +398,7 @@
     "tech",
     "money"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -448,6 +455,7 @@
     "money",
     "tech"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -504,6 +512,7 @@
     "tech",
     "money"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -560,6 +569,76 @@
   },
   {
    "version": 1,
+   "tl": "Countdown timer",
+   "category": "data",
+   "moods": [
+    "urgent",
+    "money",
+    "hype",
+    "serious",
+    "tech"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "number",
+     "type": "number",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.4,
+   "minDuration": 0.8,
+   "maxDuration": 12,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.42
+   },
+   "box": {
+    "w": 520,
+    "h": 600
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "number",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 28,
+   "minFont": 28,
+   "numRange": [
+    1,
+    5999
+   ],
+   "covers": false,
+   "defaults": {
+    "bg": "#f4efe6",
+    "color": "#17140f",
+    "accent": "#c8553d",
+    "number": 10
+   },
+   "sample": {
+    "number": 10,
+    "text": "Huling tsansa"
+   },
+   "id": "countdown-timer",
+   "name": "Countdown timer"
+  },
+  {
+   "version": 1,
    "tl": "Nagbibilang na numero",
    "category": "data",
    "moods": [
@@ -569,6 +648,7 @@
     "tech",
     "news"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "number",
@@ -630,6 +710,154 @@
   },
   {
    "version": 1,
+   "tl": "Editorial na checklist",
+   "category": "data",
+   "moods": [
+    "luxury",
+    "calm",
+    "serious",
+    "tech",
+    "news",
+    "money",
+    "emotion"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "items",
+     "type": "list",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 760,
+    "h": 440
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 32,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#fbf8f2",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "Bago ka mag-post",
+    "items": [
+     "Malakas na hook",
+     "Malinaw na audio",
+     "Isang call to action"
+    ]
+   },
+   "id": "editorial-checklist",
+   "name": "Editorial checklist"
+  },
+  {
+   "version": 1,
+   "tl": "Editorial na headline",
+   "category": "text",
+   "moods": [
+    "luxury",
+    "calm",
+    "serious",
+    "tech",
+    "news",
+    "money",
+    "emotion"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.42
+   },
+   "box": {
+    "w": 820,
+    "h": 360
+   },
+   "pad": 80,
+   "fields": [
+    "text",
+    "text2",
+    "number",
+    "font",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": true,
+   "maxChars": 60,
+   "minFont": 34,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#f4efe6",
+    "color": "#17140f",
+    "accent": "#c8553d",
+    "font": "serif",
+    "text2": "The idea",
+    "number": 0
+   },
+   "sample": {
+    "text": "Ang *sikreto* ng magandang video",
+    "text2": "Chapter one",
+    "number": 1
+   },
+   "id": "editorial-headline",
+   "name": "Editorial headline"
+  },
+  {
+   "version": 1,
    "tl": "Sabog na emoji",
    "category": "emoji",
    "moods": [
@@ -639,6 +867,7 @@
     "money",
     "emotion"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "emoji",
@@ -690,6 +919,7 @@
     "emotion",
     "money"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "emoji",
@@ -740,6 +970,7 @@
     "tech",
     "calm"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -809,6 +1040,7 @@
     "hype",
     "warning"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -865,6 +1097,7 @@
     "emotion",
     "calm"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -919,6 +1152,7 @@
     "hype",
     "tech"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -974,6 +1208,7 @@
     "playful",
     "calm"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1028,6 +1263,7 @@
     "calm",
     "hype"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1082,6 +1318,7 @@
     "money",
     "news"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1138,6 +1375,7 @@
     "money",
     "serious"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1195,6 +1433,7 @@
     "emotion",
     "funny"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1242,6 +1481,67 @@
   },
   {
    "version": 1,
+   "tl": "Gumagalaw na salita (editorial)",
+   "category": "text",
+   "moods": [
+    "hype",
+    "luxury",
+    "serious",
+    "emotion",
+    "money",
+    "news"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.4,
+   "minDuration": 0.8,
+   "maxDuration": 6,
+   "zone": "center",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.42
+   },
+   "box": {
+    "w": 800,
+    "h": 360
+   },
+   "pad": 90,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": false,
+   "words": true,
+   "maxChars": 40,
+   "minFont": 40,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "color": "#ffffff",
+    "accent": "#f2c46d",
+    "font": "black"
+   },
+   "sample": {
+    "text": "Hindi ito *magic* — ito ay *sistema*"
+   },
+   "id": "kinetic-words",
+   "name": "Kinetic words (editorial)"
+  },
+  {
+   "version": 1,
    "tl": "Item sa listahan",
    "category": "data",
    "moods": [
@@ -1252,6 +1552,7 @@
     "news",
     "money"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1309,6 +1610,75 @@
   },
   {
    "version": 1,
+   "tl": "Logo badge (sariling logo)",
+   "category": "card",
+   "moods": [
+    "tech",
+    "money",
+    "luxury",
+    "serious",
+    "news",
+    "playful"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "image",
+     "type": "image",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 2.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "upper",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.2
+   },
+   "box": {
+    "w": 560,
+    "h": 170
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "text2",
+    "image",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 28,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "Your Brand",
+    "text2": "Official partner",
+    "image": ""
+   },
+   "id": "logo-badge",
+   "name": "Logo badge (your logo)"
+  },
+  {
+   "version": 1,
    "tl": "Pill sa ibaba",
    "category": "pill",
    "moods": [
@@ -1318,6 +1688,7 @@
     "calm",
     "hype"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1374,6 +1745,70 @@
   },
   {
    "version": 1,
+   "tl": "Marker na highlight",
+   "category": "text",
+   "moods": [
+    "luxury",
+    "calm",
+    "serious",
+    "tech",
+    "news",
+    "money",
+    "emotion"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.8,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 800,
+    "h": 230
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": true,
+   "maxChars": 56,
+   "minFont": 32,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#fbf8f2",
+    "color": "#17140f",
+    "accent": "#f6d36b",
+    "font": "serif"
+   },
+   "sample": {
+    "text": "Ang tamang *timing* ang lahat"
+   },
+   "id": "marker-highlight",
+   "name": "Marker highlight"
+  },
+  {
+   "version": 1,
    "tl": "Meme caption",
    "category": "text",
    "moods": [
@@ -1381,6 +1816,7 @@
     "playful",
     "hype"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1428,6 +1864,79 @@
   },
   {
    "version": 1,
+   "tl": "Mosaic grid",
+   "category": "card",
+   "moods": [
+    "luxury",
+    "emotion",
+    "tech",
+    "money",
+    "playful",
+    "news"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "images",
+     "type": "images",
+     "required": false
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 840,
+    "h": 840
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "images",
+    "number",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 36,
+   "minFont": 28,
+   "numRange": [
+    0,
+    9
+   ],
+   "covers": true,
+   "defaults": {
+    "bg": "#f4efe6",
+    "color": "#17140f",
+    "accent": "#c8553d",
+    "number": 0
+   },
+   "sample": {
+    "text": "Bawat detalye",
+    "number": 0
+   },
+   "id": "mosaic-grid",
+   "name": "Animated mosaic grid"
+  },
+  {
+   "version": 1,
    "tl": "Balita banner",
    "category": "text",
    "moods": [
@@ -1435,6 +1944,7 @@
     "serious",
     "urgent"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1500,6 +2010,7 @@
     "money",
     "playful"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1566,6 +2077,7 @@
     "tech",
     "playful"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1613,6 +2125,144 @@
   },
   {
    "version": 1,
+   "tl": "Palette ng kulay",
+   "category": "data",
+   "moods": [
+    "luxury",
+    "calm",
+    "playful",
+    "emotion",
+    "tech"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "items",
+     "type": "list",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 800,
+    "h": 520
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 32,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#fbf8f2",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "Ang palette",
+    "items": [
+     "#1f2a44",
+     "#c8553d",
+     "#f2c46d",
+     "#e8dcc8",
+     "#6b8f71"
+    ]
+   },
+   "id": "palette-card",
+   "name": "Colour palette"
+  },
+  {
+   "version": 1,
+   "tl": "Lumulutang na phone",
+   "category": "card",
+   "moods": [
+    "tech",
+    "money",
+    "playful",
+    "hype",
+    "luxury"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "image",
+     "type": "image",
+     "required": false
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 520,
+    "h": 1000
+   },
+   "pad": 80,
+   "fields": [
+    "text",
+    "image",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 32,
+   "minFont": 28,
+   "numRange": null,
+   "covers": true,
+   "defaults": {
+    "bg": "#16171b",
+    "color": "#ffffff",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "Sa app mismo"
+   },
+   "id": "phone-mockup",
+   "name": "Floating phone (generic)"
+  },
+  {
+   "version": 1,
    "tl": "Polaroid",
    "category": "card",
    "moods": [
@@ -1621,6 +2271,7 @@
     "calm",
     "funny"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1684,6 +2335,7 @@
     "money",
     "serious"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1739,6 +2391,7 @@
     "playful",
     "urgent"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "number",
@@ -1799,6 +2452,85 @@
   },
   {
    "version": 1,
+   "tl": "Profile card",
+   "category": "card",
+   "moods": [
+    "playful",
+    "hype",
+    "tech",
+    "money",
+    "emotion",
+    "calm"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "image",
+     "type": "image",
+     "required": false
+    }
+   ],
+   "duration": 3,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.3
+   },
+   "box": {
+    "w": 720,
+    "h": 240
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "text2",
+    "image",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 28,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#17140f",
+    "accent": "#c8553d",
+    "text2": "@yourhandle"
+   },
+   "sample": {
+    "text": "Your Name",
+    "text2": "@yourhandle",
+    "items": [
+     "12.4K followers"
+    ]
+   },
+   "id": "profile-card",
+   "name": "Social profile card"
+  },
+  {
+   "version": 1,
    "tl": "Prompt card na nagta-type",
    "category": "card",
    "moods": [
@@ -1806,6 +2538,7 @@
     "hype",
     "calm"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1869,6 +2602,7 @@
     "calm",
     "luxury"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -1934,6 +2668,7 @@
     "news",
     "money"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "number",
@@ -1998,6 +2733,7 @@
     "playful",
     "luxury"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "number",
@@ -2054,6 +2790,72 @@
   },
   {
    "version": 1,
+   "tl": "Collage ng screenshots",
+   "category": "card",
+   "moods": [
+    "tech",
+    "money",
+    "news",
+    "serious",
+    "luxury"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "images",
+     "type": "images",
+     "required": false
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 860,
+    "h": 860
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "images",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 40,
+   "minFont": 28,
+   "numRange": null,
+   "covers": true,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "Real results"
+   },
+   "id": "screenshot-collage",
+   "name": "Floating screenshot collage"
+  },
+  {
+   "version": 1,
    "tl": "Screenshot",
    "category": "card",
    "moods": [
@@ -2062,6 +2864,7 @@
     "news",
     "calm"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "image",
@@ -2115,6 +2918,72 @@
   },
   {
    "version": 1,
+   "tl": "Montage ng screenshots",
+   "category": "card",
+   "moods": [
+    "tech",
+    "money",
+    "news",
+    "serious",
+    "hype"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "images",
+     "type": "images",
+     "required": false
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 4,
+   "minDuration": 0.8,
+   "maxDuration": 10,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 820,
+    "h": 700
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "images",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 36,
+   "minFont": 28,
+   "numRange": null,
+   "covers": true,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "Isa-isa nating tingnan"
+   },
+   "id": "screenshot-montage",
+   "name": "Screenshot montage"
+  },
+  {
+   "version": 1,
    "tl": "Guhit-guhit",
    "category": "pointer",
    "moods": [
@@ -2123,6 +2992,7 @@
     "hype",
     "emotion"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2170,6 +3040,76 @@
   },
   {
    "version": 1,
+   "tl": "Search bar na nagta-type",
+   "category": "card",
+   "moods": [
+    "tech",
+    "news",
+    "money",
+    "serious",
+    "calm"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "items",
+     "type": "list",
+     "required": false
+    }
+   ],
+   "duration": 3.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.4
+   },
+   "box": {
+    "w": 820,
+    "h": 240
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 48,
+   "minFont": 30,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#202124",
+    "accent": "#4f7cff"
+   },
+   "sample": {
+    "text": "paano mag-edit ng viral video",
+    "items": [
+     "paano mag-edit ng viral video sa phone",
+     "paano mag-edit ng reels"
+    ]
+   },
+   "id": "search-bar",
+   "name": "Search bar (typing)"
+  },
+  {
+   "version": 1,
    "tl": "Eleganteng serif",
    "category": "text",
    "moods": [
@@ -2178,6 +3118,7 @@
     "emotion",
     "serious"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2235,6 +3176,7 @@
     "tech",
     "luxury"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2289,6 +3231,7 @@
     "emotion",
     "tech"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2343,6 +3286,7 @@
     "hype",
     "serious"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2399,6 +3343,7 @@
     "news",
     "calm"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "number",
@@ -2466,6 +3411,7 @@
     "urgent",
     "money"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2514,6 +3460,151 @@
   },
   {
    "version": 1,
+   "tl": "Storyboard na dokumento",
+   "category": "card",
+   "moods": [
+    "calm",
+    "tech",
+    "serious",
+    "news",
+    "luxury"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "items",
+     "type": "list",
+     "required": false
+    },
+    {
+     "key": "images",
+     "type": "images",
+     "required": false
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 760,
+    "h": 980
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "text2",
+    "items",
+    "images",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 36,
+   "minFont": 28,
+   "numRange": null,
+   "covers": true,
+   "defaults": {
+    "bg": "#fbf8f2",
+    "color": "#17140f",
+    "accent": "#c8553d",
+    "text": "Storyboard",
+    "text2": "Scene plan"
+   },
+   "sample": {
+    "text": "Storyboard",
+    "text2": "Scene plan",
+    "items": [
+     "Hook: ang tanong",
+     "Proof: ang resulta",
+     "CTA: i-follow"
+    ]
+   },
+   "id": "storyboard-doc",
+   "name": "Storyboard document"
+  },
+  {
+   "version": 1,
+   "tl": "Subtitle card (cream)",
+   "category": "text",
+   "moods": [
+    "luxury",
+    "calm",
+    "serious",
+    "tech",
+    "news",
+    "money",
+    "emotion"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "lower",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.72
+   },
+   "box": {
+    "w": 760,
+    "h": 150
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "font",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": true,
+   "maxChars": 70,
+   "minFont": 30,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#f4efe6",
+    "color": "#17140f",
+    "accent": "#c8553d",
+    "font": "inter"
+   },
+   "sample": {
+    "text": "Ito ang *pinaka-importante* sa lahat"
+   },
+   "id": "subtitle-card",
+   "name": "Subtitle card (cream)"
+  },
+  {
+   "version": 1,
    "tl": "Manipis na may espasyo",
    "category": "text",
    "moods": [
@@ -2522,6 +3613,7 @@
     "serious",
     "emotion"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2577,6 +3669,7 @@
     "news",
     "hype"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2651,6 +3744,7 @@
     "calm",
     "news"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2698,6 +3792,78 @@
   },
   {
    "version": 1,
+   "tl": "Lumulutang na UI panel",
+   "category": "card",
+   "moods": [
+    "tech",
+    "money",
+    "serious",
+    "calm",
+    "news"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "items",
+     "type": "list",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.45
+   },
+   "box": {
+    "w": 760,
+    "h": 470
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 32,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#17140f",
+    "accent": "#2f8f6b",
+    "text": "Settings"
+   },
+   "sample": {
+    "text": "Your setup",
+    "items": [
+     "Good lighting",
+     "Clear audio",
+     "Strong hook"
+    ]
+   },
+   "id": "ui-panel",
+   "name": "Floating UI panel"
+  },
+  {
+   "version": 1,
    "tl": "Guhit sa ilalim",
    "category": "text",
    "moods": [
@@ -2706,6 +3872,7 @@
     "money",
     "tech"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2762,6 +3929,7 @@
     "money",
     "funny"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",
@@ -2826,6 +3994,7 @@
     "serious",
     "funny"
    ],
+   "styles": [],
    "inputs": [
     {
      "key": "text",

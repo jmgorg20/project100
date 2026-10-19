@@ -32,7 +32,7 @@ FRAME_W, FRAME_H = 1080, 1920
 
 PARAM_KEYS = ("text", "text2", "items", "number", "prefix", "suffix", "image", "emoji", "icon",
               "font", "color", "accent", "bg", "size", "intensity", "align", "case", "angle",
-              "dir")
+              "dir", "images", "cues")
 
 
 # ---------------------------------------------------------------- catalog
@@ -73,6 +73,28 @@ def font_keys():
 
 def icon_names():
     return list(catalog()["icons"])
+
+
+def palette_from_image(path, count=5):
+    """The `count` main colours of a picture (#rrggbb, most used first): for the colour palette card,
+    always from the user's own image. Pillow's median-cut, on a small copy (fast, repeatable)."""
+    from PIL import Image
+    with Image.open(path) as im:
+        small = im.convert("RGB")
+        small.thumbnail((160, 160), Image.NEAREST)            # no blending: flat colours stay exact
+    exact = small.getcolors(maxcolors=64)
+    if exact:                                                # a logo / brand picture: its own colours
+        return [f"#{r:02x}{g:02x}{b:02x}" for _n, (r, g, b) in sorted(exact, reverse=True)][:count]
+    quant = small.quantize(colors=max(2, min(8, int(count))), method=Image.Quantize.MEDIANCUT)
+    pal = quant.getpalette()
+    used = sorted(quant.getcolors(), reverse=True)
+    out = []
+    for _n, idx in used:
+        r, g, b = pal[idx * 3: idx * 3 + 3]
+        hexed = f"#{r:02x}{g:02x}{b:02x}"
+        if hexed not in out:
+            out.append(hexed)
+    return out[:count]
 
 
 # ---------------------------------------------------------------- positions and sizes
@@ -200,6 +222,17 @@ def _image_path(params, media, base_dir):
     return resolve_media_path(m, base_dir)
 
 
+def _images_paths(params, media, base_dir):
+    """The files of `params.images` (media ids) that exist in the project, in order."""
+    from .project import resolve_media_path
+    out = []
+    for ref in params.get("images") or []:
+        m = media.get(ref)
+        if m is not None:
+            out.append(resolve_media_path(m, base_dir))
+    return out
+
+
 def _fingerprint(path):
     try:
         st = Path(path).stat()
@@ -220,9 +253,13 @@ def job_for_clip(clip, fps, media, base_dir, directory=None):
         drawn["image"] = str(image)
     else:
         drawn.pop("image", None)
+    images = _images_paths(params, media, base_dir)
+    if params.get("images") is not None:
+        drawn["images"] = [str(x) for x in images]
     basis = {"t": clip["template"], "tv": meta["version"], "r": catalog()["renderer"],
-             "p": {**params, "image": _fingerprint(image) if image else None}, "fps": fps,
-             "frames": frames}
+             "p": {**params, "image": _fingerprint(image) if image else None,
+                   **({"images": [_fingerprint(x) for x in images]} if params.get("images") is not None else {})},
+             "fps": fps, "frames": frames}
     key = safe_filename(hashlib.sha256(json.dumps(basis, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:24])
     directory = Path(directory) if directory else cache_dir()
     return {"key": key, "template": clip["template"], "params": drawn, "fps": fps, "frames": frames,

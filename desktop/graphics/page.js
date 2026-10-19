@@ -11,6 +11,9 @@ window.gfx = {
   /** Build a graphic; resolves with its size once fonts are ready. */
   async prepare({ id, params, duration, quality }) {
     await loadFontsFor(document);
+    // the user's pictures are decoded before the first frame is drawn
+    const urls = [params && params.image, ...((params && Array.isArray(params.images)) ? params.images : [])].filter(Boolean);
+    await Promise.all(urls.map((src) => { const img = new Image(); img.src = src; return img.decode().catch(() => null); }));
     if (current) current.destroy();
     current = instantiate(id, params, { duration, quality: quality || "final" });
     const r = current.tile.getBoundingClientRect();

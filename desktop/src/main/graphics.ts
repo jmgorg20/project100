@@ -216,6 +216,7 @@ export async function drawJobs(
   async function drawOne(job: DrawJob) {
     const params = { ...job.params };
     if (typeof params.image === "string" && !/^(https?:|data:)/i.test(params.image)) params.image = serveFile(params.image);
+    if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === "string" && !/^(https?:|data:)/i.test(f) ? serveFile(f) : f));
     const info = await capturer.eval<{ w: number; h: number; pad: number; tileW: number; tileH: number; report: unknown }>(
       `window.gfx.prepare(${JSON.stringify({ id: job.template, params, duration: job.duration, quality: job.quality ?? "final" })})`,
     );

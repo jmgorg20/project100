@@ -165,6 +165,12 @@ export function cleanParams(meta: TemplateMeta, given: GraphicParams): GraphicPa
       case "image":
         out.image = String(v);
         break;
+      case "images":
+        if (Array.isArray(v)) out.images = v.map(String).filter(Boolean).slice(0, 9);
+        break;
+      case "cues":
+        if (Array.isArray(v)) out.cues = v.map(Number).filter((x) => Number.isFinite(x) && x >= 0 && x <= 600).slice(0, 24).sort((a, b) => a - b).map(r4);
+        break;
     }
   }
   return out;
@@ -196,6 +202,9 @@ export function setGraphic(p: Project, id: string, patch: GraphicPatch): Project
   if (!meta) throw new EditError(`There is no graphic called "${template}".`);
   if (patch.params?.image && !p.media.some((m) => m.id === patch.params?.image && m.kind === "image")) {
     throw new EditError("Choose a picture from your media for this graphic.");
+  }
+  if (patch.params?.images?.some((ref) => !p.media.some((m) => m.id === ref && m.kind === "image"))) {
+    throw new EditError("Choose pictures from your media for this graphic.");
   }
   const q = clone(p);
   const fix = (c: Clip): Clip => {

@@ -1052,13 +1052,14 @@
                 "top_banner",
                 "center_keyword",
                 "typewriter",
-                "pop_word"
+                "pop_word",
+                "editorial_card"
               ]
             },
             {
               "type": "integer",
               "minimum": 1,
-              "maximum": 13
+              "maximum": 14
             }
           ]
         },
@@ -1698,6 +1699,24 @@
             "up",
             "down"
           ]
+        },
+        "images": {
+          "type": "array",
+          "maxItems": 9,
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "Ids of several images in `media` (your screenshots / photos: collage, mosaic, montage, storyboard)."
+        },
+        "cues": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 600
+          },
+          "description": "Seconds from the graphic's start when each word / item / step appears (the Director sets them from the spoken words)."
         }
       }
     },

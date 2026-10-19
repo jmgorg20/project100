@@ -226,6 +226,12 @@ def _graphic_problems(clip, media, where):
     icon = params.get("icon")
     if icon and icon not in graphics.icon_names():
         problems.append(f"{where}: unknown icon '{icon}'")
+    for ref in params.get("images") or []:
+        m = media.get(ref)
+        if m is None:
+            problems.append(f"{where}: unknown image media '{ref}'")
+        elif m["kind"] != "image":
+            problems.append(f"{where}: the picture '{ref}' is {m['kind']}, not an image")
     image = params.get("image")
     if image:
         m = media.get(image)
