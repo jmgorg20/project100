@@ -17,6 +17,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -107,9 +108,40 @@ def tip_point(clip, meta=None):
 
 # ---------------------------------------------------------------- keys and jobs
 
+_WRITABLE = {}
+
+
+def writable(folder):
+    """True when files can be created in `folder` (made if missing). Remembered per folder."""
+    folder = Path(folder)
+    if str(folder) not in _WRITABLE:
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            probe = folder / f".write-test-{os.getpid()}"
+            probe.write_bytes(b"ok")
+            probe.unlink()
+            _WRITABLE[str(folder)] = True
+        except OSError:
+            _WRITABLE[str(folder)] = False
+    return _WRITABLE[str(folder)]
+
+
+def user_cache_dir():
+    """This user's own cache folder (%LOCALAPPDATA% on Windows, ~/.cache elsewhere)."""
+    base = os.environ.get("LOCALAPPDATA") if os.name == "nt" else os.environ.get("XDG_CACHE_HOME")
+    base = Path(base) if base else Path.home() / (".cache" if os.name != "nt" else "AppData/Local")
+    return base / "AutoEditor" / "graphics"
+
+
 def cache_dir():
+    """Where drawn graphics are kept: AUTOEDIT_GRAPHICS_CACHE, else work/cache/graphics next to the
+    engine, else (an install folder that cannot be written, e.g. under Program Files) the user's
+    own cache folder."""
     override = os.environ.get("AUTOEDIT_GRAPHICS_CACHE")
-    return Path(override) if override else PROJECT_DIR / "work" / "cache" / "graphics"
+    if override:
+        return Path(override)
+    local = PROJECT_DIR / "work" / "cache" / "graphics"
+    return local if writable(local) else user_cache_dir()
 
 
 def _frames(clip, fps):
@@ -238,6 +270,7 @@ def draw_via_server(url, token, jobs, reporter=None, cancel=None):
     if cancel is not None:
         threading.Thread(target=watch, daemon=True).start()
     failure = None
+    errors = {}
     try:
         if response.status_code != 200:
             raise EditorError(f"The graphics drawing service refused the request ({response.status_code}).")
@@ -250,6 +283,8 @@ def draw_via_server(url, token, jobs, reporter=None, cancel=None):
                 continue
             if event.get("type") == "progress" and reporter and event.get("total"):
                 reporter.progress(event["done"] / event["total"], stage="graphics")
+            elif event.get("type") == "job_error":
+                errors[event.get("key")] = event.get("message") or "unknown error"
             elif event.get("type") == "error":
                 failure = event.get("message")
     except requests.RequestException as exc:
@@ -263,29 +298,31 @@ def draw_via_server(url, token, jobs, reporter=None, cancel=None):
         raise Cancelled("Cancelled while drawing the graphics.")
     if failure:
         raise EditorError(f"Could not draw the graphics: {failure}")
+    return errors
 
 
 def draw_jobs(jobs, reporter=None, cancel=None):
     """Draw jobs to their files: through the app's graphics service when there is one
-    (AUTOEDIT_GRAPHICS_URL), else with the command line renderer. Raises EditorError if it cannot."""
+    (AUTOEDIT_GRAPHICS_URL), else with the command line renderer. Raises EditorError when nothing
+    can be drawn (no renderer, the service is down). Returns {job key: why} for the single
+    graphics that could not be drawn (the others are drawn)."""
     if not jobs:
-        return
+        return {}
     url = os.environ.get("AUTOEDIT_GRAPHICS_URL")
     if url:
-        draw_via_server(url, os.environ.get("AUTOEDIT_GRAPHICS_TOKEN"), jobs, reporter, cancel)
-        still_missing = [j for j in jobs if not is_drawn(j)]
-        if still_missing:
-            raise EditorError(f"The graphics service finished but {len(still_missing)} graphic(s) "
-                              "were not written.")
-        return
+        errors = draw_via_server(url, os.environ.get("AUTOEDIT_GRAPHICS_TOKEN"), jobs, reporter, cancel)
+        return not_drawn(jobs, errors)
     cmd = renderer_command()
     if cmd is None:
         raise EditorError(NO_RENDERER)
-    from .project import ProjectError  # noqa: F401  (keeps import order stable)
     directory = Path(jobs[0]["out"]).parent
-    directory.mkdir(parents=True, exist_ok=True)
-    spec = directory / f"jobs-{os.getpid()}-{threading.get_ident()}.json"
-    spec.write_text(json.dumps({"ffmpeg": find_tool("ffmpeg"), "jobs": jobs}), encoding="utf-8")
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        spec = directory / f"jobs-{os.getpid()}-{threading.get_ident()}.json"
+        spec.write_text(json.dumps({"ffmpeg": find_tool("ffmpeg"), "jobs": jobs}), encoding="utf-8")
+    except OSError as exc:
+        raise EditorError(f"Cannot write the graphics cache folder {directory}: {exc.strerror or exc}. "
+                          "Set AUTOEDIT_GRAPHICS_CACHE to a folder you can write to.")
     if reporter:
         reporter.stage("graphics", "drawing the graphics")
     try:
@@ -294,6 +331,7 @@ def draw_jobs(jobs, reporter=None, cancel=None):
                                 errors="replace")
         stop = threading.Event()
         err = []
+        errors = {}
 
         def watch():
             while proc.poll() is None and not stop.is_set():
@@ -316,6 +354,8 @@ def draw_jobs(jobs, reporter=None, cancel=None):
                 continue
             if event.get("type") == "progress" and reporter and event.get("total"):
                 reporter.progress(event["done"] / event["total"], stage="graphics")
+            elif event.get("type") == "job_error":
+                errors[event.get("key")] = event.get("message") or "unknown error"
             elif event.get("type") == "error":
                 failure = event.get("message")
         proc.wait()
@@ -330,27 +370,51 @@ def draw_jobs(jobs, reporter=None, cancel=None):
             spec.unlink()
         except OSError:
             pass
-    still_missing = [j for j in jobs if not is_drawn(j)]
-    if still_missing:
-        raise EditorError(f"The graphics renderer finished but {len(still_missing)} graphic(s) "
-                          "were not written.")
+    return not_drawn(jobs, errors)
+
+
+def not_drawn(jobs, errors):
+    """{key: why} for the jobs whose files are not there after drawing."""
+    return {j["key"]: errors.get(j["key"]) or f"the renderer did not write {j['out']}"
+            for j in jobs if not is_drawn(j)}
 
 
 def ensure_assets(project, base_dir, reporter=None, cancel=None, mode="require", directory=None):
-    """Make sure every graphic of the project is drawn. Returns the jobs that could not be drawn.
+    """Make sure every graphic of the project is drawn. Returns the jobs that could not be drawn
+    (each with "error": why), after a warning for each: a graphic that fails is left out of the
+    video, it never stops the render.
 
-    mode "require": draw what is missing, raise EditorError if that is not possible.
-    mode "skip":    draw what is possible; return the missing jobs instead of raising."""
+    mode "require": when nothing can be drawn at all (no renderer, the service is down), raise
+                    EditorError.
+    mode "skip":    then return all the missing jobs instead of raising."""
     missing = missing_jobs(project, base_dir, directory)
     if not missing:
         return []
     try:
-        draw_jobs(missing, reporter, cancel)
-    except EditorError:
+        errors = draw_jobs(missing, reporter, cancel) or {}
+    except EditorError as exc:
         if mode == "skip":
-            return [j for j in missing if not is_drawn(j)]
+            return [{**j, "error": str(exc)} for j in missing if not is_drawn(j)]
         raise
-    return []
+    failed = []
+    for job in missing:
+        if job["key"] in errors:
+            failed.append({**job, "error": errors[job["key"]]})
+            warn_skipped(job, errors[job["key"]], reporter)
+    return failed
+
+
+def warn_skipped(job, why, reporter=None):
+    """Say that one graphic is left out: which clip, which template, which file, and why."""
+    message = (f"Graphic {job.get('clip')} ({job['template']}) was left out of the video: it could not be "
+               f"drawn to {job['out']}: {why}")
+    print(f"WARNING: {message}", file=sys.stderr)
+    if reporter is not None:
+        try:
+            reporter.event("warning", stage="graphics", clip=job.get("clip"), template=job["template"],
+                           path=job["out"], message=message)
+        except Exception:                      # a reporter without events: the stderr line is enough
+            pass
 
 
 def render_layers(project, base_dir, directory=None):

@@ -38,6 +38,7 @@ export interface CaptionActions {
   onEmoji: (id: string, index: number, emoji: string) => void;
   onLook: (id: string, look: CaptionLook, all: boolean) => void;
   onRetranscribe: (id: string) => void;
+  onPunctuation: (mode: "remove" | "keep") => void;
   busy: boolean;
 }
 
@@ -325,6 +326,8 @@ export function Inspector({ project, selection, onProps, onSpeed, onRamp, onDele
           onEmoji={(i, e) => captions.onEmoji(clip.id, i, e)}
           onLook={(l, all) => captions.onLook(clip.id, l, all)}
           onRetranscribe={() => captions.onRetranscribe(clip.id)}
+          punctuation={project.settings.captions?.punctuation ?? "remove"}
+          onPunctuation={captions.onPunctuation}
         />
       )}
 

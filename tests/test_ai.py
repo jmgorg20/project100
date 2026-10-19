@@ -459,7 +459,7 @@ def cli(args, cwd):
 def seed_transcript(cfg_file_dir, video, transcript):
     """Put the transcript in the cache so the CLI does not call Whisper."""
     cache = Cache(cfg_file_dir / "cache")
-    key = f"{cache.fingerprint(video)}-groq-whisper-large-v3-tl"
+    key = f"{cache.fingerprint(video)}-groq-whisper-large-v3-tl-taglish1"
     path = cache.folder / "transcripts" / f"{key}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     save_transcript(load_transcript(transcript), path)

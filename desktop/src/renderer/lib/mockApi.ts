@@ -25,7 +25,7 @@ export function createMockApi(): AppApi {
   const speed = Number(params.get("speed") ?? "1");
   let settings: Settings = {
     pythonPath: "python", engineDir: "C:/AutoEditor", outputDir: "C:/AutoEditor/output", provider: "groq",
-    groqModel: "openai/gpt-oss-120b", anthropicModel: "claude-opus-5-5", transcribeWith: "groq", autoMode: true,
+    groqModel: "openai/gpt-oss-120b", anthropicModel: "claude-opus-5-5", transcribeWith: "groq", captionPunctuation: "remove", fixCaptionsFirst: false, autoMode: true,
     consentAccepted: params.has("consent"), musicFolder: params.has("music") ? "C:/Users/me/Music" : "", sfxFolder: "",
     brollFolder: params.has("broll") ? "C:/Users/me/B-roll" : "", useStock: true,
   };
@@ -456,6 +456,21 @@ export function createMockApi(): AppApi {
       return taskId;
     },
     getVocabulary: async () => structuredClone(w.vocabulary),
+    transcribe: async () => {
+      const text = "Teka lang! Tatyo sikreto ng viral na video. Sa search bar, hinanat ko: paano kumita online.";
+      let t = 0.3;
+      const words = text.split(" ").map((word) => {
+        const out = { text: word, start: Math.round(t * 1000) / 1000, end: Math.round((t + 0.35) * 1000) / 1000 };
+        t += word.endsWith(".") || word.endsWith("!") ? 0.9 : 0.4;
+        return out;
+      });
+      (window as unknown as { lastTranscribed: unknown }).lastTranscribed = words;
+      return { file: "C:/AppData/transcripts/demo.transcript.json", words };
+    },
+    saveTranscript: async (file, words) => {
+      (window as unknown as { savedTranscript: unknown }).savedTranscript = { file, words };
+      return { ok: true };
+    },
     setVocabulary: async (v) => {
       w.vocabulary = structuredClone(v);
       return { ok: true };

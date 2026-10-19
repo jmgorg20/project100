@@ -220,7 +220,7 @@ def test_end_to_end_with_the_real_engine(server, tmp_path, monkeypatch):
     talk = synthetic.make_video(tmp_path / "talk.mp4")
     transcript = synthetic.make_transcript(tmp_path / "talk.json")
     cache = Cache(tmp_path / "cache")                     # the worker's transcript cache (no network here)
-    entry = cache.folder / "transcripts" / f"{cache.fingerprint(talk)}-groq-whisper-large-v3-tl.json"
+    entry = cache.folder / "transcripts" / f"{cache.fingerprint(talk)}-groq-whisper-large-v3-tl-taglish1.json"
     entry.parent.mkdir(parents=True, exist_ok=True)
     save_transcript(load_transcript(transcript), entry)
     cfg = tmp_path / "worker.yaml"

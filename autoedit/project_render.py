@@ -571,9 +571,12 @@ def project_fonts(project):
             "heavy": (f.get("heavy", "Inter Black"), True)}
 
 
-def caption_style(clip):
+def caption_style(clip, project=None):
     style = get_style(clip["style"])
-    overrides = clip.get("overrides") or {}
+    overrides = dict(clip.get("overrides") or {})
+    punctuation = (((project or {}).get("settings") or {}).get("captions") or {}).get("punctuation")
+    if punctuation:
+        overrides["punctuation"] = punctuation          # the project's setting, for every caption
     return replace(style, **overrides) if overrides else style
 
 
@@ -592,7 +595,7 @@ def build_project_ass(project, fonts_folder):
     styles, lines, events = {}, [], []
     for track in visible_tracks(project, "caption"):
         for clip in sorted(track["clips"], key=lambda c: c["start"]):
-            style = caption_style(clip)
+            style = caption_style(clip, project)
             key = repr(style)
             if key not in styles:
                 n = len(styles) + 1

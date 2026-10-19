@@ -114,17 +114,29 @@ def transcribe_local(audio_path, language, model_name, device, prompt=None):
     return words_from_data({"words": words})
 
 
-def transcribe(video, cfg, work_dir, start=None, end=None):
+def taglish_hint_on(cfg):
+    t = cfg.get("transcription") or {}
+    return bool(t.get("taglish_hint", True)) and str(cfg.get("language", "")).lower() in ("tl", "fil")
+
+
+def transcription_prompt(cfg, hints=()):
+    """The hint sent with the audio: your vocabulary, words of your instruction and file names
+    (`hints`), and for Tagalog (language tl) a short Taglish line that steers the spelling."""
+    from .vocabulary import hint_words, load_vocabulary, prompt_for, vocabulary_path
+    return prompt_for(load_vocabulary(vocabulary_path(cfg)), hint_words(hints), taglish_hint_on(cfg))
+
+
+def transcribe(video, cfg, work_dir, start=None, end=None, hints=()):
     """Word timestamps of a file's speech (or of start-end seconds of it, in file time).
 
-    Your vocabulary (vocabulary.json) is sent as a hint; corrections are applied by the
-    callers (vocabulary.fix_words), so they also reach transcripts saved earlier.
+    Your vocabulary (vocabulary.json) and `hints` (your instruction, photo names) are sent as a
+    hint; corrections are applied by the callers (vocabulary.fix_words), so they also reach
+    transcripts saved earlier.
     """
-    from .vocabulary import load_vocabulary, prompt_for, vocabulary_path
     audio = extract_audio(video, Path(work_dir) / "speech.mp3", start, end)
     t = cfg["transcription"]
     provider = str(t["provider"]).lower()
-    prompt = prompt_for(load_vocabulary(vocabulary_path(cfg)))
+    prompt = transcription_prompt(cfg, hints)
     if provider == "groq":
         words = transcribe_groq(audio, cfg["language"], t["groq_model"], prompt)
     elif provider == "local":

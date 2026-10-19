@@ -3,7 +3,7 @@
 // both load the same page.html over a tiny local web server and write the same files.
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { createReadStream, existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,6 +30,20 @@ export function startStaticServer(root = HERE) {
   })));
 }
 
+/** Move a finished file into place. On Windows a file that is being read (a render, a preview,
+ * the virus scanner) cannot be replaced for a moment: wait and try again, then replace it. */
+export async function replaceFile(part, out, tries = 20) {
+  for (let i = 0; ; i++) {
+    try { renameSync(part, out); return; } catch (e) {
+      if (i >= tries || !["EPERM", "EBUSY", "EACCES", "EEXIST"].includes(e.code)) {
+        throw new Error(`could not write ${out}: ${e.code || ""} ${e.message}`);
+      }
+      if (i === tries - 1) { try { rmSync(out, { force: true }); } catch { /* still busy */ } }
+      await new Promise((ok) => setTimeout(ok, 150));
+    }
+  }
+}
+
 /** An FFmpeg process that takes PNG frames on stdin and writes an FFV1 (lossless, alpha) video. */
 export function openSink(ffmpeg, out, fps) {
   const part = `${out}.part.mkv`;
@@ -44,7 +58,7 @@ export function openSink(ffmpeg, out, fps) {
   });
   return {
     write: (buf) => new Promise((ok) => { if (proc.stdin.write(buf)) ok(); else proc.stdin.once("drain", ok); }),
-    async finish() { proc.stdin.end(); await done; renameSync(part, out); },
+    async finish() { proc.stdin.end(); await done; await replaceFile(part, out); },
     abort() { try { proc.stdin.destroy(); proc.kill(); } catch { /* already gone */ } },
   };
 }
@@ -65,8 +79,10 @@ export async function launchBrowser(chromium) {
  *  - meta: sidecar json path with { w, h, pad, tileW, tileH, report, fps, frames, renderer }
  *  - stills: [{ t, out }] PNG files of single times (tests, previews)
  * onProgress({ done, total, job }); `signal` (AbortSignal) cancels between frames.
+ * A job that fails (a missing picture, a file that cannot be written) is skipped: onJobError({ job,
+ * message }) is called and the other jobs are still drawn.
  */
-export async function renderJobs(jobs, { ffmpeg = process.env.AUTOEDIT_FFMPEG || "ffmpeg", onProgress, signal, chromium } = {}) {
+export async function renderJobs(jobs, { ffmpeg = process.env.AUTOEDIT_FFMPEG || "ffmpeg", onProgress, onJobError, signal, chromium } = {}) {
   if (!chromium) ({ chromium } = await import("playwright-core"));
   const server = await startStaticServer();
   const browser = await launchBrowser(chromium);
@@ -82,36 +98,42 @@ export async function renderJobs(jobs, { ffmpeg = process.env.AUTOEDIT_FFMPEG ||
     await page.waitForFunction("window.gfxReady === true", null, { timeout: 15000 });
     for (const job of jobs) {
       if (signal && signal.aborted) throw new Error("cancelled");
-      // a picture on this PC is served by the local server (a page from http:// cannot open file://)
-      const params = { ...(job.params || {}) };
-      if (params.image && !/^(https?:|data:)/i.test(params.image)) {
-        params.image = server.serveFile(`img-${imageCount++}${extname(params.image).toLowerCase()}`, params.image);
+      try {
+        // a picture on this PC is served by the local server (a page from http:// cannot open file://)
+        const params = { ...(job.params || {}) };
+        if (params.image && !/^(https?:|data:)/i.test(params.image)) {
+          params.image = server.serveFile(`img-${imageCount++}${extname(params.image).toLowerCase()}`, params.image);
+        }
+        const info = await page.evaluate((j) => window.gfx.prepare({ id: j.template, params: j.params, duration: j.duration, quality: j.quality }), { ...job, params });
+        const clip = { x: 0, y: 0, width: info.tileW, height: info.tileH };
+        const shot = async (t) => { await page.evaluate((x) => window.gfx.seek(x), t); return page.screenshot({ type: "png", omitBackground: true, clip }); };
+        if (job.frames > 0 && job.out) {
+          mkdirSync(dirname(job.out), { recursive: true });
+          const sink = openSink(ffmpeg, job.out, job.fps);
+          try {
+            for (let i = 0; i < job.frames; i++) {
+              if (signal && signal.aborted) throw new Error("cancelled");
+              await sink.write(await shot(i / job.fps));
+              done++;
+              if (onProgress && (i % 5 === 0 || i === job.frames - 1)) onProgress({ done, total, job });
+            }
+            await sink.finish();
+          } catch (e) { sink.abort(); throw e; }
+        }
+        for (const s of job.stills || []) {
+          mkdirSync(dirname(s.out), { recursive: true });
+          writeFileSync(s.out, await shot(s.t));
+          done++;
+        }
+        const meta = { w: info.w, h: info.h, pad: info.pad, tileW: info.tileW, tileH: info.tileH, report: info.report, fps: job.fps || 0, frames: job.frames || 0, renderer: await page.evaluate(() => window.gfx.version) };
+        if (job.meta) { mkdirSync(dirname(job.meta), { recursive: true }); writeFileSync(job.meta, JSON.stringify(meta)); }
+        results.push({ ...meta, job });
+        if (onProgress) onProgress({ done, total, job, finished: true });
+      } catch (e) {
+        if (signal && signal.aborted) throw e;
+        if (!onJobError) throw e;
+        onJobError({ job, message: String((e && e.message) || e) });
       }
-      const info = await page.evaluate((j) => window.gfx.prepare({ id: j.template, params: j.params, duration: j.duration, quality: j.quality }), { ...job, params });
-      const clip = { x: 0, y: 0, width: info.tileW, height: info.tileH };
-      const shot = async (t) => { await page.evaluate((x) => window.gfx.seek(x), t); return page.screenshot({ type: "png", omitBackground: true, clip }); };
-      if (job.frames > 0 && job.out) {
-        mkdirSync(dirname(job.out), { recursive: true });
-        const sink = openSink(ffmpeg, job.out, job.fps);
-        try {
-          for (let i = 0; i < job.frames; i++) {
-            if (signal && signal.aborted) throw new Error("cancelled");
-            await sink.write(await shot(i / job.fps));
-            done++;
-            if (onProgress && (i % 5 === 0 || i === job.frames - 1)) onProgress({ done, total, job });
-          }
-          await sink.finish();
-        } catch (e) { sink.abort(); throw e; }
-      }
-      for (const s of job.stills || []) {
-        mkdirSync(dirname(s.out), { recursive: true });
-        writeFileSync(s.out, await shot(s.t));
-        done++;
-      }
-      const meta = { w: info.w, h: info.h, pad: info.pad, tileW: info.tileW, tileH: info.tileH, report: info.report, fps: job.fps || 0, frames: job.frames || 0, renderer: await page.evaluate(() => window.gfx.version) };
-      if (job.meta) { mkdirSync(dirname(job.meta), { recursive: true }); writeFileSync(job.meta, JSON.stringify(meta)); }
-      results.push({ ...meta, job });
-      if (onProgress) onProgress({ done, total, job, finished: true });
     }
   } finally {
     await browser.close();

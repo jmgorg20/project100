@@ -91,6 +91,24 @@ export async function electronCapturer(): Promise<Capturer> {
   };
 }
 
+/** Move a finished file into place. On Windows a file that is being read (a render, a preview,
+ * the virus scanner) cannot be replaced for a moment: wait and try again, then replace it. */
+export async function replaceFile(part: string, out: string, tries = 20, rename = fs.renameSync): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      rename(part, out);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code ?? "";
+      if (i >= tries || !["EPERM", "EBUSY", "EACCES", "EEXIST"].includes(code)) {
+        throw new Error(`could not write ${out}: ${code} ${(e as Error).message}`);
+      }
+      if (i === tries - 1) fs.rmSync(out, { force: true });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
+}
+
 function ffmpegSink(ffmpeg: string, out: string, fps: number) {
   const part = `${out}.part.mkv`;
   const proc = spawn(ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(fps), "-c:v", "png", "-i", "-",
@@ -107,7 +125,7 @@ function ffmpegSink(ffmpeg: string, out: string, fps: number) {
     async finish() {
       proc.stdin!.end();
       await done;
-      fs.renameSync(part, out);
+      await replaceFile(part, out);
     },
     abort() {
       try {
@@ -119,7 +137,8 @@ function ffmpegSink(ffmpeg: string, out: string, fps: number) {
   };
 }
 
-/** Draw jobs with a capturer; `say` gets progress lines. Pictures on this PC are served by `serveFile`. */
+/** Draw jobs with a capturer; `say` gets progress lines. Pictures on this PC are served by `serveFile`.
+ * A job that fails is skipped ({"type":"job_error"} names it and why); the others are still drawn. */
 export async function drawJobs(
   jobs: DrawJob[], capturer: Capturer, pageUrl: string, ffmpeg: string, say: (e: Record<string, unknown>) => void,
   serveFile: (file: string) => string, aborted: () => boolean,
@@ -129,6 +148,15 @@ export async function drawJobs(
   await capturer.open(pageUrl);
   for (const job of jobs) {
     if (aborted()) throw new Error("cancelled");
+    try {
+      await drawOne(job);
+    } catch (e) {
+      if (aborted()) throw e;
+      say({ type: "job_error", key: job.key, message: (e as Error).message ?? String(e) });
+    }
+  }
+
+  async function drawOne(job: DrawJob) {
     const params = { ...job.params };
     if (typeof params.image === "string" && !/^(https?:|data:)/i.test(params.image)) params.image = serveFile(params.image);
     const info = await capturer.eval<{ w: number; h: number; pad: number; tileW: number; tileH: number; report: unknown }>(

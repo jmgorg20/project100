@@ -51,6 +51,10 @@ export function applyEvent(job: Job, event: EngineEvent): Job {
     case "log":
       next.log = [...job.log, event.message].slice(-LOG_LINES);
       break;
+    case "warning":
+      next.warnings = [...(job.warnings ?? []), event.message].slice(-20);
+      next.log = [...job.log, `WARNING: ${event.message}`].slice(-LOG_LINES);
+      break;
     default:
       break;
   }
