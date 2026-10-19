@@ -8,7 +8,7 @@ register (with the test result), promote (only if the tests passed), rollback (o
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from . import accounts, billing, clients, jobqueue
+from . import accounts, admin_stats, billing, clients, jobqueue
 from .api import ApiError, client_ip
 from .db import loads, now
 from .deps import require_admin
@@ -221,17 +221,6 @@ def usage(request: Request, month: str = None):
                 "clients": [{"id": c["id"], "name": c["name"], **clients.usage_this_month(t, c["id"], month)} for c in rows]}
 
 
-@router.get("/audit")
-def audit_log(request: Request, limit: int = 100):
-    with request.app.state.db.tx() as t:
-        rows = t.all("SELECT * FROM audit_log ORDER BY at DESC LIMIT ?", (max(1, min(1000, limit)),))
-    for r in rows:
-        r["details"] = loads(r["details"])
-    return {"entries": rows}
-
-
-# ---------------------------------------------------------------- users, invite codes, sign-ups
-
 @router.get("/users")
 def list_users(request: Request, q: str = None, limit: int = 50):
     limit = max(1, min(200, limit))
@@ -364,3 +353,51 @@ def grant_plan(request: Request, client_id: str, body: dict):
         except billing.BillingError as exc:
             raise ApiError(exc.status, exc.code, str(exc))
         return {"subscription": sub}
+
+
+# ---------------------------------------------------------------- the dashboard and costs
+
+@router.get("/dashboard")
+def dashboard(request: Request, days: int = 30):
+    s = request.app.state
+    with s.db.tx() as t:
+        return admin_stats.dashboard(t, s.settings, days)
+
+
+def _month(month):
+    if month is not None and (len(month) != 7 or month[4] != "-" or not month.replace("-", "").isdigit()):
+        raise ApiError(422, "invalid", "month must look like 2026-10.")
+    return month
+
+
+@router.get("/costs")
+def costs(request: Request, month: str = None):
+    s = request.app.state
+    with s.db.tx() as t:
+        return admin_stats.costs(t, s.settings, _month(month))
+
+
+@router.get("/costs.csv")
+def costs_csv(request: Request, month: str = None):
+    s = request.app.state
+    with s.db.tx() as t:
+        report = admin_stats.costs(t, s.settings, _month(month))
+    return Response(admin_stats.costs_csv(report), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="autoedit-costs-{report["month"]}.csv"'})
+
+
+@router.get("/audit")
+def audit_log(request: Request, limit: int = 100, actor: str = None, action: str = None):
+    limit = max(1, min(500, limit))
+    sql, params = "SELECT * FROM audit_log WHERE 1 = 1", []
+    if actor:
+        sql += " AND actor = ?"
+        params.append(actor)
+    if action:
+        sql += " AND action LIKE ?"
+        params.append(action.replace("%", "") + "%")
+    with request.app.state.db.tx() as t:
+        rows = t.all(sql + " ORDER BY at DESC LIMIT ?", (*params, limit))
+    for r in rows:
+        r["details"] = loads(r["details"])
+    return {"entries": rows}

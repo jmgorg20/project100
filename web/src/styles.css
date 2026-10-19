@@ -133,3 +133,37 @@ li.plan .price { font-size: 1.1rem; font-weight: 700; }
   .presets { grid-template-columns: 1fr 1fr; }
   h1 { font-size: 1.75rem; }
 }
+
+/* admin */
+.tabs { display: flex; gap: 0.25rem; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.tabs a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 0.75rem; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.tabs a.active { color: var(--text); border-bottom: 2px solid var(--accent); }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.tile-label { color: var(--muted); font-size: 0.8rem; }
+.tile-value { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; }
+/* the chart: series colours validated on the dark card surface (#1b1e26) */
+.chart { --series-1: #3987e5; --series-2: #d95926; margin: 0; }
+.chart figcaption { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin-bottom: 0.5rem; }
+.legend { display: flex; gap: 0.75rem; color: var(--muted); font-size: 0.85rem; }
+.legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.swatch.s1 { background: var(--series-1); }
+.swatch.s2 { background: var(--series-2); }
+.chart-box { position: relative; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .baseline { stroke: var(--muted); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 11px; }
+.chart .col.s1 { fill: var(--series-1); }
+.chart .col.s2 { fill: var(--series-2); }
+.chart .col.on { stroke: var(--text); stroke-width: 1; }
+.chart .hit { fill: transparent; }
+.tip { margin-top: 0.5rem; background: #0d0f13; border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem 0.65rem; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-size: 0.85rem; }
+.tip span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.tip-empty { margin-top: 0.5rem; font-size: 0.85rem; }
+@media (min-width: 640px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
