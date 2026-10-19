@@ -91,7 +91,7 @@ def signup(request: Request, body: dict):
     with s.db.tx() as t:
         try:
             return accounts.signup(t, s.settings, body.get("email"), body.get("password"), body.get("name"),
-                                   body.get("invite_code"), _ip(request), body.get("locale"))
+                                   body.get("invite_code"), _ip(request), body.get("locale"), body.get("device_id"))
         except (AccountError, passwords.PasswordError) as exc:
             raise _err(exc)
 
@@ -102,7 +102,7 @@ def verify(request: Request, body: dict, response: Response):
     _anonymous_post(request, body, "verify", 20)
     with s.db.tx() as t:
         try:
-            user = accounts.verify_email(t, s.settings, body.get("token"))
+            user = accounts.verify_email(t, s.settings, body.get("token"), body.get("device_id"))
         except AccountError as exc:
             raise _err(exc)
         if user["mfa_enabled_at"]:
@@ -275,7 +275,7 @@ def mfa_disable(request: Request, body: dict, me=Depends(require_user)):
 # ---------------------------------------------------------------- Google sign-in
 
 @router.get("/auth/oauth/{provider}/start")
-def oauth_start(request: Request, provider: str, invite_code: str = None):
+def oauth_start(request: Request, provider: str, invite_code: str = None, device_id: str = None):
     s = request.app.state
     ip_limit(request, 20, "oauth")
     try:
@@ -287,6 +287,7 @@ def oauth_start(request: Request, provider: str, invite_code: str = None):
     with s.db.tx() as t:
         state = accounts.new_token(t, s.settings, "oauth_state", None, 10,
                                    {"provider": provider, "verifier": verifier, "invite_code": invite_code,
+                                    "device": device_id if device_id and len(device_id) <= 100 else None,
                                     "binding": security.hash_token(s.settings.secret_key, "oauth_binding", binding)})
     response = RedirectResponse(oauth.authorize_url(s.settings, provider, state, challenge), status_code=302)
     response.set_cookie(OAUTH_COOKIE, binding, max_age=600, path="/v1/auth/oauth/", httponly=True,
@@ -320,7 +321,8 @@ def oauth_callback(request: Request, provider: str, state: str = "", code: str =
         return _back_to_app(s.settings, "login?error=oauth_failed")
     with s.db.tx() as t:
         try:
-            user, _created = accounts.oauth_login(t, s.settings, provider, profile, data.get("invite_code"), _ip(request))
+            user, _created = accounts.oauth_login(t, s.settings, provider, profile, data.get("invite_code"), _ip(request),
+                                                  data.get("device"))
         except AccountError as exc:
             return _back_to_app(s.settings, f"login?error={exc.code}")
         if user["mfa_enabled_at"]:

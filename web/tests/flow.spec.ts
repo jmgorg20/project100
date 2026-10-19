@@ -6,7 +6,7 @@ test.describe.configure({ mode: "serial" });
 
 test("phone: sign up, upload, pick a style, watch, fix a caption, export, history", async ({ page }) => {
   const email = await signUp(page);
-  await expect(page.getByTestId("minutes-left")).toContainText("60 minutes");
+  await expect(page.getByTestId("minutes-left")).toContainText("30 minutes");            // the free trial's limit
 
   // a new video: the file goes up in pieces, then the job starts
   await page.getByTestId("pick-video").setInputFiles(path.join(MEDIA, "talk.mp4"));

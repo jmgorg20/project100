@@ -3,6 +3,7 @@ import { ApiError, call, get, post, type Catalog, type JobView, type Me, type Pr
 import { go, type SessionProps } from "../App";
 import { getLang, pick, t, useLang } from "../i18n";
 import { uploadFile } from "../upload";
+import { BillingBanner } from "./Billing";
 
 interface Info {
   limits: { max_upload_mb: number; max_duration_seconds: number };
@@ -94,6 +95,7 @@ export function NewVideo(_: SessionProps) {
   return (
     <section>
       <h1>{t("newTitle")}</h1>
+      <BillingBanner />
       {me && left !== null && <p className="muted" data-testid="minutes-left">{t("minutesLeft", { left: left.toFixed(0), total: me.client.monthly_minutes.toFixed(0) })}</p>}
       <form onSubmit={submit} className="stack">
         <label className="file">

@@ -6,10 +6,11 @@
   first download); a "files.expiring" webhook goes out about a day before;
 - unfinished uploads older than a day are removed;
 - old rate counters are dropped;
-- unconfirmed sign-ups (after 7 days), old one-time tokens and ended sessions are removed.
+- unconfirmed sign-ups (after 7 days), old one-time tokens and ended sessions are removed;
+- billing: trial reminders, and the end of trials, grace periods and canceled plans.
 """
 
-from . import accounts, jobqueue, ratelimit, webhooks
+from . import accounts, billing, jobqueue, ratelimit, webhooks
 from .clients import audit
 from .db import now
 
@@ -50,8 +51,9 @@ def run_once(db, storage, settings):
     with db.tx() as t:
         ratelimit.cleanup(t)
         accounts.cleanup(t)
+        billing_done = billing.tick(t, settings)
         for job_id in reaped:
             job = t.one("SELECT * FROM jobs WHERE id = ?", (job_id,))
             if job and job["status"] in ("failed", "cancelled"):
                 webhooks.emit(t, job["client_id"], f"job.{job['status']}", webhooks.payload_for_job(job))
-    return {"reaped": reaped, **files}
+    return {"reaped": reaped, **files, "billing": billing_done}

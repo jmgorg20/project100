@@ -133,6 +133,9 @@ def create_app(settings=None, storage=None):
         raise RuntimeError("Row-level security does not apply: the service connects to Postgres as a superuser or "
                            "a BYPASSRLS user. Connect as an ordinary user (deploy/postgres-init.sql).")
     app.state.rls = rls
+    from . import billing
+    with app.state.db.tx() as t:
+        billing.ensure_plans(t, settings)          # the plans file, the first time (then they are data)
     import requests
     app.state.http = requests.Session()           # captcha and Google sign-in (replaced in tests)
     app.state.storage = storage or LocalStorage(settings.data_path / "files")
@@ -213,11 +216,13 @@ def create_app(settings=None, storage=None):
 
     from .routes_admin import router as admin_router
     from .routes_auth import router as auth_router
+    from .routes_billing import router as billing_router
     from .routes_client import router as client_router
     from .routes_files import router as files_router
     from .routes_web import router as web_router
     from .routes_worker import router as worker_router
     app.include_router(auth_router)
+    app.include_router(billing_router)
     app.include_router(client_router)
     app.include_router(worker_router)
     app.include_router(admin_router)

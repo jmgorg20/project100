@@ -51,6 +51,30 @@ TEMPLATES = {
         "Hello,\n\nTwo-step sign-in was {state} on your AutoEdit account. If this was not you, reset your "
         "password now: {link}\n\n---\n\nAng two-step sign-in ng account mo ay {state}. Kung hindi ikaw, i-reset "
         "agad ang password: {link}\n"),
+    "trial_ending": (
+        "Your free trial ends in {days} day(s) · Matatapos na ang free trial mo",
+        "Hello,\n\nYour AutoEdit free trial ends in about {days} day(s). To keep making videos, choose a plan:\n{link}"
+        "\n\nYour finished videos stay downloadable until they expire.\n\n---\n\nMatatapos ang free trial mo sa loob ng "
+        "mga {days} araw. Para tuloy-tuloy, pumili ng plan:\n{link}\n"),
+    "trial_ended": (
+        "Your free trial has ended · Tapos na ang free trial",
+        "Hello,\n\nYour AutoEdit free trial has ended. Choose a plan to make more videos:\n{link}\n\nYour finished "
+        "videos can still be downloaded until they expire.\n\n---\n\nTapos na ang free trial mo. Pumili ng plan para "
+        "makagawa pa ng video:\n{link}\nPuwede pa ring i-download ang mga natapos na video.\n"),
+    "plan_ended": (
+        "Your plan has ended · Natapos na ang plan mo",
+        "Hello,\n\nYour AutoEdit plan has ended, so new videos are paused. Choose a plan again any time:\n{link}"
+        "\n\n---\n\nNatapos na ang plan mo kaya naka-pause ang bagong video. Pumili ulit ng plan:\n{link}\n"),
+    "subscribed": (
+        "Thank you: your plan is active · Salamat: aktibo na ang plan mo",
+        "Hello,\n\nThank you! Your AutoEdit plan is active. Receipts come from our payment partner (Paddle).\n"
+        "Manage it here: {link}\n\n---\n\nSalamat! Aktibo na ang plan mo. Ang resibo ay galing sa payment partner "
+        "namin (Paddle).\n"),
+    "payment_failed": (
+        "Your payment did not go through · Hindi pumasok ang bayad",
+        "Hello,\n\nThe last payment for your AutoEdit plan did not go through. Your plan keeps working for {days} "
+        "more day(s); please update your card: {link}\n\n---\n\nHindi pumasok ang huling bayad. Gagana pa ang plan "
+        "nang {days} araw; paki-update ang card: {link}\n"),
     "account_deleted": (
         "Your account was deleted · Nabura na ang account mo",
         "Hello,\n\nYour AutoEdit account and its files were deleted, as you asked. Thank you for trying "

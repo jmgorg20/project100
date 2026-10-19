@@ -8,7 +8,7 @@ register (with the test result), promote (only if the tests passed), rollback (o
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from . import accounts, clients, jobqueue
+from . import accounts, billing, clients, jobqueue
 from .api import ApiError, client_ip
 from .db import loads, now
 from .deps import require_admin
@@ -321,3 +321,46 @@ def set_signups(request: Request, body: dict):
             raise _err(exc)
         _audit(request, t, "signups.mode", None, {"mode": mode})
     return {"mode": mode}
+
+
+# ---------------------------------------------------------------- plans and subscriptions
+
+@router.get("/plans")
+def list_plans(request: Request):
+    with request.app.state.db.tx() as t:
+        return {"plans": billing.list_plans(t, public_only=False)}
+
+
+@router.put("/plans/{plan_id}")
+def put_plan(request: Request, plan_id: str, body: dict):
+    """Create or change a plan (price, limits, the provider's price id, shown or hidden). Workspaces on
+    the plan get the new limits at once; the price a customer pays changes in the provider."""
+    s = request.app.state
+    with s.db.tx() as t:
+        try:
+            plan = billing.set_plan(t, s.settings, plan_id, body)
+        except (billing.BillingError, ValueError, TypeError) as exc:
+            raise ApiError(getattr(exc, "status", 422), "invalid", str(exc))
+        _audit(request, t, "plan.saved", plan_id, body)
+        return {"plan": plan}
+
+
+@router.get("/subscriptions")
+def list_subscriptions(request: Request, status: str = None):
+    sql = ("SELECT s.*, c.name AS organisation FROM subscriptions s JOIN clients c ON c.id = s.client_id"
+           + (" WHERE s.status = ?" if status else "") + " ORDER BY s.updated_at DESC LIMIT 500")
+    with request.app.state.db.tx() as t:
+        return {"subscriptions": t.all(sql, (status,) if status else ())}
+
+
+@router.post("/billing/{client_id}/grant")
+def grant_plan(request: Request, client_id: str, body: dict):
+    """Give a workspace a plan by hand (a partner, a refund, a test): for `days`, or until changed.
+    plan_id null takes it away."""
+    s = request.app.state
+    with s.db.tx() as t:
+        try:
+            sub = billing.grant(t, s.settings, client_id, body.get("plan_id"), body.get("days"), request.state.actor)
+        except billing.BillingError as exc:
+            raise ApiError(exc.status, exc.code, str(exc))
+        return {"subscription": sub}

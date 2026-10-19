@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from . import SERVICE_VERSION, accounts, clients, jobqueue, jobs, media, ratelimit, security, webhooks
+from . import SERVICE_VERSION, accounts, billing, clients, jobqueue, jobs, media, ratelimit, security, webhooks
 from .api import ApiError
 from .db import dumps, loads, now
 from .deps import require_client, require_manager
@@ -92,6 +92,14 @@ def _upload_view(u, settings):
             "expires_in_seconds": max(0, int(u["expires_at"] - now())), "chunk_size": settings.chunk_mb * 1024 * 1024}
 
 
+def _require_plan(t, settings, client):
+    """Workspaces of the web app need a trial or a plan for new uploads and videos (downloads and
+    deleting keep working)."""
+    reason = billing.gate(t, settings, client)
+    if reason:
+        raise ApiError(402, "payment_required", reason)
+
+
 def _get_upload(t, client, upload_id):
     u = t.one("SELECT * FROM uploads WHERE id = ? AND client_id = ? AND status <> 'deleted'", (upload_id, client["id"]))
     if not u:
@@ -118,6 +126,7 @@ def create_upload(request: Request, body: dict, client=Depends(require_client)):
         raise ApiError(422, "invalid", "sha256 must be 64 lowercase hex characters.")
     project_id = body.get("project_id")
     with s.db.tx() as t:
+        _require_plan(t, s.settings, client)
         if project_id is not None:
             if not isinstance(project_id, str):
                 raise ApiError(422, "invalid", "project_id must be a project id.")
@@ -244,6 +253,7 @@ def _get_job(t, client, job_id):
 def create_job(request: Request, body: dict, response: Response, client=Depends(require_client)):
     s = request.app.state
     with s.db.tx() as t:
+        _require_plan(t, s.settings, client)
         try:
             job, created = jobs.create(t, s.settings, client, body, request.headers.get("idempotency-key"))
         except (JobError, clients.ClientError, jobqueue.QueueError) as exc:
