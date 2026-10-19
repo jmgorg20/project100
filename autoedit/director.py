@@ -238,9 +238,16 @@ def group_of(meta):
     return GROUPS.get(meta["category"], meta["category"])
 
 
+def style_allows(ctx, meta):
+    """A template made for some styles only (`styles` in its meta, e.g. the editorial set) is never
+    used by the others; templates without `styles` are open to every style."""
+    only = meta.get("styles") or []
+    return not only or ctx.style_name in only
+
+
 def template_score(ctx, meta, it, used):
     style = ctx.style
-    if meta["id"] in style["deny"]:
+    if meta["id"] in style["deny"] or not style_allows(ctx, meta):
         return None
     weight = style["categories"].get(meta["category"], 0.5)
     if weight <= 0:
@@ -895,7 +902,8 @@ def validate_plan(plan, ctx):
 def catalog_text(ctx):
     lines = []
     for m in graphics.templates():
-        if m["id"] in ctx.style["deny"] or ctx.style["categories"].get(m["category"], 0.5) <= 0:
+        if m["id"] in ctx.style["deny"] or ctx.style["categories"].get(m["category"], 0.5) <= 0 \
+                or not style_allows(ctx, m):
             continue
         need = ",".join(sorted(required_inputs(m) | ({"emoji"} if m["category"] == "emoji" else set())))
         lines.append(f"{m['id']} | {m['category']} | moods: {'/'.join(m['moods'])} | needs: {need} "

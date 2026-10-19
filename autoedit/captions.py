@@ -167,6 +167,24 @@ def word_boxes(lines, style, zone, measurer):
     return boxes
 
 
+def card_events(lines, style, zone, measurer, start_cs, end_cs, box_name):
+    """A rounded card (and its soft shadow) behind a whole caption group, for its whole time."""
+    boxes = word_boxes(lines, style, zone, measurer)
+    pad_y = style.size * 0.28
+    x0 = min(b[0] for b in boxes)
+    x1 = max(b[2] for b in boxes)
+    y0 = min(b[1] for b in boxes) - pad_y
+    y1 = max(b[3] for b in boxes) + pad_y
+    shape = rounded_box(x0, y0, x1, y1, style.card_radius)
+    drop = style.size * 0.12
+    shadow = rounded_box(x0, y0 + drop, x1, y1 + drop, style.card_radius)
+    return [
+        (0, start_cs, end_cs, box_name,
+         rf"{{\an7\pos(0,0)\bord0\shad0\blur{style.size * 0.35:.0f}\1c&H140F0B&\1a&H9A&\p1}}{shadow}"),
+        (0, start_cs, end_cs, box_name, rf"{{\an7\pos(0,0)\bord0\shad0\p1}}{shape}"),
+    ]
+
+
 def group_end_times(groups, last_end=None):
     """When each caption group leaves the screen (seconds).
 
@@ -211,6 +229,8 @@ def build_events(words, style, zone=None, measurer=None, names=("Main", "Box"), 
                 continue
             text = prefix + render_group(lines, i, style)
             events.append((1, cs[i], cs[i + 1], names[0], text))
+            if style.card and measurer and i == 0:
+                events += card_events(lines, style, zone, measurer, cs[0], cs[-1], names[1])
             if style.active_box and measurer:
                 x0, y0, x1, y1 = word_boxes(lines, style, zone, measurer)[i]
                 shape = rounded_box(x0, y0, x1, y1, style.size * 0.18)
@@ -243,9 +263,20 @@ def style_line(name, style: CaptionStyle, fonts, box=False, box_color=None, padd
 
 def style_lines(style, fonts, fonts_folder=None, names=("Main", "Box")):
     """ASS [V4+ Styles] lines for one caption style, plus the text measurer for word boxes."""
+    measurer = None
+    if style.card:
+        family, bold = fonts[style.font]
+        font_file = find_font_file(family, bold, fonts_folder or "")
+        if font_file:
+            measurer = TextMeasurer(font_file, style.size)
+            card_style = CaptionStyle(0, "card", "", color=style.card, outline=0)
+            return [style_line(names[0], style, fonts),
+                    style_line(names[1], card_style, fonts)], measurer
+        # no font file to measure with: a square card drawn by libass behind the text
+        return [style_line(names[0], style, fonts, box=True, box_color=style.card,
+                           padding=style.box_padding)], None
     lines = [style_line(names[0], style, fonts, box=style.box,
                         box_color=style.box_color, padding=style.box_padding)]
-    measurer = None
     if style.active_box:
         family, bold = fonts[style.font]
         font_file = find_font_file(family, bold, fonts_folder or "")

@@ -160,6 +160,10 @@ export interface GraphicParams {
   case?: "" | "upper" | "lower" | "title";
   angle?: number;
   dir?: "left" | "right" | "up" | "down";
+  /** Ids of several of your pictures (collage, mosaic, montage, storyboard). */
+  images?: string[];
+  /** Seconds from the graphic's start when each word / item / step appears (from the speech). */
+  cues?: number[];
 }
 
 export interface Track {

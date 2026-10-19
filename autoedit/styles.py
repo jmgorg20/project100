@@ -14,6 +14,8 @@ Settings you can use in a style (anything left out uses the default below):
   outline       outline thickness, outline_color its colour
   shadow        shadow distance, shadow_color its colour, shadow_alpha 0 (solid) to 255 (invisible)
   box           True = solid box behind the whole text, box_color its colour, box_padding its size
+  card          colour of a rounded card behind each caption group (None = no card), with a soft
+                shadow; card_radius its corner radius in pixels
   uppercase / lowercase   change the case of all text
   zone          where the captions sit: "lower", "center" or "top"
   align         "center" or "left" (lines start at the left safe margin)
@@ -52,6 +54,8 @@ class CaptionStyle:
     box: bool = False
     box_color: str = "#000000"
     box_padding: float = 14
+    card: Optional[str] = None
+    card_radius: float = 30
     uppercase: bool = False
     lowercase: bool = False
     zone: str = "lower"
@@ -99,6 +103,10 @@ STYLES = [
     CaptionStyle(13, "pop_word", "Each word pops in as it is spoken",
                  font="heavy", size=82, outline=6, mode="pop", keyword_color=YELLOW,
                  words_per_line=3),
+    CaptionStyle(14, "editorial_card", "Ink text on a cream rounded card, spoken word in terracotta",
+                 font="bold", size=56, color="#17140F", active_color="#C8553D",
+                 keyword_color="#C8553D", outline=0, shadow=0, card="#F4EFE6", card_radius=30,
+                 box_padding=26, words_per_line=4, max_lines=2),
 ]
 
 

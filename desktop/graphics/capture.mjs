@@ -84,9 +84,9 @@ export async function renderJobs(jobs, { ffmpeg = process.env.AUTOEDIT_FFMPEG ||
       if (signal && signal.aborted) throw new Error("cancelled");
       // a picture on this PC is served by the local server (a page from http:// cannot open file://)
       const params = { ...(job.params || {}) };
-      if (params.image && !/^(https?:|data:)/i.test(params.image)) {
-        params.image = server.serveFile(`img-${imageCount++}${extname(params.image).toLowerCase()}`, params.image);
-      }
+      const serve = (file) => (/^(https?:|data:)/i.test(file) ? file : server.serveFile(`img-${imageCount++}${extname(file).toLowerCase()}`, file));
+      if (params.image) params.image = serve(params.image);
+      if (Array.isArray(params.images)) params.images = params.images.map(serve);
       const info = await page.evaluate((j) => window.gfx.prepare({ id: j.template, params: j.params, duration: j.duration, quality: j.quality }), { ...job, params });
       const clip = { x: 0, y: 0, width: info.tileW, height: info.tileH };
       const shot = async (t) => { await page.evaluate((x) => window.gfx.seek(x), t); return page.screenshot({ type: "png", omitBackground: true, clip }); };
