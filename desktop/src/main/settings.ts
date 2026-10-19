@@ -18,6 +18,8 @@ export function defaultSettings(platform: string, engineDir: string): Settings {
     sfxFolder: "",
     brollFolder: "",
     useStock: true,
+    captionPunctuation: "remove",
+    fixCaptionsFirst: false,
   };
 }
 
@@ -31,6 +33,7 @@ export function cleanSettings(value: unknown, defaults: Settings): Settings {
   }
   if (out.provider !== "groq" && out.provider !== "anthropic") out.provider = defaults.provider;
   if (out.transcribeWith !== "groq" && out.transcribeWith !== "local") out.transcribeWith = defaults.transcribeWith;
+  if (out.captionPunctuation !== "remove" && out.captionPunctuation !== "keep") out.captionPunctuation = defaults.captionPunctuation;
   return out;
 }
 

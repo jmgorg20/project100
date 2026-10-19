@@ -154,7 +154,13 @@ too little contrast, or runs past the end of the video. You can still export.
 Each graphic is drawn frame by frame by a Chromium (in the app: a hidden window; on the command
 line: Playwright's Chromium, or Microsoft Edge / Chrome) into a small lossless video with
 transparency (FFV1), saved in `work\cache\graphics` under a key made from everything that
-changes its pixels. Moving a graphic does not redraw it; changing its text or length does. FFmpeg
+changes its pixels. When that folder cannot be written (an install under Program Files), the
+user's own cache is used instead (`%LOCALAPPDATA%\AutoEditor\graphics`; `AUTOEDIT_GRAPHICS_CACHE`
+sets any folder). A finished file is moved into place only when complete; on Windows, where a file
+being read (a render, the virus scanner) cannot be replaced for a moment, this is retried for a
+few seconds. **One graphic that cannot be drawn never stops the edit:** it is left out of the
+video and a warning names the clip, the template, the file path and the reason (in the app, under
+the video; on the command line, a `WARNING:` line). Moving a graphic does not redraw it; changing its text or length does. FFmpeg
 then lays these videos over the picture. The preview in the editor draws the same templates live
 in the page (a little lighter), so place and timing match the export.
 

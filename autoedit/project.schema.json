@@ -160,6 +160,19 @@
               "minLength": 1
             }
           }
+        },
+        "captions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "punctuation": {
+              "enum": [
+                "remove",
+                "keep"
+              ],
+              "description": "remove (default): captions show no , . ! ? ; : or quotes; the words themselves are not changed. keep: as transcribed."
+            }
+          }
         }
       }
     },

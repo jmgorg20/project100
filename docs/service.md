@@ -96,8 +96,9 @@ Every request: `Authorization: Bearer ak_...`. Errors are `{"error": {"code", "m
 ```json
 {"kind": "polish", "inputs": {"main": ["up_..."], "broll": ["up_..."]}, "preset": "viral_tiktok",
  "format": "auto", "instruction": "Mabilis, malalaking caption", "items": [], "offsets": {},
- "provider": "groq", "qc": true, "retry": true, "gpu": false}
+ "provider": "groq", "qc": true, "retry": true, "gpu": false, "caption_punctuation": "remove"}
 ```
+`caption_punctuation`: `remove` (default: captions show no `, . ! ? ; :` or quotes) or `keep`.
 The result (`GET /v1/jobs/{id}`) has `result.status` (`ok` / `warnings` / `failed`), `result.qc`
 (the objective checks), `result.opinions` (the AI's description, marked *not checked*), and
 `outputs`: `video`, `project`, `sidecar`, `plan`, each with a link valid for 15 minutes (ask again

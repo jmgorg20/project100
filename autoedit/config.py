@@ -17,6 +17,7 @@ DEFAULTS = {
     "transcription": {
         "provider": "groq",
         "groq_model": "whisper-large-v3",
+        "taglish_hint": True,
         "local_model": "medium",
         "local_device": "auto",
         "vocabulary_file": "vocabulary.json",
@@ -53,6 +54,7 @@ DEFAULTS = {
         "font_regular": "Inter",
         "font_bold": "Inter",
         "font_heavy": "Inter Black",
+        "punctuation": "remove",
     },
     "highlight": {
         "enabled": True,

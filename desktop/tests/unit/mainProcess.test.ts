@@ -68,7 +68,7 @@ d = Path(sys.argv[1])
 synthetic.make_video(d / "talk.mp4"); synthetic.make_transcript(d / "talk.json"); synthetic.make_image(d / "logo.png")
 `, tmp], { cwd: repo });
   const digest = crypto.createHash("sha256").update(fs.readFileSync(path.join(tmp, "talk.mp4"))).digest("hex");
-  seeded = path.join(repo, "work", "cache", "transcripts", `${digest}-groq-whisper-large-v3-tl.json`);
+  seeded = path.join(repo, "work", "cache", "transcripts", `${digest}-groq-whisper-large-v3-tl-taglish1.json`);
   fs.mkdirSync(path.dirname(seeded), { recursive: true });
   fs.copyFileSync(path.join(tmp, "talk.json"), seeded);
   await import("../../src/main/main");

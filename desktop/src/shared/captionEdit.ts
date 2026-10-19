@@ -167,6 +167,11 @@ export function setCaptionLook(p: Project, ids: string[] | "all", look: CaptionL
 }
 
 /** Highlight (or un-highlight) one word in the keyword colour. */
+/** Captions of the whole project without punctuation ("remove") or as transcribed ("keep"). */
+export function setCaptionPunctuation(p: Project, punctuation: "remove" | "keep"): Project {
+  return { ...p, settings: { ...p.settings, captions: { ...(p.settings.captions ?? {}), punctuation } } };
+}
+
 export function toggleHighlight(p: Project, id: string, index: number): Project {
   const clip = captionOf(p, id);
   return setCaptionWords(p, id, clip.words!.map((w, i) => (i === index ? { ...w, highlight: !w.highlight } : w)));
@@ -201,4 +206,39 @@ export function addCaption(p: Project, at: number, text: string, seconds = 2): {
   if (near?.overrides) clip.overrides = { ...near.overrides };
   const r = placeClip(p, clip, "caption", () => ({ id: newId(p, "captions"), kind: "caption", name: "Captions", clips: [] }));
   return { project: r.project, clipId: id };
+}
+
+// ---------------------------------------------------------------- fixing a transcript before the edit
+
+export interface TranscriptWord {
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** The transcript as lines (a sentence ends at . ? ! or a pause of 0.6 s), to fix by hand. */
+export function transcriptLines(words: TranscriptWord[]): TranscriptWord[][] {
+  const lines: TranscriptWord[][] = [];
+  let cur: TranscriptWord[] = [];
+  words.forEach((w, i) => {
+    cur.push(w);
+    const next = words[i + 1];
+    if (!next || next.start - w.end >= 0.6 || /[.?!…]["']?$/.test(w.text.replace(/\*/g, ""))) {
+      lines.push(cur);
+      cur = [];
+    }
+  });
+  return lines;
+}
+
+/** A line's words after you retype it: the same number of words keep their times; otherwise the
+ * new words share the line's time evenly. An empty line removes its words. */
+export function retimeLine(line: TranscriptWord[], text: string): TranscriptWord[] {
+  const tokens = text.split(/\s+/).filter(Boolean);
+  if (!tokens.length || !line.length) return [];
+  if (tokens.length === line.length) return line.map((w, i) => ({ ...w, text: tokens[i] }));
+  const start = line[0].start;
+  const step = (line[line.length - 1].end - start) / tokens.length;
+  const r3 = (x: number) => Math.round(x * 1000) / 1000;
+  return tokens.map((t, i) => ({ text: t, start: r3(start + i * step), end: r3(start + (i + 1) * step - Math.min(0.02, step / 4)) }));
 }

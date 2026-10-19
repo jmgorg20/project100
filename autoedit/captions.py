@@ -47,8 +47,36 @@ def escape(text):
     return text.replace("\\", "/").replace("{", "(").replace("}", ")").strip()
 
 
+STRIP_MARKS = set(",.!?;:…")
+QUOTES = set('"“”„«»‘’‚`\'¡¿')
+
+
+def strip_punctuation(text):
+    """A word as shown without punctuation: , . ! ? ; : and quotes go; an apostrophe or a hyphen
+    inside a word stays (i-check, mag-post, it's), and so do numbers (3,600, 1.5). The *marks*
+    of a keyword stay. A word that is only punctuation (a dash) is kept as it is."""
+    out = []
+    n = len(text)
+    for i, ch in enumerate(text):
+        prev = text[i - 1] if i else ""
+        nxt = text[i + 1] if i + 1 < n else ""
+        if ch in STRIP_MARKS:
+            if ch in ",." and prev.isdigit() and nxt.isdigit():
+                out.append(ch)                   # 3,600 / 1.5
+            continue
+        if ch in QUOTES:
+            if ch in "'’" and prev.isalpha() and nxt.isalpha():
+                out.append(ch)                   # it's, Ma'am
+            continue
+        out.append(ch)
+    cleaned = "".join(out).strip()
+    return cleaned if cleaned.replace("*", "") else text
+
+
 def display_text(word, style):
     text = escape(word.text)
+    if getattr(style, "punctuation", "remove") != "keep":
+        text = strip_punctuation(text)
     if style.uppercase:
         text = text.upper()
     elif style.lowercase:

@@ -39,6 +39,8 @@ def build_parser():
     edit.add_argument("video", help="the raw talking video (or a screen recording with "
                                     "--layout screen)")
     edit.add_argument("--style", help=f"caption style number or name: {styles}")
+    edit.add_argument("--caption-punctuation", choices=["remove", "keep"],
+                    help="captions without , . ! ? ; : and quotes (remove, the default) or as said (keep)")
     edit.add_argument("--grade", help=f"colour grade: {', '.join(GRADES)}")
     edit.add_argument("--lang", dest="language", help="speech language code (default tl)")
     edit.add_argument("--preset", help="pacing preset from config.yaml (fast, relaxed...)")
@@ -87,6 +89,14 @@ def build_parser():
     frame.add_argument("--time", type=float, required=True, help="seconds on the timeline")
     frame.add_argument("--output", help="where to save the PNG")
 
+    tr = sub.add_parser("transcribe", help="transcribe a video (word timestamps) to a .json you can "
+                                           "fix, then use with ai-edit --transcript")
+    tr.add_argument("video")
+    tr.add_argument("--output", help="the transcript file (default: <video>.transcript.json next to it)")
+    tr.add_argument("-i", "--instruction", default="", help="your instruction (its words help Whisper)")
+    tr.add_argument("--photos", nargs="*", default=[], help="your photos (their names help Whisper)")
+    tr.add_argument("--transcribe-with", choices=["groq", "local"], help="speech-to-text service")
+
     validate = sub.add_parser("validate", help="check a project file and list any problems")
     validate.add_argument("project", help="the .project.json file")
 
@@ -97,10 +107,14 @@ def build_parser():
                     'captions, show receipt.png when I say resibo"')
     ai.add_argument("--instruction-file", help="read the instruction from a UTF-8 text file")
     ai.add_argument("--photos", nargs="*", default=[], help="photos the AI may pop in")
+    ai.add_argument("--caption-punctuation", choices=["remove", "keep"],
+                    help="captions without , . ! ? ; : and quotes (remove, the default) or as said (keep)")
     ai.add_argument("--provider", choices=["groq", "anthropic"], help="AI provider")
     ai.add_argument("--model", help="AI model (default from config.yaml, ai:)")
     ai.add_argument("--transcribe-with", choices=["groq", "local"],
                     help="speech-to-text service (default from config.yaml)")
+    ai.add_argument("--transcript", help="use this transcript (.json, e.g. one you fixed after "
+                                         "`python editor.py transcribe`) instead of transcribing again")
     ai.add_argument("--no-render", action="store_true",
                     help="stop after the project and plan (review before rendering)")
     ai.add_argument("--plan-file", help="use this plan (.plan.json) as is: no AI call")
@@ -153,6 +167,8 @@ def build_parser():
                     help="start the second video this many seconds later")
     po.add_argument("--provider", choices=["groq", "anthropic"], help="AI provider")
     po.add_argument("--model", help="AI model")
+    po.add_argument("--caption-punctuation", choices=["remove", "keep"],
+                    help="captions without , . ! ? ; : and quotes (remove, the default) or as said (keep)")
     po.add_argument("--no-qc", action="store_true", help="skip the quality checks")
     po.add_argument("--no-retry", action="store_true", help="do not fix and render again when a check fails")
     po.add_argument("--max-minutes", type=float, help="no retry after this many minutes (default 30)")
@@ -329,6 +345,7 @@ def cmd_edit(args, reporter=None, cancel=None):
         cfg["transcription"]["provider"] = args.provider
     if args.no_captions:
         cfg["captions"]["enabled"] = False
+    caption_punctuation(cfg, args)
     if args.keep_work:
         cfg["keep_work_files"] = True
     plan = None
@@ -782,9 +799,15 @@ def print_qc(report):
         print(f"{mark} {c['label']:<30} {c['message']}")
 
 
+def caption_punctuation(cfg, args):
+    if getattr(args, "caption_punctuation", None):
+        cfg["captions"]["punctuation"] = args.caption_punctuation
+
+
 def cmd_polish(args, reporter, cancel):
     from autoedit.polish import polish
     cfg = load_config(args.config)
+    caption_punctuation(cfg, args)
     sidecar = polish(args.video, cfg, preset=args.preset, format=args.format, out_folder=args.out,
                      instruction=args.instruction, provider=args.provider, model=args.model,
                      inputs=format_inputs(args), reporter=reporter, cancel=cancel, check=not args.no_qc,
@@ -828,11 +851,43 @@ def cmd_qc(args, reporter):
     reporter.result(**report)
 
 
+def cmd_transcribe(args, reporter):
+    """The transcript of a video (from the cache when it was transcribed before), saved to a file
+    you can fix by hand; `ai-edit --transcript FILE` then uses it."""
+    import shutil
+    import tempfile
+
+    from autoedit.ai_edit import load_words
+    from autoedit.cache import Cache
+    from autoedit.ffmpeg_tools import probe_video_with_audio
+    from autoedit.words import save_transcript
+    cfg = load_config(args.config)
+    if args.transcribe_with:
+        cfg["transcription"]["provider"] = args.transcribe_with
+    video = Path(args.video).resolve()
+    duration = probe_video_with_audio(video)["duration"]
+    out = Path(args.output).resolve() if args.output else video.with_suffix(".transcript.json")
+    work = Path(tempfile.mkdtemp(prefix="transcribe-"))
+    try:
+        reporter.stage("transcript", "Listening to your video")
+        hints = [args.instruction, *(Path(p).name for p in args.photos)]
+        words, cached, cost = load_words(video, cfg, Cache(project_path(cfg["ai"]["cache_folder"])), work,
+                                         duration, hints)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    save_transcript(words, out, cfg["language"])
+    print(f"{len(words)} words -> {out}")
+    reporter.result(transcript=str(out), words=[{"text": w.text, "start": round(w.start, 3),
+                                                 "end": round(w.end, 3)} for w in words],
+                    cached=cached, cost=cost)
+
+
 def cmd_ai_edit(args, reporter, cancel):
     from autoedit.ai_edit import ai_edit_video
     from autoedit.errors import Cancelled, EditorError
 
     cfg = load_config(args.config)
+    caption_punctuation(cfg, args)
     if args.transcribe_with:
         cfg["transcription"]["provider"] = args.transcribe_with
     if args.broll_library is not None:
@@ -874,7 +929,8 @@ def cmd_ai_edit(args, reporter, cancel):
                                  cancel=cancel, gen_paths=generation_paths(args),
                                  max_gen_minutes=args.max_generation_minutes,
                                  max_ai_clips=args.max_ai_clips, graphics=args.graphics,
-                                 format=args.format, inputs=inputs, preset=args.preset)
+                                 format=args.format, inputs=inputs, preset=args.preset,
+                                 transcript=args.transcript)
             item.update(video=str(video), ok=True)
         except Cancelled:
             raise
@@ -1174,6 +1230,8 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_validate(args, reporter)
         elif args.command == "ai-edit":
             cmd_ai_edit(args, reporter, cancel)
+        elif args.command == "transcribe":
+            cmd_transcribe(args, reporter)
         elif args.command == "estimate":
             cmd_estimate(args, reporter)
         elif args.command == "hardware":

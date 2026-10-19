@@ -220,6 +220,7 @@ def build_edit_project(video, cfg, transcript=None, plan=None, screen=None, layo
         name=video.stem, fps=fps, loudness=cfg["audio"]["loudness"],
         true_peak=cfg["audio"]["true_peak"],
         fonts={"regular": c["font_regular"], "bold": c["font_bold"], "heavy": c["font_heavy"]},
+        caption_punctuation=c.get("punctuation", "remove"),
     )
     project["meta"] = {"made_by": "python editor.py edit", "source": str(video),
                        "style": style.name, "grade": cfg["grade"], "preset": cfg["preset"],

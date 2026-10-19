@@ -694,7 +694,8 @@ def build_voiceover_project(audio, broll, cfg, words, name="Voice-over"):
     from .styles import get_style
     if not broll:
         raise FormatError("Voice-over with B-roll needs B-roll clips or pictures.")
-    p = new_project(name, fps=int(cfg["output"]["fps"]))
+    p = new_project(name, fps=int(cfg["output"]["fps"]),
+                    caption_punctuation=(cfg.get("captions") or {}).get("punctuation", "remove"))
     voice = media_from_file(audio, "vo")
     p["media"].append(voice)
     total = voice["duration"]

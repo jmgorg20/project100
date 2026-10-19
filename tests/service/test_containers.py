@@ -114,7 +114,7 @@ def test_polish_in_containers(stack):
     talk = synthetic.make_video(tmp / "talk.mp4")
     work = tmp / "work"
     cache = Cache(work / "cache")                            # the worker has no network: a saved transcript
-    entry = cache.folder / "transcripts" / f"{cache.fingerprint(talk)}-groq-whisper-large-v3-tl.json"
+    entry = cache.folder / "transcripts" / f"{cache.fingerprint(talk)}-groq-whisper-large-v3-tl-taglish1.json"
     entry.parent.mkdir(parents=True, exist_ok=True)
     save_transcript(load_transcript(synthetic.make_transcript(tmp / "talk.json")), entry)
     for p in [work, *work.rglob("*")]:

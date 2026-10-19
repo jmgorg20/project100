@@ -292,10 +292,11 @@ def save_project(data, path):
 # ---------------------------------------------------------------- building
 
 def new_project(name="Untitled", fps=30, normalize_audio=True, loudness=-14, true_peak=-1.5,
-                fonts=None):
-    """An empty project with the standard tracks."""
+                fonts=None, caption_punctuation=None):
+    """An empty project with the standard tracks. `caption_punctuation`: "remove" / "keep"
+    (settings.captions.punctuation; not set = remove)."""
     fonts = fonts or {"regular": "Inter", "bold": "Inter", "heavy": "Inter Black"}
-    return {
+    project = {
         "format": FORMAT,
         "version": VERSION,
         "name": name,
@@ -316,6 +317,9 @@ def new_project(name="Untitled", fps=30, normalize_audio=True, loudness=-14, tru
             {"id": "sfx", "kind": "audio", "role": "sfx", "name": "Sound effects", "clips": []},
         ],
     }
+    if caption_punctuation:
+        project["settings"]["captions"] = {"punctuation": caption_punctuation}
+    return project
 
 
 def media_kind(path):
