@@ -7,7 +7,8 @@
 - unfinished uploads older than a day are removed;
 - old rate counters are dropped;
 - unconfirmed sign-ups (after 7 days), old one-time tokens and ended sessions are removed;
-- billing: trial reminders, and the end of trials, grace periods and canceled plans.
+- billing: trial reminders, and the end of trials, grace periods and canceled plans;
+- the audit log and handled abuse reports older than SERVICE_AUDIT_RETENTION_DAYS are removed.
 """
 
 from . import accounts, billing, jobqueue, ratelimit, webhooks
@@ -52,8 +53,19 @@ def run_once(db, storage, settings):
         ratelimit.cleanup(t)
         accounts.cleanup(t)
         billing_done = billing.tick(t, settings)
+        old_records = trim_records(t, settings)
         for job_id in reaped:
             job = t.one("SELECT * FROM jobs WHERE id = ?", (job_id,))
             if job and job["status"] in ("failed", "cancelled"):
                 webhooks.emit(t, job["client_id"], f"job.{job['status']}", webhooks.payload_for_job(job))
-    return {"reaped": reaped, **files, "billing": billing_done}
+    return {"reaped": reaped, **files, "billing": billing_done, "records_trimmed": old_records}
+
+
+def trim_records(t, settings):
+    """The audit log and handled abuse reports are kept SERVICE_AUDIT_RETENTION_DAYS (0 = forever)."""
+    if settings.audit_retention_days <= 0:
+        return 0
+    before = now() - settings.audit_retention_days * 86400
+    n = t.run("DELETE FROM audit_log WHERE at < ?", (before,))
+    n += t.run("DELETE FROM reports WHERE status <> 'open' AND resolved_at < ?", (before,))
+    return n

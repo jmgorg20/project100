@@ -43,9 +43,11 @@ def http(app):
 
 def join(app, http, email, device=DEVICE):
     """Sign up and confirm on `http`; returns the session payload."""
-    assert http.post("/v1/auth/signup", json={"email": email, "password": PASSWORD, "device_id": device}).status_code == 202
+    assert http.post("/v1/auth/signup", json={"email": email, "password": PASSWORD, "device_id": device,
+                                                     "accept_terms": True}).status_code == 202
     token = link_token(last_email(app, email, "verify_email"), "verify")
-    r = http.post("/v1/auth/verify", json={"token": token, "device_id": device})
+    r = http.post("/v1/auth/verify", json={"token": token, "device_id": device,
+                                                     "accept_terms": True})
     assert r.status_code == 200, r.text
     return r.json()
 

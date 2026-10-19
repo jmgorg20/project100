@@ -48,6 +48,9 @@ class Settings:
         ".mp4", ".mov", ".m4v", ".webm", ".mkv", ".3gp", ".jpg", ".jpeg", ".png", ".webp",
         ".wav", ".mp3", ".m4a", ".aac", ".json"])
     scan_command: str = ""                   # e.g. "clamdscan --no-summary {path}" (exit 0 = clean)
+    moderation_command: str = ""             # your content check, run on every accepted video / picture:
+                                             # "{path}" in it is the file; exit 0 = allowed, else refused
+                                             # (its first output line is shown as the reason)
     # retention
     retention_days: float = 3.0              # uploads and results are deleted after this
     delete_after_download_hours: float = 24.0  # results: also this long after the first download
@@ -98,6 +101,9 @@ class Settings:
     admin_require_mfa: bool = True           # staff need two-step sign-in for the admin pages
     require_rls: bool = False                # refuse to start unless Postgres row-level security applies
                                              # (always on in production)
+    # compliance
+    terms_version: str = "draft-2026-10"     # the version of the terms and privacy notice users accept
+    audit_retention_days: float = 400.0      # audit log entries are kept this long
     # billing (the web app's organisations; API clients like JGG CITY are not billed here)
     billing: str = "off"                     # off: no trial or plan limits | on
     billing_provider: str = ""               # "" (plans given by the admin only) | paddle | fake (development)

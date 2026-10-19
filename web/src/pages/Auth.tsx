@@ -9,6 +9,7 @@ const OAUTH_ERRORS: Record<string, [string, string]> = {
   signups_paused: ["New sign-ups are paused for now.", "Naka-pause muna ang bagong sign-up."],
   email_not_verified: ["Your Google email is not verified.", "Hindi verified ang Google email mo."],
   account_disabled: ["This account is disabled.", "Naka-disable ang account na ito."],
+  terms_required: ["New here? Sign up first and accept the Terms, then use Google.", "Bago ka? Mag-sign up muna at tanggapin ang Terms, tapos Google."],
 };
 
 function errorText(err: unknown): string {
@@ -55,12 +56,14 @@ function Captcha({ config, onToken }: { config: AuthConfig | null; onToken: (tok
   return provider ? <div ref={box} className="captcha" /> : null;
 }
 
-function GoogleButton({ config, invite }: { config: AuthConfig | null; invite?: string }) {
+/** On the sign-up page `agreed` says whether the terms box is ticked: the button waits for it. */
+function GoogleButton({ config, invite, agreed }: { config: AuthConfig | null; invite?: string; agreed?: boolean }) {
   if (!config?.providers.includes("google")) return null;
   const q = new URLSearchParams({ device_id: deviceId() });
   if (invite) q.set("invite_code", invite);
-  const href = `/v1/auth/oauth/google/start?${q}`;
-  return <a className="button ghost wide" href={href}>{t("withGoogle")}</a>;
+  if (agreed) q.set("accept_terms", "1");
+  if (agreed === false) return <button type="button" className="ghost wide" disabled>{t("withGoogle")}</button>;
+  return <a className="button ghost wide" href={`/v1/auth/oauth/google/start?${q}`}>{t("withGoogle")}</a>;
 }
 
 export function Login({ onDone }: { onDone: (s: Session) => void }) {
@@ -118,7 +121,7 @@ export function Signup() {
     setBusy(true);
     setError("");
     try {
-      await post("/v1/auth/signup", { ...form, captcha: captcha || undefined, locale: getLang(), device_id: deviceId() || undefined });
+      await post("/v1/auth/signup", { ...form, accept_terms: agree, captcha: captcha || undefined, locale: getLang(), device_id: deviceId() || undefined });
       setSent(true);
     } catch (err) {
       setError(errorText(err));
@@ -150,7 +153,7 @@ export function Signup() {
         <ErrorLine text={error} />
         <button className="wide" disabled={busy || !agree}>{t("signUp")}</button>
       </form>
-      <GoogleButton config={config} invite={form.invite_code} />
+      <GoogleButton config={config} invite={form.invite_code} agreed={agree} />
       <p className="links"><a href="#/login">{t("haveAccount")}</a></p>
     </section>
   );

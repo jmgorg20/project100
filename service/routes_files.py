@@ -47,6 +47,8 @@ def download(request: Request, output_id: str, t: str = "", download: int = 0):
                    "WHERE o.id = ? AND o.deleted_at IS NULL", (output_id,))
         if not o or not o["path"]:
             raise ApiError(410, "gone", "This file was deleted (files are kept only for a few days).")
+        if o.get("held_at"):
+            raise ApiError(451, "held", "This file was reported and is held while it is reviewed.")
         if download and o["first_download_at"] is None:
             later = now() + float(o["delete_after_download_hours"]) * 3600
             tx.run("UPDATE outputs SET first_download_at = ?, expires_at = CASE WHEN expires_at > ? THEN ? ELSE "

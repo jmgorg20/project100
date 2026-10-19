@@ -63,7 +63,8 @@ def invite_code(http, uses=1):
 
 
 def signup(http, email, password=PASSWORD, code=None, **extra):
-    body = {"email": email, "password": password, "invite_code": code if code is not None else invite_code(http), **extra}
+    body = {"email": email, "password": password, "invite_code": code if code is not None else invite_code(http),
+            "accept_terms": True, **extra}
     return http.post("/v1/auth/signup", json=body)
 
 
@@ -82,7 +83,7 @@ def csrf(payload):
 # ---------------------------------------------------------------- sign-up
 
 def test_signup_needs_an_invite_code_and_can_be_paused(http, app):
-    r = http.post("/v1/auth/signup", json={"email": "a@example.com", "password": PASSWORD})
+    r = http.post("/v1/auth/signup", json={"email": "a@example.com", "password": PASSWORD, "accept_terms": True})
     assert r.status_code == 403 and r.json()["error"]["code"] == "invite_required"
     assert signup(http, "a@example.com", code="AAAA-BBBB-CCCC-DDDD").status_code == 403
     code = invite_code(http)
@@ -93,7 +94,7 @@ def test_signup_needs_an_invite_code_and_can_be_paused(http, app):
     assert r.status_code == 403 and r.json()["error"]["code"] == "signups_paused"
     assert http.get("/v1/auth/config").json()["signup_mode"] == "closed"
     http.put("/v1/admin/signups", json={"mode": "open"}, headers=admin(http))
-    assert http.post("/v1/auth/signup", json={"email": "c@example.com", "password": PASSWORD}).status_code == 202
+    assert http.post("/v1/auth/signup", json={"email": "c@example.com", "password": PASSWORD, "accept_terms": True}).status_code == 202
     with app.state.db.tx() as t:
         codes = accounts.list_invite_codes(t)
         audit = [r["action"] for r in t.all("SELECT action FROM audit_log")]
@@ -135,6 +136,17 @@ def test_password_rules(http):
                       ("maria-rosa-2026!", "email name")):
         r = signup(http, "maria-rosa@example.com", password=bad)
         assert r.status_code == 422 and word in r.json()["error"]["message"], (bad, r.text)
+
+
+def test_sign_up_needs_the_terms_accepted_and_keeps_the_version(http, app):
+    for value in (None, False, "yes", 1):
+        r = signup(http, "terms@example.com", accept_terms=value)
+        assert r.status_code == 422 and r.json()["error"]["code"] == "terms_required", value
+    assert signup(http, "terms@example.com").status_code == 202
+    with app.state.db.tx() as t:
+        row = t.one("SELECT terms_version, terms_accepted_at FROM users WHERE email = 'terms@example.com'")
+    assert row["terms_version"] == app.state.settings.terms_version and row["terms_accepted_at"]
+    assert http.get("/v1/auth/config").json()["terms_version"] == app.state.settings.terms_version
 
 
 def test_verify_then_sign_in(http, app):
@@ -200,7 +212,8 @@ def test_sign_in_and_sign_up_are_limited_per_address(settings):
                  for _ in range(4)]
         assert codes == [401, 401, 401, 429]
         http.put("/v1/admin/signups", json={"mode": "open"}, headers=admin(http))
-        codes = [http.post("/v1/auth/signup", json={"email": f"s{i}@example.com", "password": PASSWORD}).status_code
+        codes = [http.post("/v1/auth/signup", json={"email": f"s{i}@example.com", "password": PASSWORD,
+                                                           "accept_terms": True}).status_code
                  for i in range(3)]
         assert codes == [202, 202, 429]
         # a bot that fills the hidden field gets nothing
@@ -508,8 +521,11 @@ def google(settings):
     return app
 
 
-def google_round(c, code="good-code", invite=None, state=None):
-    r = c.get("/v1/auth/oauth/google/start", params={"invite_code": invite} if invite else {}, follow_redirects=False)
+def google_round(c, code="good-code", invite=None, state=None, terms=True):
+    params = {"invite_code": invite} if invite else {}
+    if terms:
+        params["accept_terms"] = 1
+    r = c.get("/v1/auth/oauth/google/start", params=params, follow_redirects=False)
     assert r.status_code == 302
     url = urlsplit(r.headers["location"])
     q = parse_qs(url.query)
@@ -545,17 +561,29 @@ def test_google_sign_in(google):
             assert "error=oauth_state" in r.headers["location"] and other.get("/v1/me").status_code == 401
 
 
+def test_a_new_google_account_needs_the_terms_accepted(google):
+    with TestClient(google) as c:
+        c.put("/v1/admin/signups", json={"mode": "open"}, headers=admin(c))
+        assert "error=terms_required" in google_round(c, terms=False).headers["location"]
+        assert c.get("/v1/me").status_code == 401
+        assert google_round(c).headers["location"].endswith("/app/#/")
+        with browser(google) as b:                      # an existing account signs in without it
+            assert google_round(b, terms=False).headers["location"].endswith("/app/#/")
+
+
 def test_google_unverified_email_and_takeover_of_unconfirmed_signups(google):
     with TestClient(google) as c:
         c.put("/v1/admin/signups", json={"mode": "open"}, headers=admin(c))
         google.state.http.profile = {"sub": "g-2", "email": "nov@example.com", "email_verified": False}
         assert "error=email_not_verified" in google_round(c).headers["location"]
         # someone signed up with Pia's email and their own password but never confirmed it
-        c.post("/v1/auth/signup", json={"email": "pia@example.com", "password": "squatter password"})
+        c.post("/v1/auth/signup", json={"email": "pia@example.com", "password": "squatter password",
+                                         "accept_terms": True})
         google.state.http.profile = {"sub": "g-1", "email": "pia@example.com", "email_verified": True}
         with browser(google) as pia:
             assert google_round(pia).headers["location"].endswith("/app/#/")
-        r = c.post("/v1/auth/login", json={"email": "pia@example.com", "password": "squatter password"})
+        r = c.post("/v1/auth/login", json={"email": "pia@example.com", "password": "squatter password",
+                                         "accept_terms": True})
         assert r.status_code == 401                                               # their password was removed
 
 
@@ -579,7 +607,7 @@ def test_captcha_on_signup_reset_and_after_failed_sign_ins(settings):
     app.state.http = FakeHTTP()
     with TestClient(app) as c:
         assert c.get("/v1/auth/config").json()["captcha"]["provider"] == "turnstile"
-        body = {"email": "bot@example.com", "password": PASSWORD}
+        body = {"email": "bot@example.com", "password": PASSWORD, "accept_terms": True}
         assert c.post("/v1/auth/signup", json=body).json()["error"]["code"] == "captcha"
         assert c.post("/v1/auth/signup", json={**body, "captcha": "robot"}).status_code == 400
         assert c.post("/v1/auth/signup", json={**body, "captcha": "human"}).status_code == 202

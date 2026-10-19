@@ -85,6 +85,7 @@ export interface AuthConfig {
   providers: string[];
   captcha: { provider: string | null; site_key: string | null };
   password_min_length: number;
+  terms_version?: string;
 }
 export interface Preset {
   id: string;
