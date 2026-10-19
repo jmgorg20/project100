@@ -133,6 +133,43 @@ def user_cache_dir():
     return base / "AutoEditor" / "graphics"
 
 
+WINDOWS_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+WINDOWS_MAX_PATH = 259
+
+
+def windows_path_problems(path):
+    """Why `path` could not be written on Windows (empty when it can): a reserved or illegal
+    character, a reserved name (CON, NUL...), a name ending in a dot or space, or longer than
+    260 characters. Checked for every file the graphics cache writes."""
+    from pathlib import PureWindowsPath
+    p = PureWindowsPath(str(path))
+    problems = []
+    if len(str(p)) > WINDOWS_MAX_PATH:
+        problems.append(f"the path is {len(str(p))} characters long (Windows allows {WINDOWS_MAX_PATH})")
+    for part in p.parts[1:] if p.drive else p.parts:
+        name = part.rstrip("\\/")
+        if not name:
+            continue
+        bad = sorted({ch for ch in name if ch in '<>:"|?*' or ord(ch) < 32})
+        if bad:
+            problems.append(f"'{name}' has characters Windows does not allow: {' '.join(bad)}")
+        if name.endswith((".", " ")):
+            problems.append(f"'{name}' ends with a dot or a space")
+        if name.split(".")[0].lower() in WINDOWS_RESERVED:
+            problems.append(f"'{name}' is a name Windows reserves")
+    return problems
+
+
+def safe_filename(name, limit=80):
+    """A file name every system accepts: illegal characters become "-", no trailing dots or spaces,
+    no reserved names (CON, NUL...), at most `limit` characters."""
+    import re as _re
+    clean = _re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "-", str(name)).strip().rstrip(". ") or "file"
+    if clean.split(".")[0].lower() in WINDOWS_RESERVED:
+        clean = "_" + clean
+    return clean[:limit].rstrip(". ") or "file"
+
+
 def cache_dir():
     """Where drawn graphics are kept: AUTOEDIT_GRAPHICS_CACHE, else work/cache/graphics next to the
     engine, else (an install folder that cannot be written, e.g. under Program Files) the user's
@@ -141,7 +178,9 @@ def cache_dir():
     if override:
         return Path(override)
     local = PROJECT_DIR / "work" / "cache" / "graphics"
-    return local if writable(local) else user_cache_dir()
+    # a cache file name is 24 hex characters + ".mkv.part.mkv"; keep the whole path short enough
+    too_long = len(str(local)) + 40 > WINDOWS_MAX_PATH
+    return local if writable(local) and not too_long else user_cache_dir()
 
 
 def _frames(clip, fps):
@@ -184,7 +223,7 @@ def job_for_clip(clip, fps, media, base_dir, directory=None):
     basis = {"t": clip["template"], "tv": meta["version"], "r": catalog()["renderer"],
              "p": {**params, "image": _fingerprint(image) if image else None}, "fps": fps,
              "frames": frames}
-    key = hashlib.sha256(json.dumps(basis, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:24]
+    key = safe_filename(hashlib.sha256(json.dumps(basis, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:24])
     directory = Path(directory) if directory else cache_dir()
     return {"key": key, "template": clip["template"], "params": drawn, "fps": fps, "frames": frames,
             "duration": frames / fps, "quality": "final", "out": str(directory / f"{key}.mkv"),
@@ -310,8 +349,24 @@ def draw_jobs(jobs, reporter=None, cancel=None):
         return {}
     url = os.environ.get("AUTOEDIT_GRAPHICS_URL")
     if url:
-        errors = draw_via_server(url, os.environ.get("AUTOEDIT_GRAPHICS_TOKEN"), jobs, reporter, cancel)
-        return not_drawn(jobs, errors)
+        try:
+            errors = not_drawn(jobs, draw_via_server(url, os.environ.get("AUTOEDIT_GRAPHICS_TOKEN"), jobs,
+                                                     reporter, cancel))
+        except EditorError as exc:
+            if renderer_command() is None:
+                raise
+            errors = {j["key"]: str(exc) for j in jobs if not is_drawn(j)}
+        failed = [j for j in jobs if j["key"] in errors]
+        if failed and renderer_command() is not None:
+            # the app's drawing window could not draw these: try the command line renderer (Edge / Chrome)
+            again = draw_with_cli(failed, reporter, cancel)
+            errors = {k: f"{errors[k]}; the command line renderer: {again[k]}" for k in errors if k in again}
+        return errors
+    return draw_with_cli(jobs, reporter, cancel)
+
+
+def draw_with_cli(jobs, reporter=None, cancel=None):
+    """Draw with Node + the bundled script (Playwright's Chromium, Edge or Chrome)."""
     cmd = renderer_command()
     if cmd is None:
         raise EditorError(NO_RENDERER)
