@@ -33,6 +33,7 @@ import json
 import re
 from collections import Counter
 
+from . import cues as cues_mod
 from . import director, graphics
 from .director import Ctx, important, locate, norm, shown, snap, strip_marks
 from .errors import Cancelled
@@ -65,7 +66,16 @@ BEATS = {
     "storyboard": ("storyboard-doc", "cover", "items", "a storyboard page: the steps of a plan with pictures"),
     "pip": (None, "pip", "clip", "one of the creator's clips or photos floating as a rounded picture-in-picture"),
     "camera": (None, "camera", "", "no graphic: a slow push-in on the speaker (a quiet beat)"),
+    # set only by what is said (cues.py), never chosen from the menu
+    "before_after": (None, "look", "", "black and white while the past is told, colour again on 'ngayon'"),
+    "screenshot": ("screenshot-collage", "cover", "image", "your screenshots, matched to what is said"),
+    "platforms": ("app-tile", "card", "", "an app tile for each platform named (your logo files, else the name)"),
+    "stats": ("stat-cards", "card", "", "the numbers said, each with what it counts"),
 }
+CUE_ONLY = {"before_after", "screenshot", "platforms", "stats"}
+CUE_BEAT = {"countdown": "countdown", "keyword": "kinetic", "before_after": "before_after", "search": "search",
+            "screenshot": "screenshot", "checklist": "checklist", "platforms": "platforms", "handle": "profile",
+            "storyboard": "storyboard", "stats": "stats", "follow": "profile"}
 COVER_SHARE = 0.4                  # at most this share of the scenes are big picture beats
 ONCE = {"profile", "logo", "countdown", "palette", "storyboard"}
 BW_GAP = 12.0
@@ -118,12 +128,19 @@ class Assets:
                    if str((c.get("broll") or {}).get("source") or "") in NOT_YOURS}
         self.base_dir = base_dir
         self.images, self.videos, self.logo, self.avatar = [], [], None, None
+        self.platform_logos = {}          # "tiktok" -> media id of YOUR tiktok_logo.png
+        self.names = {}                   # media id -> file name
         for m in project["media"]:
             if m["id"] in main or m["id"] in sourced:
                 continue
-            name = norm(m.get("name") or m["path"].replace("\\", "/").split("/")[-1])
+            fname = m.get("name") or m["path"].replace("\\", "/").split("/")[-1]
+            self.names[m["id"]] = fname
+            name = fname.lower()
             if m["kind"] == "image":
-                if "logo" in name and self.logo is None:
+                platform = next((k for k in cues_mod.PLATFORMS if len(k) > 2 and k in name), None)
+                if platform and ("logo" in name or "icon" in name or re.sub(r"[^a-z]", "", name.rsplit(".", 1)[0]) == platform):
+                    self.platform_logos.setdefault(cues_mod.PLATFORMS[platform].lower(), m["id"])
+                elif "logo" in name and self.logo is None:
                     self.logo = m["id"]
                 elif any(k in name for k in ("avatar", "profile", "headshot")) and self.avatar is None:
                     self.avatar = m["id"]
@@ -142,7 +159,18 @@ class Assets:
         return resolve_media_path(self.media[media_id], self.base_dir or ".")
 
     def summary(self):
-        return {"images": list(self.images), "videos": list(self.videos), "logo": self.logo, "avatar": self.avatar}
+        return {"images": list(self.images), "videos": list(self.videos), "logo": self.logo, "avatar": self.avatar,
+                "platform_logos": dict(self.platform_logos)}
+
+    def matching_images(self, tokens):
+        """Your screenshots, the ones whose file names match the spoken words first ("resulta" ->
+        search_results.png: a shared 5-letter start)."""
+        said = {t for t in (norm(x) for x in tokens) if len(t) >= 4}
+
+        def score(mid):
+            parts = [p for p in re.split(r"[^a-z0-9]+", self.names.get(mid, "").lower().rsplit(".", 1)[0]) if len(p) >= 4]
+            return sum(1 for p in parts for t in said if p[:5] == t[:5])
+        return sorted(self.images, key=lambda mid: (-score(mid), self.images.index(mid)))
 
     def satisfies(self, need, scene_info=None):
         if need == "images2":
@@ -359,7 +387,7 @@ def allowed(beat, ctx, scene, assets, chosen, captions_on, after=None):
     """Can `beat` go on `scene`, given what earlier scenes got (and `after`, the next scene's beat
     when that one is already decided)?"""
     template, kind, need, _about = BEATS[beat]
-    if not assets.satisfies(need):
+    if beat in CUE_ONLY or not assets.satisfies(need):
         return False
     if need == "items" and not list_items(ctx, scene):
         return False
@@ -452,7 +480,7 @@ def plan_schema():
                 "type": "object", "additionalProperties": False, "required": ["scene", "beat"],
                 "properties": {
                     "scene": {"type": "integer", "minimum": 0},
-                    "beat": {"enum": list(BEATS)},
+                    "beat": {"enum": [b for b in BEATS if b not in CUE_ONLY]},
                     "words": {"type": "string", "description": "exact spoken words the main element shows / starts on"},
                     "keyword": {"type": "string", "description": "the one spoken word to emphasise"},
                     "items": {"type": "array", "maxItems": 5, "items": {"type": "string"},
@@ -492,7 +520,7 @@ as said). Never invent words.
 def build_prompt(ctx, scenes, assets, captions_on, problems=None):
     lines = ["BEATS:"]
     for b, (template, kind, need, about) in BEATS.items():
-        if b == "subtitle" and captions_on:
+        if (b == "subtitle" and captions_on) or b in CUE_ONLY:
             continue
         lines.append(f"- {b} ({kind}{', needs ' + need if need else ''}): {about}")
     lines.append("")
@@ -770,6 +798,136 @@ def element(ctx, scene, beat, assets, choice, used_images, captions_on):
     return it, effects, pips
 
 
+# ---------------------------------------------------------------- what is said asks for it (cues.py)
+
+def scene_of(scenes, t):
+    return next((s for s in reversed(scenes) if s.start <= t + EPS), scenes[0])
+
+
+def cue_item(ctx, cue, template, beat, start_i, end_t, scene, **kw):
+    """A graphic item for a spoken cue: it starts on its word and stays until end_t."""
+    sw = ctx.words
+    start = snap(sw[start_i]["start"], ctx.fps)
+    meta = graphics.template_meta(template)
+    end = snap(min(ctx.duration, start + meta["maxDuration"], max(end_t, start + max(meta["minDuration"], 1.6))), ctx.fps)
+    return {"template": template, "words": " ".join(strip_marks(sw[i]["text"]) for i in range(cue.i0, cue.i1 + 1)),
+            "start": start, "end": end, "i0": cue.i0, "i1": cue.i1, "word_end": sw[cue.i1]["end"],
+            "spoken": " ".join(strip_marks(sw[i]["text"]) for i in range(cue.i0, cue.i1 + 1)),
+            "mood": None, "importance": 0.95, "zone": "upper", "reason": f"said: {cue.kind}", "beat": beat,
+            "scene": scene.index, "cue": cue.kind, "timed": True, **kw}
+
+
+def rel(ctx, idx, start):
+    return [round(max(0.0, ctx.words[i]["start"] - start), 3) for i in idx]
+
+
+def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
+    """Graphic items and effect specs for the spoken cues. Returns (items, effects, notes, used): `used`
+    = the cues that made something (a cue with nothing to show leaves its scene to the beats)."""
+    sw = ctx.words
+    items, effects, notes, used = [], [], [], []
+    hold = 0.9
+    profile_photo = assets.avatar
+    for cue in found:
+        made = len(items) + len(effects)
+        s = scene_of(scenes, sw[cue.i0]["start"])
+        last_end = sw[cue.i1]["end"]
+        beat = CUE_BEAT[cue.kind]
+        if cue.kind == "countdown":
+            idx = [k for k, _v in cue.items]
+            it = cue_item(ctx, cue, "countdown-timer", beat, idx[0], last_end + 0.7, s, number=cue.number, text="")
+            it["cues"] = rel(ctx, idx, it["start"])
+            it["zone"] = "center"
+            items.append(it)
+        elif cue.kind == "keyword":
+            it = cue_item(ctx, cue, "kinetic-words", beat, cue.i0, last_end + 1.4, s,
+                          text=" ".join(f"*{w}*" for w in cue.text.split()))
+            it["cues"] = rel(ctx, range(cue.i1 - len(cue.text.split()) + 1, cue.i1 + 1), it["start"])
+            it["zone"] = "upper"
+            items.append(it)
+            effects.append({"type": "zoom", "start": sw[cue.i1]["start"], "end": min(ctx.duration, last_end + 1.2),
+                            "amount": 1.12, "ease": 0.2, "smooth": True, "anchor_y": 0.4})
+        elif cue.kind == "before_after":
+            after_i = cue.items[0][0]
+            effects.append({"type": "look", "start": sw[cue.i0]["start"] - 0.1, "end": sw[after_i]["start"] + 0.1})
+        elif cue.kind == "search":
+            q0 = next(i for i in range(cue.i0, cue.i1 + 1) if strip_marks(sw[i]["text"]).strip(".,!?:") and
+                      " ".join(shown(sw[k]) for k in range(i, cue.i1 + 1)).startswith(cue.text.split()[0]))
+            it = cue_item(ctx, cue, "search-bar", beat, cue.i0, last_end + hold + 0.6, s, text=cue.text)
+            it["cues"] = [round(max(0.1, sw[q0]["start"] - it["start"]), 3),
+                          round(max(0.6, last_end - it["start"]), 3)]
+            items.append(it)
+        elif cue.kind == "screenshot":
+            pics = assets.matching_images([t for _k, t in cue.items])[:4]
+            if not pics:
+                notes.append(f"You talk about a screenshot at {director.mmss(sw[cue.i0]['start'])}, but no picture "
+                             "of yours was given, so none is shown. Add your screenshot (e.g. results.png) to show it.")
+                continue
+            for m in pics:
+                used_images[m] += 1
+            it = cue_item(ctx, cue, "screenshot-collage", beat, cue.number if cue.number is not None else cue.i0,
+                          last_end + hold + 0.6, s, images=pics, text="")
+            it["cues"] = rel(ctx, [cue.number if cue.number is not None else cue.i0] * len(pics), it["start"])
+            it["cues"] = [round(c + 0.35 * k, 3) for k, c in enumerate(it["cues"])]
+            it["zone"] = "center"
+            items.append(it)
+        elif cue.kind in ("checklist", "storyboard"):
+            template = "editorial-checklist" if cue.kind == "checklist" else "storyboard-doc"
+            it = cue_item(ctx, cue, template, beat, cue.i0, last_end + hold + 0.8, s, text=cue.text,
+                          list=[t for _k, t in cue.items])
+            it["cues"] = rel(ctx, [k for k, _t in cue.items], it["start"])
+            it["zone"] = "upper" if cue.kind == "checklist" else "center"
+            items.append(it)
+        elif cue.kind == "platforms":
+            n = len(cue.items[:4])
+            xs = {1: [0.5], 2: [0.34, 0.66], 3: [0.22, 0.5, 0.78], 4: [0.15, 0.38, 0.62, 0.85]}[n]
+            for (k, name), x in zip(cue.items[:4], xs):
+                logo = assets.platform_logos.get(name.lower())
+                it = cue_item(ctx, cue, "app-tile", beat, k, last_end + hold + 0.4, s, text=name,
+                              **({"image": logo} if logo else {}))
+                it["prefer"] = (x, 0.16)
+                it["importance"] = 0.97
+                items.append(it)
+                if not logo:
+                    notes.append(f"No logo file of yours for {name}, so its tile shows the name (add e.g. "
+                                 f"{name.lower()}_logo.png to use your logo).")
+        elif cue.kind in ("handle", "follow"):
+            who = cue.text if cue.kind == "handle" else (handle or assets.handle)
+            title = assets.name or who
+            if not title:
+                it = cue_item(ctx, cue, "kinetic-words", "kinetic", cue.i0, last_end + 1.0, s,
+                              text=" ".join(shown(sw[k]) for k in range(cue.i0, cue.i1 + 1)))
+                it["cues"] = rel(ctx, range(cue.i0, cue.i1 + 1), it["start"])
+                items.append(it)
+                used.append(cue)
+                continue
+            press = cue.number if cue.kind == "follow" else cue.i1
+            it = cue_item(ctx, cue, "profile-card", beat, cue.i0, last_end + hold + 0.8, s, text=title,
+                          text2=who if assets.name else "", **({"image": profile_photo} if profile_photo else {}))
+            it["cues"] = rel(ctx, [press], it["start"])
+            it["cues"] = [round(it["cues"][0] + (0.25 if cue.kind == "follow" else 0.9), 3)]
+            if cue.kind == "handle":
+                it["prefer"] = (0.5, 0.36)
+            items.append(it)
+        elif cue.kind == "stats":
+            it = cue_item(ctx, cue, "stat-cards", beat, cue.i0, last_end + hold + 0.8, s,
+                          list=[t for _k, t in cue.items])
+            it["cues"] = rel(ctx, [k for k, _t in cue.items], it["start"])
+            items.append(it)
+        if len(items) + len(effects) > made:
+            used.append(cue)
+    return items, effects, notes, used
+
+
+def cue_scenes(ctx, found, scenes):
+    """{scene index: beat} for the scenes that a spoken cue decides."""
+    out = {}
+    for cue in sorted(found, key=lambda c: -c.priority):
+        s = scene_of(scenes, ctx.words[cue.i0]["start"])
+        out.setdefault(s.index, CUE_BEAT[cue.kind])
+    return out
+
+
 # ---------------------------------------------------------------- the whole thing
 
 def captions_present(project):
@@ -847,6 +1005,16 @@ def add_effect_clips(project, ctx, ids, items, effects, pips, scenes):
         elif e["type"] == "bw":
             put(trans, {"id": next(ids), "type": "fx", "effect": "bw", "start": snap(e["start"], fps),
                         "duration": round(e["duration"], 4), "intensity": 1.0, "label": "B&W transition"})
+        elif e["type"] == "look":
+            # the past told in black and white, dimmed and vignetted; colour again on "ngayon"
+            start, end = snap(max(0.0, e["start"]), fps), snap(e["end"], fps)
+            d = round(end - start, 4)
+            put(trans, {"id": next(ids), "type": "fx", "effect": "bw", "start": start, "duration": d,
+                        "intensity": 1.0, "label": "Before: black and white"})
+            put(look, {"id": next(ids), "type": "dim", "start": start, "duration": d, "amount": 0.3, "blur": 0,
+                       "fade": 0.2, "label": "Before: dimmed"})
+            put(vig, {"id": next(ids), "type": "vignette", "start": start, "duration": d, "strength": 0.85,
+                      "fade": 0.2, "label": "Before: vignette"})
     for p in pips:
         m = next(x for x in project["media"] if x["id"] == p["media"])
         start, end = snap(p["start"], fps), snap(p["end"], fps)
@@ -940,12 +1108,13 @@ def choose_beats(ctx, scenes, assets, captions_on, choices, kept=None, exclude=N
     return chosen
 
 
-def build(ctx, project, scenes, chosen, assets, captions_on):
+def build(ctx, project, scenes, chosen, assets, captions_on, extra=(), used_images=None):
     """The clips for the scenes that are not kept: graphics (timed and placed by the Director's
     rules: off the face unless made to cover it, never on the captions, inside the safe area),
-    effect specs and PiP specs. Changes `chosen` when a beat cannot be built (camera instead)."""
+    effect specs and PiP specs. `extra`: items already timed (the spoken cues). Changes `chosen`
+    when a beat cannot be built (camera instead)."""
     by_index = {s.index: s for s in scenes}
-    used_images = Counter()
+    used_images = used_images if used_images is not None else Counter()
     items, effects, pips = [], [], []
     for s, c in zip(scenes, chosen):
         if c.get("kept"):
@@ -959,8 +1128,8 @@ def build(ctx, project, scenes, chosen, assets, captions_on):
             items.append(it)
         effects += eff
         pips += pip
-    starts = sorted([x["start"] for x in items] + [c["start"] for c in ctx.fixed])
-    timed = []
+    starts = sorted([x["start"] for x in items] + [x["start"] for x in extra] + [c["start"] for c in ctx.fixed])
+    timed = list(extra)
     for it in sorted(items, key=lambda x: x["start"]):
         nxt = next((t for t in starts if t > it["start"] + EPS), None)
         if time_item(ctx, it, by_index[it["scene"]], nxt):
@@ -972,6 +1141,10 @@ def build(ctx, project, scenes, chosen, assets, captions_on):
     kept_ids = {id(x) for x in placed}
     for it in timed:
         if id(it) not in kept_ids:
+            if it.get("cue"):
+                ctx.note(f"The {it['cue']} graphic at {director.mmss(it['start'])} was left out: no free space "
+                         "that keeps the face and captions clear.")
+                continue
             chosen_for(scenes, chosen, it["scene"])["beat"] = "camera"
             effects += element(ctx, by_index[it["scene"]], "camera", assets, {}, used_images, captions_on)[1]
     ids = director.next_ids(project, "g")
@@ -1045,9 +1218,19 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
             first = attempts[0]["problems"][0] if attempts and attempts[0]["problems"] else "no answer"
             reason = (f"The AI scene plan could not be used ({first}) - the scenes were planned by the "
                       "editorial rules instead.")
-    chosen = choose_beats(ctx, scenes, assets, captions_on, choices)
-    clips, placed, effects, pips = build(ctx, project, scenes, chosen, assets, captions_on)
-    effects += bw_transitions(ctx, scenes, chosen)
+    # what is said decides its scenes (a countdown, a search, a list...); the others get beats
+    found = cues_mod.extract(ctx.words)
+    handle = next((c.text for c in found if c.kind == "handle"), None)
+    used_images = Counter()
+    cue_items, cue_effects, cue_notes, made = cue_elements(ctx, found, scenes, assets, used_images, handle)
+    chosen = choose_beats(ctx, scenes, assets, captions_on, choices, kept=cue_scenes(ctx, made, scenes))
+    clips, placed, effects, pips = build(ctx, project, scenes, chosen, assets, captions_on, extra=cue_items,
+                                         used_images=used_images)
+    for c in chosen:
+        c.pop("kept", None)
+    looks = [e for e in cue_effects if e["type"] == "look"]
+    effects += cue_effects + [b for b in bw_transitions(ctx, scenes, chosen)
+                              if all(abs(b["start"] - lk["start"]) > 3 for lk in looks)]
     director.lay_out(project, clips)
     add_effect_clips(project, ctx, director.next_ids(project, "pe"), placed, effects, pips, scenes)
     rows = plan_rows(ctx, scenes, chosen)
@@ -1058,7 +1241,7 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     ai = cfg.get("ai") or {}
     cost = plan_cost(ai.get("prices") or {}, used_model, usage["input_tokens"], usage["output_tokens"]) \
         if (used_model and usage["input_tokens"]) else (0.0 if cached else None)
-    notes = list(ctx.notes)
+    notes = list(ctx.notes) + [n for n in cue_notes if n not in ctx.notes]
     if not (assets.images or assets.videos or assets.logo):
         notes.append("No screenshots, photos or clips of yours were given, so the picture beats "
                      "(collage, montage, phone, PiP...) were left out. Add your own files to use them.")

@@ -87,7 +87,7 @@ def test_each_scene_gets_one_beat_that_suits_its_words_and_beats_vary(shots):
     assert beat["Una"] == "checklist"                                          # a spoken list
     assert beat["I-search"] == "search"
     assert beat["Bigyan"] == "countdown"                                       # "30 seconds"
-    assert beat["Tingnan"] in ("collage", "montage", "mosaic", "phone", "pip")  # "the results on my dashboard"
+    assert beat["Tingnan"] in ("screenshot", "collage", "montage", "mosaic", "phone", "pip")  # "the results on my dashboard"
     assert beat["Kaya"] == "profile"                                           # "i-follow mo ako"
     kinds = [editorial.BEATS[r["beat"]][1] for r in rows]
     for a, b, ka, kb in zip(rows, rows[1:], kinds, kinds[1:]):
@@ -211,9 +211,11 @@ def test_uploaded_files_the_edit_did_not_use_become_media(shots):
 # ---------------------------------------------------------------- the AI's choices
 
 def ai_answer(rows, override=None):
+    """An AI answer for these scenes (the beats only cues set are never on the AI's menu)."""
     override = override or {}
-    return {"summary": "ok", "scenes": [{"scene": r["index"], "beat": r["beat"], **override.get(r["index"], {})}
-                                        for r in rows]}
+    return {"summary": "ok", "scenes": [{"scene": r["index"],
+                                         "beat": "camera" if r["beat"] in editorial.CUE_ONLY else r["beat"],
+                                         **override.get(r["index"], {})} for r in rows]}
 
 
 def test_ai_choices_are_used_when_they_check_out(shots, monkeypatch):

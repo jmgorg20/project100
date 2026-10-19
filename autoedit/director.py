@@ -566,7 +566,7 @@ def place_items(ctx, items):
         base_size = clamp(float(it.get("size") or ctx.style["size"]), MIN_SIZE, 1.8)
         text = it.get("text", "")
         zone = it["zone"] if it["zone"] not in (None, "auto") else None
-        preferred = ZONE_ANCHOR.get(zone) if zone else (meta["anchor"]["x"], meta["anchor"]["y"])
+        preferred = it.get("prefer") or (ZONE_ANCHOR.get(zone) if zone else (meta["anchor"]["x"], meta["anchor"]["y"]))
         busy = [(p["box"], p) for p in placed if p["start"] < t1 and p["end"] > t0]
         fixed_busy = [zones.inflate(graphics.estimated_box(c), 14) for c in ctx.fixed
                       if c["start"] < t1 and c["start"] + c["duration"] > t0]

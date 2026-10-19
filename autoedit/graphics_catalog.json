@@ -59,6 +59,71 @@
  "templates": [
   {
    "version": 1,
+   "tl": "App tile",
+   "category": "card",
+   "moods": [
+    "tech",
+    "playful",
+    "hype",
+    "money",
+    "calm"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "image",
+     "type": "image",
+     "required": false
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "upper",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.2
+   },
+   "box": {
+    "w": 260,
+    "h": 300
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "image",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 14,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "Your app"
+   },
+   "id": "app-tile",
+   "name": "App tile (a platform you name)"
+  },
+  {
+   "version": 1,
    "tl": "Arrow na nakaturo",
    "category": "pointer",
    "moods": [
@@ -613,7 +678,8 @@
     "accent",
     "bg",
     "size",
-    "intensity"
+    "intensity",
+    "cues"
    ],
    "bg": true,
    "words": false,
@@ -3399,6 +3465,76 @@
    },
    "id": "stat-bar",
    "name": "Percent bar"
+  },
+  {
+   "version": 1,
+   "tl": "Mga numero",
+   "category": "data",
+   "moods": [
+    "money",
+    "hype",
+    "serious",
+    "news",
+    "tech"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "items",
+     "type": "list",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    }
+   ],
+   "duration": 3.4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.3
+   },
+   "box": {
+    "w": 860,
+    "h": 300
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 32,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#f4efe6",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "items": [
+     "0",
+     "1,000 followers",
+     "30 araw"
+    ]
+   },
+   "id": "stat-cards",
+   "name": "Number cards"
   },
   {
    "version": 1,

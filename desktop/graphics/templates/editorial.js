@@ -433,7 +433,7 @@ defineTemplate({
   id: "countdown-timer", name: "Countdown timer", tl: "Countdown timer", category: "data", styles: ONLY,
   moods: ["urgent", "money", "hype", "serious", "tech"], zone: "any", anchor: { x: 0.5, y: 0.42 }, box: { w: 520, h: 600 }, duration: 3.4, maxDuration: 12,
   maxChars: 28, bg: true, pad: 70, numRange: [1, 5999],
-  fields: ["text", "number", "color", "accent", "bg", "size", "intensity"],
+  fields: ["text", "number", "color", "accent", "bg", "size", "intensity", "cues"],
   inputs: [{ key: "number", type: "number", required: true }, { key: "text", type: "text", required: false }],
   defaults: { bg: CREAM, color: INK, accent: ACCENT, number: 10 },
   sample: { number: 10, text: "Huling tsansa" },
@@ -465,12 +465,16 @@ defineTemplate({
     w: Math.max(w, 440), h,
     update(t, dur) {
       settle(wrap, t, dur, { tin: 0.35, from: 0.9, rise: 20 });
-      const run = prog(t, 0.3, Math.max(0.6, dur - 0.35));        // the time shown runs over the graphic
-      const left = Math.max(0, Math.ceil(total * (1 - run) - 1e-9));
+      // spoken countdown ("tatlo... dalawa... isa"): each number shows on its own word (cues);
+      // otherwise the time shown runs over the graphic
+      const said = p.cues.length >= 2 ? p.cues.filter((x) => x <= t + 1e-6).length : -1;
+      const run = said >= 0 ? c01(said / p.cues.length) : prog(t, 0.3, Math.max(0.6, dur - 0.35));
+      const left = said >= 0 ? Math.max(total - p.cues.length + 1, total - Math.max(0, said - 1)) : Math.max(0, Math.ceil(total * (1 - run) - 1e-9));
       digits.textContent = fmt(left);
       arc.setAttribute("stroke-dashoffset", String(L * run));
-      const tick = (total * run) % 1;
-      setT(digits, { s: 1 + 0.06 * (1 - ease.out(c01(tick * 4))) * (run < 1 ? 1 : 0) });
+      const last = said > 0 ? p.cues[said - 1] : null;
+      const tick = said >= 0 ? (last === null ? 1 : c01((t - last) / 0.25)) : (total * run) % 1;
+      setT(digits, { s: 1 + (said >= 0 ? 0.14 : 0.06) * (1 - ease.out(c01(said >= 0 ? tick : tick * 4))) * (run < 1 || said >= 0 ? 1 : 0) });
     },
   };
 });
@@ -701,6 +705,86 @@ defineTemplate({
       follow.style.opacity = String(1 - c01(k * 2));         // one label at a time
       following.style.opacity = String(c01(k * 2 - 1));
       setT(btn, { s: 1 - 0.08 * Math.sin(Math.PI * c01((t - press) / 0.3)) });
+    },
+  };
+});
+
+// ---------------------------------------------------------------- 17. app tile (a platform you name)
+defineTemplate({
+  id: "app-tile", name: "App tile (a platform you name)", tl: "App tile", category: "card", styles: ONLY,
+  moods: ["tech", "playful", "hype", "money", "calm"], zone: "upper", anchor: { x: 0.5, y: 0.2 }, box: { w: 260, h: 300 }, duration: 2.6, maxDuration: 8,
+  maxChars: 14, bg: true, pad: 60,
+  fields: ["text", "image", "color", "accent", "bg", "size", "intensity"],
+  inputs: [{ key: "text", type: "text", required: true }, { key: "image", type: "image", required: false }],
+  defaults: { bg: "#ffffff", color: INK, accent: ACCENT },
+  sample: { text: "Your app" },
+}, (c) => {
+  // Your own logo file when you gave one; otherwise the name, set in type (never a made-up logo).
+  const { p } = c;
+  const wrap = mk("div", { display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "14px", width: "260px" }, null, c.root);
+  const tile = p.image
+    ? picture(wrap, p.image, { width: "200px", height: "200px", borderRadius: "48px", background: "#ffffff", boxShadow: SOFT }, { fit: "contain" })
+    : mk("div", { width: "200px", height: "200px", borderRadius: "48px", background: p.bg, color: p.color, boxShadow: SOFT, display: "grid", placeItems: "center", boxSizing: "border-box", padding: "18px", fontFamily: serif.fontFamily, fontWeight: "800", textAlign: "center", lineHeight: "1.05" }, plainText(p.text), wrap);
+  if (!p.image) c.fit(tile, { maxW: 164, maxH: 150, max: 60, min: 22 });
+  const label = mk("div", { fontFamily: inter.fontFamily, fontWeight: "700", fontSize: "30px", color: "#ffffff", textShadow: "0 3px 12px rgba(0,0,0,.55)", whiteSpace: "nowrap" }, plainText(p.text), wrap);
+  c.fit(label, { maxW: 260, maxH: 44, max: 30, min: 18, lines: 1 });
+  const { h } = dims(wrap);
+  return {
+    w: 260, h,
+    update(t, dur) {
+      const e = envelope(t, dur, 0.45, 0.35);
+      const k = ease.back(c01(e.i), 1.6);
+      wrap.style.opacity = String(c01(e.i * 2) * (1 - ease.inOut(e.o)));
+      setT(tile, { s: lerp(0.4, 1, k) * (1 - 0.1 * ease.in(e.o)), r: lerp(-14, 0, ease.out(c01(e.i))) + Math.sin(t * 1.3) * 1.5, y: Math.sin(t * 1.7) * 6 });
+      label.style.opacity = String(arrive(t, 0.25));
+    },
+  };
+});
+
+// ---------------------------------------------------------------- 18. stat cards (numbers you say)
+defineTemplate({
+  id: "stat-cards", name: "Number cards", tl: "Mga numero", category: "data", styles: ONLY,
+  moods: ["money", "hype", "serious", "news", "tech"], zone: "any", anchor: { x: 0.5, y: 0.3 }, box: { w: 860, h: 300 }, duration: 3.4, maxDuration: 8,
+  maxChars: 32, bg: true, pad: 70,
+  fields: ["text", "items", "color", "accent", "bg", "size", "intensity", "cues"],
+  inputs: [{ key: "items", type: "list", required: true }, { key: "text", type: "text", required: false }],
+  defaults: { bg: CREAM, color: INK, accent: ACCENT },
+  sample: { items: ["0", "1,000 followers", "30 araw"] },
+}, (c) => {
+  // Each item is "<number> <what it counts>", as said; each card counts up on its own word.
+  const { p } = c;
+  const parsed = p.items.slice(0, 4).map((raw) => {
+    const m = String(raw).match(/^([₱$€]?)(\d[\d,.]*)(%?)\s*(.*)$/);
+    return m ? { pre: m[1], value: Number(m[2].replace(/,/g, "")), suf: m[3], label: m[4], raw: m[2] } : { pre: "", value: NaN, suf: "", label: String(raw), raw: String(raw) };
+  });
+  const row = mk("div", { display: "flex", gap: "18px", alignItems: "stretch" }, null, c.root);
+  const cards = parsed.map((it, i) => {
+    const card = mk("div", { width: `${Math.floor((860 - 18 * (parsed.length - 1)) / parsed.length)}px`, boxSizing: "border-box", background: p.bg, color: p.color, borderRadius: "26px", padding: "24px 18px 22px", boxShadow: SOFT, textAlign: "center", fontFamily: inter.fontFamily }, null, row);
+    const num = mk("div", { fontFamily: serif.fontFamily, fontWeight: "800", fontSize: "96px", lineHeight: "1", color: i === parsed.length - 1 ? p.accent : p.color, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }, `${it.pre}${it.raw}${it.suf}`, card);
+    c.fit(num, { maxW: parseInt(card.style.width) - 36, maxH: 110, max: 96, min: 36, lines: 1 });
+    const lab = mk("div", { fontSize: "28px", fontWeight: "700", letterSpacing: "0.06em", textTransform: "uppercase", color: rgba(p.color, 0.6), marginTop: "12px", whiteSpace: "nowrap", minHeight: "34px" }, plainText(it.label), card);
+    c.fit(lab, { maxW: parseInt(card.style.width) - 36, maxH: 40, max: 28, min: 16, lines: 1 });
+    return { card, num, it };
+  });
+  const { w, h } = dims(row);
+  const times = cueTimes(p, cards.length, c.dur, { from: 0.3, to: Math.min(c.dur * 0.6, 0.3 + cards.length * 0.5) });
+  const show = (it, k) => {
+    if (!Number.isFinite(it.value)) return `${it.pre}${it.raw}${it.suf}`;
+    const v = it.value * k;
+    const dec = (it.raw.split(".")[1] || "").length;
+    return `${it.pre}${v.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })}${it.suf}`;
+  };
+  return {
+    w, h,
+    update(t, dur) {
+      const e = envelope(t, dur, 0.4, 0.4);
+      row.style.opacity = String(1 - ease.inOut(e.o));
+      cards.forEach((cd, i) => {
+        const a = arrive(t, times[i], 0.45);
+        cd.card.style.opacity = String(a);
+        setT(cd.card, { y: (1 - a) * 40, s: lerp(0.9, 1, a) });
+        cd.num.textContent = show(cd.it, ease.out(prog(t, times[i], times[i] + 0.8)));
+      });
     },
   };
 });
