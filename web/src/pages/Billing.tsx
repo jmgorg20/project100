@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, get, post, type Billing as BillingView, type PlanInfo } from "../api";
 import { query } from "../App";
+import { inAndroidApp } from "../platform";
 import { getLang, t, useLang } from "../i18n";
 
 function money(cents: number, currency: string) {
@@ -77,6 +78,9 @@ export function BillingCard() {
       setBusy(false);
     }
   };
+  // Google Play: plans are not sold inside the Android app (digital goods there must use Play's
+  // own billing). The app shows the plan and the minutes, without buying or a link to buy.
+  const android = inAndroidApp();
   const used = b.usage.minutes;
   const limit = b.usage.minutes_limit;
   return (
@@ -97,12 +101,13 @@ export function BillingCard() {
       <ul className="plans">
         {b.plans.map((p) => (
           <PlanCard key={p.id} plan={p} current={b.plan?.id === p.id && b.mode === "plan"} busy={busy}
-            canBuy={b.can_manage && b.online_payment} onChoose={() => void go("/v1/billing/checkout", { plan_id: p.id })} />
+            canBuy={b.can_manage && b.online_payment && !android} onChoose={() => void go("/v1/billing/checkout", { plan_id: p.id })} />
         ))}
       </ul>
       {!b.can_manage && <p className="muted">{t("onlyManagers")}</p>}
-      {b.can_manage && !b.online_payment && <p className="muted">{t("contactForPlan")}</p>}
-      {b.can_manage && b.has_portal && <button className="ghost" disabled={busy} onClick={() => void go("/v1/billing/portal")}>{t("manageBilling")}</button>}
+      {android && <p className="muted" data-testid="no-buying-in-app">{t("plansNotInApp")}</p>}
+      {b.can_manage && !b.online_payment && !android && <p className="muted">{t("contactForPlan")}</p>}
+      {b.can_manage && b.has_portal && !android && <button className="ghost" disabled={busy} onClick={() => void go("/v1/billing/portal")}>{t("manageBilling")}</button>}
       {b.payments.length > 0 && (
         <details>
           <summary>{t("payments")}</summary>

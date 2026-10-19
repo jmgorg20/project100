@@ -12,6 +12,7 @@ Optional: see Settings below (each field's env name is SERVICE_ + the field name
 """
 
 import os
+import re
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
@@ -105,6 +106,10 @@ class Settings:
     # compliance
     terms_version: str = "draft-2026-10"     # the version of the terms and privacy notice users accept
     audit_retention_days: float = 400.0      # audit log entries are kept this long
+    # the Android app (docs/android.md): its package name and the SHA-256 fingerprints of the keys
+    # that sign it (Play Console > App integrity), served as /.well-known/assetlinks.json
+    android_package: str = ""
+    android_cert_sha256: list = field(default_factory=list)
     # billing (the web app's organisations; API clients like JGG CITY are not billed here)
     billing: str = "off"                     # off: no trial or plan limits | on
     billing_provider: str = ""               # "" (plans given by the admin only) | paddle | fake (development)
@@ -211,6 +216,15 @@ class Settings:
             problems.append("SERVICE_CAPTCHA_SECRET is needed with SERVICE_CAPTCHA_PROVIDER")
         if bool(self.oauth_google_client_id) != bool(self.oauth_google_client_secret):
             problems.append("Google sign-in needs both SERVICE_OAUTH_GOOGLE_CLIENT_ID and _SECRET")
+        if self.android_package and not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+",
+                                                     self.android_package):
+            problems.append("SERVICE_ANDROID_PACKAGE must look like com.example.autoedit")
+        for fp in self.android_cert_sha256:
+            if not re.fullmatch(r"([0-9A-F]{2}:){31}[0-9A-F]{2}", fp):
+                problems.append(f"SERVICE_ANDROID_CERT_SHA256: {fp!r} is not a SHA-256 fingerprint "
+                                "(32 pairs like AB:CD:..., as Play Console shows it)")
+        if self.android_package and not self.android_cert_sha256:
+            problems.append("SERVICE_ANDROID_CERT_SHA256 is needed with SERVICE_ANDROID_PACKAGE")
         if not 10 <= self.password_cost <= 20:
             problems.append("SERVICE_PASSWORD_COST must be between 10 and 20")
         if problems:

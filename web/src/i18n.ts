@@ -115,6 +115,8 @@ export const WORDS = {
   r_illegal: ["Something else illegal (scam, fake ID...)", "Iba pang ilegal (scam, pekeng ID...)"],
   r_spam: ["Spam", "Spam"],
   r_other: ["Something else", "Iba pa"],
+  plansNotInApp: ["Plans cannot be bought in the Android app. Your plan and minutes work the same here.",
+    "Hindi nabibili ang plan sa Android app. Pareho pa rin dito ang plan at minutes mo."],
   tryAgain: ["Try again", "Subukan ulit"],
   // history
   historyEmpty: ["No videos yet. Tap New to start.", "Wala pang video. Pindutin ang Bago para magsimula."],

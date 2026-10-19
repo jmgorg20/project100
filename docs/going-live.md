@@ -104,6 +104,13 @@ problema.*
 Admin → Overview (money), Costs (who costs most), Reports (handle them), System (workers online,
 audit log). The routine and the "what to do when" list are in [runbook.md](runbook.md).
 
+## 10. Optional: the Android app · Opsyonal: Android app
+
+When the website works well, put it on the Play Store as an app (no new code): [android.md](android.md).
+iPhone users add the website to their home screen: [ios.md](ios.md).
+
+*Kapag ok na ang website, puwede itong gawing Android app sa Play Store (android.md).*
+
 ## What this guide cannot promise · Hindi masisiguro
 
 These steps were written from the code and its tests; a full production launch (real domain, real
