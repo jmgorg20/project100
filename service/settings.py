@@ -70,6 +70,7 @@ class Settings:
     cost_gpu_second: float = 0.0004
     cost_gb_month: float = 0.021
     cost_gb_egress: float = 0.09
+    fx_rates: list = field(default_factory=list)   # e.g. PHP=0.0172,EUR=1.08: other currencies in US dollars
     # accounts (the SaaS web app)
     app_url: str = ""                        # the web app; empty: PUBLIC_URL + /app/
     web_dir: str = ""                        # the built web app; empty: web/dist next to the code
