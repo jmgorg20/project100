@@ -55,6 +55,20 @@ follow-up) and "Apply" (after review) start from.
   instruction and your photo / file names (`search_results.png` → search, results), and a Taglish
   line with words Whisper often mishears ("tatlo", "hinanap"...). `transcription: taglish_hint:
   false` in config.yaml turns the Taglish line off.
+- **Taglish post-correction** (on the real Windows run the hint was not enough: "Tatlo" came out
+  "Tatyo"). After transcription, a word that is exactly one letter off a known word becomes that
+  word: Tagalog / English numbers (`Tatyo` → `Tatlo`, `tatlumpong` → `tatlumpung`), words creators
+  say on camera (`hinanat` → `hinanap`, `disipina` → `disiplina`) and the words of your
+  instruction and file names. Everyday words (`wala`, `sana`, `dito`...), plurals and words of
+  under 5 letters (4 for numbers) are never touched. "What the AI did" lists every change
+  (`Fixed 2 misheard Taglish word(s): 'Tatyo' -> 'Tatlo', ...`). `transcription: taglish_fix: false`
+  turns it off. The countdown also accepts a number word one letter off when the next word is a
+  number ("Tatyo dalawa isa" → 3, 2, 1).
+- **Real Whisper words have no punctuation** (Groq's word timestamps): the cue engine then finds
+  sentences by pauses and capital letters (never cutting after "sa", "ng", "ang"...), a title after
+  "Una" / "Pangalawa" without caps or a colon, list items in the sentence after "checklist ..."
+  split at verb forms (mag-post, sagutin, i-check) or pauses. Tested on the words of the real
+  Windows run (`tests/data/realclip/`, evidence in `docs/acceptance/realclip/a/`).
 - **Fix the words before the edit.** In the app: Settings → *Let me fix the words before the AI
   edit*; after you press Edit with AI you see what was heard, line by line, correct it ("Tatyo" →
   "Tatlo"), then the edit starts with your words (captions and graphics use them). Command line:

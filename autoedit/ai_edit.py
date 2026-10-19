@@ -465,6 +465,12 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
             hints = [instruction, *photos, *(Path(f).name for fs in (inputs or {}).values() for f in fs
                                              if isinstance(f, (str, Path)))]
             words, cached, transcript_cost = load_words(video, cfg, cache, job_dir, duration, hints)
+        # Taglish words Whisper nearly got right ("Tatyo" -> "Tatlo"), from numbers, creator words
+        # and the words of your instruction / file names
+        from .taglish import changes_text, correct_words
+        words, taglish_fixes = correct_words(
+            words, [instruction, *(Path(p).name for p in photos)],
+            enabled=bool((cfg.get("transcription") or {}).get("taglish_fix", True)))
         reporter.event("transcript", words=len(words), cached=cached,
                        text=" ".join(w.text for w in words)[:4000])
         check_cancel()
@@ -580,6 +586,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
             summary["details"] = ([f"Format: {spec['name']} ({format_reason})."]
                                   + [f"Format: {n}" for n in format_notes] + summary["details"])
         summary["format"] = format_id
+        if taglish_fixes:
+            summary["details"].insert(0, changes_text(taglish_fixes))
         if look:
             summary["details"] = ([f"Preset: {look['name']}."] + [f"Preset: {n}" for n in preset_notes]
                                   + summary["details"])
@@ -685,6 +693,12 @@ def voiceover_edit(audio, broll, cfg, instruction="", provider=None, model=None,
     try:
         reporter.stage("transcript", "Listening to your voice-over")
         words, cached, transcript_cost = load_words(audio, cfg, cache, job_dir, duration)
+        # Taglish words Whisper nearly got right ("Tatyo" -> "Tatlo"), from numbers, creator words
+        # and the words of your instruction / file names
+        from .taglish import correct_words
+        words, _fixes = correct_words(
+            words, [instruction],
+            enabled=bool((cfg.get("transcription") or {}).get("taglish_fix", True)))
         reporter.event("transcript", words=len(words), cached=cached,
                        text=" ".join(w.text for w in words)[:4000])
         reporter.stage("format", "Putting your B-roll under the voice-over")

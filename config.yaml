@@ -19,6 +19,7 @@ transcription:
   provider: groq              # "groq" (online, needs GROQ_API_KEY in .env) or "local" (on your PC)
   groq_model: whisper-large-v3 # the most accurate Groq Whisper (turbo is faster but misses more Taglish)
   taglish_hint: true          # send a short Taglish line + words from your instruction and file names
+  taglish_fix: true           # put right Taglish words Whisper nearly got ("Tatyo" -> "Tatlo"); see autoedit/taglish.py
   local_model: medium         # local model size: small, medium, large-v3 (bigger = slower, better)
   local_device: auto          # auto, cpu or cuda (NVIDIA graphics card)
   vocabulary_file: vocabulary.json   # your words + corrections (the app edits it)
