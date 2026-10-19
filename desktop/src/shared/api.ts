@@ -1,4 +1,5 @@
 // What the window can ask the main process (exposed as window.api by the preload script).
+import type { TranscriptWord } from "./captionEdit";
 import type {
   BrollMeta, BrollStyle, ContentType, Cost, GenStatus, GenTaskUpdate, Job, JobRequest, KeyName, KeysStatus, Media, Plan, Project, Provider,
   Settings, VideoHistory,
@@ -186,6 +187,10 @@ export interface AppApi {
   // ---- captions, sound, effects
   /** Your words and corrections (vocabulary.json next to the editor engine). */
   getVocabulary(): Promise<{ words: string[]; corrections: { from: string; to: string }[] }>;
+  /** Transcribe a video (no edit yet) so its words can be fixed first; `file` is the saved transcript. */
+  transcribe(video: string, instruction: string, photos: string[]): Promise<{ file?: string; words?: TranscriptWord[]; error?: string }>;
+  /** Save the fixed words over that transcript file. */
+  saveTranscript(file: string, words: TranscriptWord[]): Promise<{ ok: boolean; error?: string }>;
   setVocabulary(v: { words: string[]; corrections: { from: string; to: string }[] }): Promise<{ ok: boolean; error?: string }>;
   /** Sound files in your music or sound-effect folder, or pictures/videos in your B-roll folder. */
   listLibrary(kind: "music" | "sfx" | "broll"): Promise<{ folder: string; files: LibraryFile[]; error?: string }>;

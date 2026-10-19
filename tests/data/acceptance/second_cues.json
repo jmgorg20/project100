@@ -1,0 +1,14 @@
+[
+ {"id": "hook", "said": "Limang minuto lang ito", "expect": "title", "want": ["minuto", "limang", "5"]},
+ {"id": "count", "said": "Lima apat tatlo dalawa isa", "expect": "countdown", "want": ["5"], "templates": ["countdown-timer", "number-card", "counter-number"]},
+ {"id": "keyword", "said": "Pangalawa PASENSYA", "expect": "title", "want": ["pasensya"]},
+ {"id": "before_after", "said": "Noon takot akong mag-live", "expect": "bw", "want": []},
+ {"id": "search", "said": "i-type ninyo murang ulam recipe", "expect": "search bar", "want": ["murang ulam recipe"], "templates": ["search-bar"]},
+ {"id": "screenshot", "said": "Tingnan ninyo ang graph ng sales ko", "expect": "floating screenshot", "want": ["search_results.png"]},
+ {"id": "list", "said": "Mga gamit ko sa kusina", "expect": "checklist", "want": ["kawali", "sandok", "rice cooker"], "count": 3, "late": 5.0},
+ {"id": "platforms", "said": "Nasa Instagram at YouTube ako", "expect": "logo cards", "want": ["instagram", "youtube"], "count": 2, "late": 3.0},
+ {"id": "handle", "said": "@lutongbahay.ph", "expect": "profile card", "want": ["@lutongbahay.ph"], "late": 3.0},
+ {"id": "storyboard", "said": "Plano ko intro luto tikim", "expect": "storyboard", "want": ["intro", "luto", "tikim"], "count": 3, "late": 3.0},
+ {"id": "stats", "said": "Mula isang daan hanggang limang libong views sa dalawang linggo", "expect": "numbers", "want": ["100", "5000", "2"], "count": 3, "late": 3.0},
+ {"id": "follow", "said": "Mag-subscribe ka na", "expect": "follow card", "want": ["@lutongbahay.ph", "subscribe", "follow"], "late": 2.0}
+]

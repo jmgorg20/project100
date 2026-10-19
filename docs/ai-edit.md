@@ -48,6 +48,26 @@ Each run saves a project file and a plan file next to the finished video
 app). The plan file holds the instruction, plan, summary and cost, and is what "Change this edit" (a
 follow-up) and "Apply" (after review) start from.
 
+## Transcription (Taglish) · Ang pagsulat ng sinabi
+
+- Groq Whisper `whisper-large-v3` (the most accurate; `turbo` is faster but misses more Taglish),
+  `language: tl`. With it goes a short hint: your own words (vocabulary.json), words from your
+  instruction and your photo / file names (`search_results.png` → search, results), and a Taglish
+  line with words Whisper often mishears ("tatlo", "hinanap"...). `transcription: taglish_hint:
+  false` in config.yaml turns the Taglish line off.
+- **Fix the words before the edit.** In the app: Settings → *Let me fix the words before the AI
+  edit*; after you press Edit with AI you see what was heard, line by line, correct it ("Tatyo" →
+  "Tatlo"), then the edit starts with your words (captions and graphics use them). Command line:
+  `python editor.py transcribe me.mp4 --output me.transcript.json`, fix the file, then
+  `python editor.py ai-edit me.mp4 --transcript me.transcript.json`.
+- **Captions without punctuation** (default): no `, . ! ? ; :` or quotes on screen; `i-check`,
+  `mag-post`, `it's`, `3,600` and `1.5` stay. The words themselves are not changed. Settings →
+  *Caption punctuation* (keep / remove), `--caption-punctuation keep`, `captions: punctuation:` in
+  config.yaml, the caption editor's *Show punctuation* switch (whole project), or the API's
+  `"caption_punctuation"`.
+- **Not verified:** how much the hint improves real Taglish speech (there is no real speech or
+  Groq key on the test machine; the request that is sent is tested).
+
 ## Providers
 
 | | Groq (default) | Anthropic (optional) |

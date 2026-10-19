@@ -1,0 +1,380 @@
+{
+ "language": "tl",
+ "words": [
+  {
+   "word": "Teka",
+   "start": 0.35,
+   "end": 0.573
+  },
+  {
+   "word": "lang!",
+   "start": 0.619,
+   "end": 0.842
+  },
+  {
+   "word": "Tatlong",
+   "start": 1.202,
+   "end": 1.513
+  },
+  {
+   "word": "sikreto",
+   "start": 1.559,
+   "end": 1.871
+  },
+  {
+   "word": "ng",
+   "start": 1.917,
+   "end": 2.08
+  },
+  {
+   "word": "viral",
+   "start": 2.126,
+   "end": 2.379
+  },
+  {
+   "word": "na",
+   "start": 2.424,
+   "end": 2.588
+  },
+  {
+   "word": "video.",
+   "start": 2.634,
+   "end": 2.887
+  },
+  {
+   "word": "Tatlo...",
+   "start": 3.247,
+   "end": 3.499
+  },
+  {
+   "word": "dalawa...",
+   "start": 3.86,
+   "end": 4.142
+  },
+  {
+   "word": "isa!",
+   "start": 4.502,
+   "end": 4.696
+  },
+  {
+   "word": "Una:",
+   "start": 5.056,
+   "end": 5.249
+  },
+  {
+   "word": "DISIPLINA.",
+   "start": 5.446,
+   "end": 5.807
+  },
+  {
+   "word": "Dati,",
+   "start": 6.167,
+   "end": 6.39
+  },
+  {
+   "word": "wala",
+   "start": 6.587,
+   "end": 6.809
+  },
+  {
+   "word": "akong",
+   "start": 6.855,
+   "end": 7.108
+  },
+  {
+   "word": "follower.",
+   "start": 7.154,
+   "end": 7.494
+  },
+  {
+   "word": "Ngayon,",
+   "start": 7.855,
+   "end": 8.137
+  },
+  {
+   "word": "ito",
+   "start": 8.333,
+   "end": 8.527
+  },
+  {
+   "word": "na",
+   "start": 8.573,
+   "end": 8.736
+  },
+  {
+   "word": "ako.",
+   "start": 8.782,
+   "end": 8.976
+  },
+  {
+   "word": "Sa",
+   "start": 9.336,
+   "end": 9.5
+  },
+  {
+   "word": "search",
+   "start": 9.546,
+   "end": 9.828
+  },
+  {
+   "word": "bar,",
+   "start": 9.874,
+   "end": 10.067
+  },
+  {
+   "word": "hinanap",
+   "start": 10.264,
+   "end": 10.575
+  },
+  {
+   "word": "ko:",
+   "start": 10.621,
+   "end": 10.785
+  },
+  {
+   "word": "paano",
+   "start": 10.981,
+   "end": 11.234
+  },
+  {
+   "word": "kumita",
+   "start": 11.28,
+   "end": 11.561
+  },
+  {
+   "word": "online.",
+   "start": 11.607,
+   "end": 11.889
+  },
+  {
+   "word": "Tingnan",
+   "start": 12.25,
+   "end": 12.561
+  },
+  {
+   "word": "ninyo",
+   "start": 12.607,
+   "end": 12.859
+  },
+  {
+   "word": "ang",
+   "start": 12.905,
+   "end": 13.098
+  },
+  {
+   "word": "screenshot",
+   "start": 13.144,
+   "end": 13.505
+  },
+  {
+   "word": "ng",
+   "start": 13.551,
+   "end": 13.714
+  },
+  {
+   "word": "resulta",
+   "start": 13.76,
+   "end": 14.072
+  },
+  {
+   "word": "ko.",
+   "start": 14.118,
+   "end": 14.281
+  },
+  {
+   "word": "Ito",
+   "start": 14.642,
+   "end": 14.835
+  },
+  {
+   "word": "ang",
+   "start": 14.881,
+   "end": 15.075
+  },
+  {
+   "word": "checklist",
+   "start": 15.12,
+   "end": 15.481
+  },
+  {
+   "word": "ko",
+   "start": 15.527,
+   "end": 15.691
+  },
+  {
+   "word": "sa",
+   "start": 15.737,
+   "end": 15.9
+  },
+  {
+   "word": "phone:",
+   "start": 15.946,
+   "end": 16.199
+  },
+  {
+   "word": "mag-post,",
+   "start": 16.395,
+   "end": 16.736
+  },
+  {
+   "word": "sagutin",
+   "start": 16.933,
+   "end": 17.244
+  },
+  {
+   "word": "ang",
+   "start": 17.29,
+   "end": 17.483
+  },
+  {
+   "word": "comments,",
+   "start": 17.529,
+   "end": 17.87
+  },
+  {
+   "word": "i-check",
+   "start": 18.067,
+   "end": 18.378
+  },
+  {
+   "word": "ang",
+   "start": 18.424,
+   "end": 18.617
+  },
+  {
+   "word": "analytics.",
+   "start": 18.663,
+   "end": 19.024
+  },
+  {
+   "word": "Nasa",
+   "start": 19.384,
+   "end": 19.607
+  },
+  {
+   "word": "TikTok,",
+   "start": 19.653,
+   "end": 19.935
+  },
+  {
+   "word": "Facebook",
+   "start": 20.131,
+   "end": 20.472
+  },
+  {
+   "word": "at",
+   "start": 20.518,
+   "end": 20.682
+  },
+  {
+   "word": "YouTube",
+   "start": 20.728,
+   "end": 21.039
+  },
+  {
+   "word": "ako:",
+   "start": 21.085,
+   "end": 21.278
+  },
+  {
+   "word": "@akosicreator.",
+   "start": 21.475,
+   "end": 21.835
+  },
+  {
+   "word": "Storyboard",
+   "start": 22.196,
+   "end": 22.556
+  },
+  {
+   "word": "ko:",
+   "start": 22.602,
+   "end": 22.766
+  },
+  {
+   "word": "hook,",
+   "start": 22.963,
+   "end": 23.186
+  },
+  {
+   "word": "kwento,",
+   "start": 23.382,
+   "end": 23.664
+  },
+  {
+   "word": "call",
+   "start": 23.861,
+   "end": 24.084
+  },
+  {
+   "word": "to",
+   "start": 24.129,
+   "end": 24.293
+  },
+  {
+   "word": "action.",
+   "start": 24.339,
+   "end": 24.621
+  },
+  {
+   "word": "Mula",
+   "start": 24.982,
+   "end": 25.204
+  },
+  {
+   "word": "zero",
+   "start": 25.25,
+   "end": 25.473
+  },
+  {
+   "word": "hanggang",
+   "start": 25.519,
+   "end": 25.86
+  },
+  {
+   "word": "isang",
+   "start": 25.906,
+   "end": 26.158
+  },
+  {
+   "word": "libong",
+   "start": 26.204,
+   "end": 26.486
+  },
+  {
+   "word": "followers",
+   "start": 26.532,
+   "end": 26.892
+  },
+  {
+   "word": "sa",
+   "start": 26.938,
+   "end": 27.102
+  },
+  {
+   "word": "tatlumpung",
+   "start": 27.148,
+   "end": 27.508
+  },
+  {
+   "word": "araw.",
+   "start": 27.554,
+   "end": 27.777
+  },
+  {
+   "word": "I-follow",
+   "start": 28.138,
+   "end": 28.478
+  },
+  {
+   "word": "mo",
+   "start": 28.524,
+   "end": 28.688
+  },
+  {
+   "word": "ako!",
+   "start": 28.734,
+   "end": 28.927
+  }
+ ]
+}

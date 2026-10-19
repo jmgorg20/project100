@@ -163,9 +163,14 @@ def validate_polish(t, client, body):
                   [t.one("SELECT duration, kind FROM uploads WHERE id = ?", (i,)) for i in resolved[role]]
                   if u["kind"] in ("video", "audio")) / 60.0
     clients.check_job_quota(t, client, minutes, gpu)
+    punctuation = body.get("caption_punctuation")
+    if punctuation not in (None, "remove", "keep"):
+        raise JobError("caption_punctuation must be remove (no , . ! ? ; : in the captions) or keep.")
     params = {"preset": preset, "format": fmt, "instruction": instruction, "items": [str(i) for i in items],
               "offsets": {k: float(v) for k, v in offsets.items()}, "provider": provider,
               "qc": body.get("qc", True) is not False, "retry": body.get("retry", True) is not False}
+    if punctuation:
+        params["caption_punctuation"] = punctuation
     if preset_body is not None:
         params["preset_body"] = preset_body
     return params, resolved, minutes, "gpu" if gpu else "cpu"

@@ -82,7 +82,7 @@ class FrameMap:
         self.spans = []
         for seg in segments:
             self.spans.append((seg.end_frame - seg.frames, seg.end_frame, seg))
-        self.zoom_layers = zoom_layers        # [((amount, anchor, ease, t0), [(f0, f1)])]
+        self.zoom_layers = zoom_layers        # [((amount, anchor, ease, t0, from, smooth), [(f0, f1)])]
 
     def info(self, f):
         for a, b, seg in self.spans:
@@ -116,11 +116,12 @@ class FrameMap:
     def zoomed(self, f, x, y, size):
         """The same point after the zoom effects active at frame f (same order as the render)."""
         t = f / self.fps
-        for (amount, anchor, ease, t0), ranges in self.zoom_layers:
+        from .project_render import zoom_factor
+        for (amount, anchor, ease, t0, start, smooth), ranges in self.zoom_layers:
             if not any(a <= f < b for a, b in ranges):
                 continue
             if ease > 0:
-                z = 1 + (amount - 1) * min(1.0, max(0.0, (t - t0) / ease))
+                z = zoom_factor(amount, ease, t0, start, smooth, t)
                 zw, zh = math.trunc(W * z / 2) * 2, math.trunc(H * z / 2) * 2
                 x, y = x * zw / W + (W - zw) / 2, y * zh / H + (H - zh) * anchor
                 size *= zw / W

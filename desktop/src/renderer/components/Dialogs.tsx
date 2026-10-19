@@ -87,6 +87,17 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
             <option value="local">On this PC (offline, slower; needs faster-whisper)</option>
           </select>
         </div>
+        <div className="field">
+          <label htmlFor="caption-punctuation">Caption punctuation · Bantas sa caption</label>
+          <select id="caption-punctuation" value={draft.captionPunctuation} onChange={(e) => set("captionPunctuation", e.target.value as Settings["captionPunctuation"])}>
+            <option value="remove">Remove (no , . ! ? ; : on screen; i-check and 3,600 stay)</option>
+            <option value="keep">Keep (as transcribed)</option>
+          </select>
+        </div>
+        <label className="row">
+          <input type="checkbox" checked={draft.fixCaptionsFirst} onChange={(e) => set("fixCaptionsFirst", e.target.checked)} data-testid="fix-captions-first" />
+          <span>Let me fix the words before the AI edit · Ayusin muna ang mga salita</span>
+        </label>
         <h3 className="settings-head">B-roll · Dagdag na kuha</h3>
         <div className="field">
           <label htmlFor="broll-folder">Your B-roll folder (your own clips and pictures; name them after what they show)</label>

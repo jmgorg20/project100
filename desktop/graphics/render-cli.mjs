@@ -1,6 +1,7 @@
 // Command line: node render-cli.mjs jobs.json
 // jobs.json = { "ffmpeg": "path", "jobs": [ ...see capture.mjs ] }. Prints one JSON line per event:
 //   {"type":"progress","done":10,"total":90}  {"type":"job","key":"..."}  {"type":"done"}
+//   {"type":"job_error","key":"...","message":"..."}  (that graphic is skipped, the others are drawn)
 // Used by autoedit/graphics.py when it has to draw graphics itself (no app running).
 import { readFileSync } from "node:fs";
 import { renderJobs } from "./capture.mjs";
@@ -15,6 +16,7 @@ try {
     ffmpeg: spec.ffmpeg || undefined,
     signal: ctl.signal,
     onProgress: (e) => (e.finished ? say({ type: "job", key: e.job.key }) : say({ type: "progress", done: e.done, total: e.total })),
+    onJobError: (e) => say({ type: "job_error", key: e.job.key, message: e.message }),
   });
   say({ type: "done" });
 } catch (e) {
