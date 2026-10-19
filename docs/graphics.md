@@ -202,7 +202,7 @@ Edge / Chrome (needs Node.js) or left out with a warning, and the edit no longer
 ## What was and was not verified
 
 **Verified (automatically, on Linux):**
-- All 65 templates (47 + the 18 editorial ones) drawn by a real Chromium: not empty, centred where x/y say, same pixels on
+- All 71 templates (47 + the 24 editorial ones) drawn by a real Chromium: not empty, centred where x/y say, same pixels on
   every run (up to tiny anti-aliasing differences), going in and out, within the frame, with
   Taglish text, *ñ*, emoji and very long words (no word breaks in normal sentences).
 - Compositing measured on the rendered pixels: a graphic appears exactly on its frames and where

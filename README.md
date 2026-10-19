@@ -99,7 +99,7 @@ Be aware of what has and has not been checked:
   add light). The real MediaPipe ran on **one real photo only** (a plumbing check). **Not
   tested: real talking videos**, so how well hands are followed and how the effects look on your
   footage is unknown. See [docs/tracking.md](docs/tracking.md).
-- **Motion graphics (65 templates, 18 of them the Premium Editorial set) and the Director:** every template drawn by a real Chromium
+- **Motion graphics (71 templates, 24 of them the Premium Editorial set) and the Director:** every template drawn by a real Chromium
   and checked on its pixels (Taglish, *ñ*, emoji, long words); the compositing measured on
   rendered frames; the Director's rules (sync to word frames, density, variety, mood, face-safe
   on synthetic face tracks, caption-safe, readability) with a stand-in AI. **Not verified:**

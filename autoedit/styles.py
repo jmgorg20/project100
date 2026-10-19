@@ -60,7 +60,8 @@ class CaptionStyle:
     lowercase: bool = False
     zone: str = "lower"
     align: str = "center"
-    punctuation: str = "remove"   # "remove": no , . ! ? ; : or quotes on screen; "keep"
+    punctuation: str = "remove"
+    family: Optional[str] = None  # a font family of its own (e.g. "Playfair Display"); else the project's   # "remove": no , . ! ? ; : or quotes on screen; "keep"
     mode: str = "phrase"
     words_per_line: int = 4
     max_lines: int = 2
@@ -104,10 +105,10 @@ STYLES = [
     CaptionStyle(13, "pop_word", "Each word pops in as it is spoken",
                  font="heavy", size=82, outline=6, mode="pop", keyword_color=YELLOW,
                  words_per_line=3),
-    CaptionStyle(14, "editorial_card", "Ink text on a cream rounded card, spoken word in terracotta",
-                 font="bold", size=56, color="#17140F", active_color="#C8553D",
-                 keyword_color="#C8553D", outline=0, shadow=0, card="#F4EFE6", card_radius=30,
-                 box_padding=26, words_per_line=4, max_lines=2),
+    CaptionStyle(14, "editorial_card", "Serif ink words on a cream card, each word appearing as it is said",
+                 font="bold", family="Playfair Display", size=60, color="#17140F", mode="reveal",
+                 keyword_color="#C8553D", outline=0, shadow=0, card="#F4EFE6", card_radius=18,
+                 box_padding=22, words_per_line=4, max_lines=2),
 ]
 
 

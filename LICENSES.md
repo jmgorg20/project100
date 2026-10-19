@@ -35,6 +35,7 @@ Not installed when this was generated (install all requirements and run again): 
 | Chromium via playwright-core (worker image, renders graphics) | BSD-3-Clause and many third-party licences (see chrome://credits) | Downloaded at image build time from Playwright's CDN, not stored in this repository. |
 | Python (Debian package) | PSF-2.0 |  |
 | Inter font (assets/fonts, desktop/graphics/fonts) | OFL-1.1 | Licence text: assets/fonts/LICENSE-Inter.txt. |
+| Playfair Display (assets/fonts, for the editorial captions) | OFL-1.1 | Licence text: assets/fonts/OFL-playfairdisplay.txt. |
 | Anton, Archivo Black, Bangers, Bebas Neue, Caveat, JetBrains Mono, Oswald, Playfair Display (desktop/graphics/fonts) | OFL-1.1 | Licence texts: desktop/graphics/fonts/OFL-*.txt. The fonts may be embedded in videos; they may not be sold on their own. |
 
 ## Not shipped

@@ -51,7 +51,7 @@ editorial:
 | | |
 |---|---|
 | Cuts | `fast` pacing (pauses and fillers cut) with the jump-cut punch-in zoom |
-| Captions | style 14 `editorial_card`: ink words on a cream rounded card with a soft shadow, the spoken word in terracotta |
+| Captions | style 14 `editorial_card`: serif (Playfair Display) ink words on a cream rounded card with a soft shadow; the words not said yet are faint and turn ink as they are said; no end punctuation (setting) |
 | Colour | `natural_clean` |
 | Graphics | the `premium_editorial` style, planned scene by scene (below) |
 | B-roll | **no stock search, no AI-made clips**: only your own files |
@@ -151,7 +151,7 @@ into graphics, each starting on the exact word. The rules are in `autoedit/cues.
 |---|---|
 | "Tatlo… dalawa… isa!", "5, 4, 3, 2, 1" | a countdown showing each number on its word |
 | "Una: DISIPLINA", a word in CAPS | a big title with that exact word, with a punch-in |
-| "Dati … Ngayon …" (before / now) | black and white, dimmed, vignetted, then colour again on "ngayon" |
+| "Dati … Ngayon …" (before / now) | black and white, dimmed, vignetted, then colour again on "ngayon"; the past words struck out and the new ones landing big on "ngayon" |
 | "sa search bar, hinanap ko: X", "i-type ninyo: X" | a search bar typing X while you say it |
 | "tingnan ninyo ang screenshot / resulta / graph" | your screenshots floating in, the one whose file name matches first |
 | "checklist / gamit / steps: a, b at c" | a checklist that ticks each item as you say it |
@@ -160,6 +160,12 @@ into graphics, each starting on the exact word. The rules are in `autoedit/cues.
 | "Storyboard / Plano ko: hook, kwento, call to action" | a storyboard page with those scene names |
 | "mula zero hanggang isang libong followers sa tatlumpung araw" | number cards: 0, 1,000 followers, 30 araw, counting up on their words |
 | "i-follow mo ako", "mag-subscribe" | your profile card; Follow turns to Following on the word |
+| "Ang routine / schedule ko araw-araw: gising, kape, edit" | a timeline card with those parts as its tracks |
+| "Comment mo ang salitang GUIDE", "I-DM mo ako" | a comment card with your handle and photo, typing the line you said |
+| "Kaya tandaan: …", "Sa madaling salita …", "In short …" | a mosaic of word tiles: what you just listed, then what the earlier cards showed |
+| "tingnan ninyo ang results ko **sa phone / app**" | your matching screenshot inside a floating phone |
+| an opening with plenty coming (5 or more spoken cards) | the first scene as a magazine cover: the first title word as the masthead, your first sentence under it, three later cards as cover lines |
+| a floating picture-in-picture (a beat, when you gave clips or photos) | a small label under it with the words it goes with |
 
 **How the cues fit the rest:**
 - Numbers can be said in Tagalog (isa, dalawa, tatlumpu, isang libo, dalawang daan…), in English,

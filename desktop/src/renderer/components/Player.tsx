@@ -56,7 +56,7 @@ function CaptionView({ frame, onClick }: { frame: CaptionFrame; onClick?: (id: s
     left: place.x,
     transform: place.left ? undefined : "translateX(-50%)",
     textAlign: place.left ? "left" : "center",
-    fontFamily: "Inter",
+    fontFamily: (style as { family?: string | null }).family ? `"${(style as { family?: string }).family}", serif` : "Inter",
     fontWeight: WEIGHT[style.font] ?? 700,
     fontSize,
     lineHeight: `${style.size}px`,
@@ -64,6 +64,11 @@ function CaptionView({ frame, onClick }: { frame: CaptionFrame; onClick?: (id: s
     WebkitTextStroke: style.outline && !style.box ? `${style.outline * 2}px ${style.outline_color}` : undefined,
     textShadow: style.shadow ? `${style.shadow}px ${style.shadow}px 0 ${rgba(style.shadow_color, style.shadow_alpha)}` : undefined,
   };
+  const card = (style as { card?: string | null }).card;
+  if (card) {
+    // the cream card behind the whole caption (captions.card_events in the engine)
+    Object.assign(base, { background: card, borderRadius: (style as { card_radius?: number }).card_radius ?? 18, padding: `${style.box_padding * 0.5}px ${style.box_padding}px`, boxShadow: "0 10px 30px rgba(20,15,11,.35)" });
+  }
   let index = 0;
   return (
     <div
@@ -81,7 +86,7 @@ function CaptionView({ frame, onClick }: { frame: CaptionFrame; onClick?: (id: s
             let color = style.color;
             if (word.highlight && style.keyword_color) color = style.keyword_color;
             if (n === active && style.active_color) color = style.active_color;
-            const wordStyle: CSSProperties = { color, visibility: hidden ? "hidden" : "visible" };
+            const wordStyle: CSSProperties = { color, visibility: hidden ? "hidden" : "visible", opacity: style.mode === "reveal" && n > active ? 0.34 : undefined };
             if (n === active && style.active_scale !== 100) {
               wordStyle.display = "inline-block";
               wordStyle.transform = `scale(${style.active_scale / 100})`;
