@@ -232,6 +232,8 @@ def test_graphics_service_errors_are_reported(red, monkeypatch, tmp_path):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     monkeypatch.setenv("AUTOEDIT_GRAPHICS_URL", f"http://127.0.0.1:{server.server_port}")
     try:
+        # with no command line renderer to fall back on, the service's error is the reason given
+        monkeypatch.setattr(graphics, "renderer_command", lambda: None)
         with pytest.raises(Exception, match="the window crashed"):
             graphics.ensure_assets(p, tmp)
     finally:

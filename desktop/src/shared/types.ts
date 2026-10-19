@@ -315,6 +315,8 @@ export type EngineEvent =
   | { type: "stage"; stage: string; label: string }
   | { type: "progress"; stage: string; percent: number }
   | { type: "log"; message: string; stream?: "stderr" }
+  /** Something left out without stopping the edit (e.g. one graphic that could not be drawn). */
+  | { type: "warning"; message: string; stage?: string; clip?: string; path?: string }
   | { type: "transcript"; words: number; cached: boolean; text: string }
   | {
       type: "plan";
@@ -393,6 +395,8 @@ export interface Job extends JobRequest {
   stagesDone: string[];
   transcriptWords?: number;
   transcriptCached?: boolean;
+  /** What was left out (with the file and the reason), the edit still finished. */
+  warnings?: string[];
   plan?: Plan;
   /** The preset edit's plan: what each AI change is compared with in the review list. */
   planBaseline?: Plan;
