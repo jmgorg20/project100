@@ -37,13 +37,26 @@ ASSETS = {  # name -> (colour, size, label drawn on it)
 
 
 def make_assets(folder):
-    """Plain test pictures (a colour and a letter); made by FFmpeg, for this test only."""
+    """Simple test pictures (a fake results screenshot, letter logos, a face-coloured photo), drawn
+    here for this test only."""
+    from PIL import Image, ImageDraw
     folder.mkdir(parents=True, exist_ok=True)
     out = []
-    for name, (colour, size, _label) in ASSETS.items():
+    for name, (colour, size, label) in ASSETS.items():
+        w, h = (int(x) for x in size.split("x"))
+        img = Image.new("RGB", (w, h), colour)
+        d = ImageDraw.Draw(img)
+        if name == "search_results.png":
+            d.rounded_rectangle((40, 40, w - 40, 130), 45, fill="#ffffff", outline="#c9c9c9", width=4)
+            for k in range(6):
+                y = 190 + k * 190
+                d.rectangle((60, y, 60 + 520, y + 34), fill="#1a56db")
+                d.rectangle((60, y + 60, w - 80, y + 84), fill="#9aa0a6")
+                d.rectangle((60, y + 100, w - 260, y + 124), fill="#9aa0a6")
+        else:
+            d.ellipse((w * 0.2, h * 0.2, w * 0.8, h * 0.8), fill="#ffffff" if colour != "#c8a27a" else "#7a5230")
         path = folder / name
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"color=c={colour}:s={size}:d=1",
-                        "-frames:v", "1", str(path)], check=True)
+        img.save(path)
         out.append(path)
     return out
 
@@ -173,8 +186,9 @@ def run(out, video=None, words_file=DATA / "base_words.json", cues_file=DATA / "
     out.mkdir(parents=True, exist_ok=True)
     fixture = json.loads(Path(words_file).read_text(encoding="utf-8"))["words"]
     if video is None:
+        seconds = max(seconds, round(fixture[-1]["end"] + 0.6, 2))
         video = make_stand_in(out / "base_stand_in.mp4", seconds, fixture)
-        source = "a 29.8 s stand-in clip made with FFmpeg (the base video was not available here)"
+        source = f"a {seconds:g} s stand-in clip made with FFmpeg (the base video was not available here)"
     else:
         source = f"the video {video}"
     photos = make_assets(out / "assets")

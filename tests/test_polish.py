@@ -13,6 +13,7 @@ from autoedit.polish_watch import Watcher
 from autoedit.project import load_project, media_from_file, new_project, save_project
 from autoedit.project_render import render_project
 from tests.test_ai import talk  # noqa: F401  (fixture)
+from tests.gfx_helpers import needs_chromium
 from tests.test_qc import mp4
 
 
@@ -334,3 +335,33 @@ def test_polish_a_real_ai_edit_end_to_end(talk, cfg, monkeypatch):  # noqa: F811
     assert side["preset"] == "podcast_clips" and "Keep the speaker" in calls[0]
     assert load_project(side["project"])["meta"]["preset"] == "podcast_clips"
     assert json.loads((tmp / "outbox" / "talk.json").read_text(encoding="utf-8"))["output"] == side["output"]
+
+
+@needs_chromium
+def test_polish_with_the_premium_editorial_preset_end_to_end(talk, cfg, monkeypatch):  # noqa: F811
+    """The real AI edit (stand-in AI and Whisper) with PREMIUM EDITORIAL VIRAL and one uploaded
+    screenshot: the scenes are planned, the cream caption cards are used, nothing comes from stock,
+    and the render passes the checks."""
+    from autoedit import editorial
+    from autoedit.llm import LLMError
+    from tests.test_ai import good_plan, scripted
+
+    def no_scene_ai(*a, **kw):
+        raise LLMError("no AI for the scenes in this test")
+    tmp, video, photo, _ = talk
+    fake, calls = scripted([good_plan(cfg)])
+    monkeypatch.setattr(ai_edit, "ask_json", fake)
+    monkeypatch.setattr(editorial, "ask_json", no_scene_ai)
+    side = polish.polish(video, cfg, preset="premium_editorial_viral", out_folder=tmp / "outbox",
+                         inputs={"photos": [str(photo)]})
+    failed = [c for c in side["qc"]["checks"] if not c["ok"]]
+    assert side["status"] == "ok", failed
+    project = load_project(side["project"])
+    assert project["meta"]["preset"] == "premium_editorial_viral"
+    scenes = project["meta"]["editorial"]["scenes"]
+    assert scenes and scenes[0]["beat"] in ("headline", "kinetic")
+    caps = [c for t in project["tracks"] if t["kind"] == "caption" for c in t["clips"]]
+    assert caps and all(c["style"] == "editorial_card" for c in caps)
+    assert all(not (c.get("broll") or {}).get("source") in ("pexels", "pixabay", "ai")
+               for t in project["tracks"] for c in t["clips"])
+    assert "Premium editorial" in calls[0]

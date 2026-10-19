@@ -89,7 +89,8 @@ tracking:                     # effects that follow your hands / face (docs/trac
 
 graphics:                     # motion graphics the AI edit adds (docs/graphics.md)
   style: auto                 # auto = only when you ask ("like a professional promoter"), or
-                              # promoter | calm_documentary | meme | news | luxury | minimal | off
+                              # promoter | calm_documentary | meme | news | luxury | minimal |
+                              # premium_editorial | off
   max_per_10s:                # empty = the style's own limit (promoter 4, documentary 1...)
   track_face: true            # find the face (if tracking is set up) so graphics keep off it
   min_font: 30                # smallest text size (px on the 1080x1920 frame) before a warning
@@ -112,6 +113,11 @@ polish:                       # `polish` and `polish-watch` (docs/polish.md): fo
 broll:                        # B-roll the AI edit adds: your library, then free stock, then AI
   library_folder: ""          # a folder with your own clips/pictures; names = what they show
   use_stock: true             # Pexels/Pixabay, only if PEXELS_API_KEY / PIXABAY_API_KEY is set
+
+editorial:                    # PREMIUM EDITORIAL VIRAL: YOUR name / handle / brand for the profile
+  name: ""                    # and logo cards (empty = those cards are left out; nothing is made up).
+  handle: ""                  # Your photo: a picture named avatar/profile; your logo: one named logo.
+  brand: ""
 
 sfx:                          # your own sound effects (none are included)
   enabled: false

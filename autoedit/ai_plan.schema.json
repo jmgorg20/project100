@@ -41,7 +41,8 @@
         "top_banner",
         "center_keyword",
         "typewriter",
-        "pop_word"
+        "pop_word",
+        "editorial_card"
       ],
       "description": "Caption style."
     },

@@ -64,11 +64,15 @@ preset.
 | **Faceless Automation** | Voice-over with B-roll | minimal | bold caps | natural | fast | calm | – |
 | **Calm Documentary** | from your words | calm documentary | classic | warm | relaxed, no zooms | calm | – |
 | **Meme** | from your words | meme, up to 4 per 10 s | thick outline, bigger | high contrast | fast | – | whoosh/pop |
+| **PREMIUM EDITORIAL VIRAL** | from your words | premium editorial, one beat per 2–4 s scene | cream editorial cards | natural | fast, smooth zooms | upbeat (quiet) | – |
 
 - **The preset's captions and colour win over the AI's choice** (the AI still decides the cuts,
   zooms, photos and B-roll). You can change them afterwards on the timeline.
 - **Faceless Automation** uses only the B-roll you give it ("approved assets"): no stock search,
   no AI-made clips. Give it a voice-over and B-roll files.
+- **PREMIUM EDITORIAL VIRAL** plans the video scene by scene with only your own screenshots,
+  photos, clips and logo (no stock, no AI-made clips). Guide:
+  [premium-editorial.md](premium-editorial.md).
 - **Music:** no music is bundled (copyright). Put music you are allowed to use in
   `assets/music` (`music: folder:` in config.yaml). A file whose name contains the mood
   (upbeat / happy / summer, cinematic / epic, calm / chill / lofi / piano) is picked first. It
@@ -85,7 +89,7 @@ presets` lists them all and checks each file (`autoedit/presets/preset.schema.js
 menu shows the built-in presets.
 
 ## What was and was not tested · Ano ang nasubukan
-- **Tested (automatically, Linux):** the seven presets and your own (valid, replaced, bad ones
+- **Tested (automatically, Linux):** the eight presets and your own (valid, replaced, bad ones
   refused with the reason); what each preset changes in the settings and the plan; music picked
   by mood, repeated and faded; sounds spaced out; an AI edit with a preset end to end (stand-in
   AI); the storyboard's scenes, lock, words and regenerate in the engine **and the app, checked to

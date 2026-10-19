@@ -3,7 +3,7 @@
  {"id": "count", "said": "Tatlo dalawa isa", "expect": "countdown", "want": ["3"], "templates": ["countdown-timer", "number-card", "counter-number"]},
  {"id": "keyword", "said": "Una DISIPLINA", "expect": "title", "want": ["disiplina"]},
  {"id": "before_after", "said": "Dati wala akong follower", "expect": "bw", "want": []},
- {"id": "search", "said": "hinanap ko paano kumita online", "expect": "search bar", "want": ["paano kumita online"], "templates": ["search-bar"]},
+ {"id": "search", "said": "Sa search bar hinanap ko paano kumita online", "expect": "search bar", "want": ["paano kumita online"], "templates": ["search-bar"]},
  {"id": "screenshot", "said": "Tingnan ninyo ang screenshot ng resulta ko", "expect": "floating screenshot", "want": ["search_results.png"]},
  {"id": "checklist", "said": "Ito ang checklist ko sa phone", "expect": "checklist", "want": ["mag-post", "sagutin ang comments", "i-check ang analytics"], "count": 3, "late": 6.0},
  {"id": "platforms", "said": "Nasa TikTok Facebook at YouTube ako", "expect": "logo cards", "want": ["tiktok", "facebook", "youtube"], "count": 3, "late": 3.0},

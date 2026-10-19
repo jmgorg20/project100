@@ -85,11 +85,12 @@ test.describe("storyboard", () => {
     await expect(page.locator(".sb-card").first()).toContainText("Hook");
   });
 
-  test("presets: the seven looks, and Faceless asks for its voice-over and B-roll", async ({ page }) => {
+  test("presets: the eight looks, and Faceless asks for its voice-over and B-roll", async ({ page }) => {
     await open(page, "mock=1&consent=1&speed=4");
     await page.getByRole("button", { name: "Add videos" }).click();
     const select = page.getByTestId("preset");
-    await expect(select.locator("option")).toHaveCount(8);
+    await expect(select.locator("option")).toHaveCount(9);
+    await expect(select.locator("option[value=premium_editorial_viral]")).toHaveText(/^PREMIUM EDITORIAL VIRAL · .*magasin/);
     await select.selectOption("viral_tiktok");
     await expect(page.getByTestId("preset-about")).toContainText("Fast cuts");
     await page.getByTestId("run").click();

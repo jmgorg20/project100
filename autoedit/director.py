@@ -163,7 +163,7 @@ def resolve_style(cfg, instruction="", explicit=None):
         raise DirectorError(f"Unknown graphics style '{choice}'. Choose: auto, off, "
                             + ", ".join(STYLES))
     text = " " + str(instruction or "").lower() + " "
-    for name in ("calm_documentary", "meme", "news", "luxury", "minimal", "promoter"):
+    for name in ("premium_editorial", "calm_documentary", "meme", "news", "luxury", "minimal", "promoter"):
         if any(k in text for k in STYLE_KEYWORDS[name]):
             return name
     if any(k in text for k in GRAPHICS_WORDS):
@@ -566,13 +566,13 @@ def place_items(ctx, items):
         base_size = clamp(float(it.get("size") or ctx.style["size"]), MIN_SIZE, 1.8)
         text = it.get("text", "")
         zone = it["zone"] if it["zone"] not in (None, "auto") else None
-        preferred = ZONE_ANCHOR.get(zone) if zone else (meta["anchor"]["x"], meta["anchor"]["y"])
+        preferred = it.get("prefer") or (ZONE_ANCHOR.get(zone) if zone else (meta["anchor"]["x"], meta["anchor"]["y"]))
         busy = [(p["box"], p) for p in placed if p["start"] < t1 and p["end"] > t0]
         fixed_busy = [zones.inflate(graphics.estimated_box(c), 14) for c in ctx.fixed
                       if c["start"] < t1 and c["start"] + c["duration"] > t0]
         # a template made to cover the picture for a moment (a screenshot, like B-roll) may go
         # over the face; nothing goes over the captions
-        obs = obstacles_for(ctx, t0, t1, None if meta.get("covers") else face)
+        obs = obstacles_for(ctx, t0, t1, None if (meta.get("covers") or it.get("covers_face")) else face)
         extra = [("graphic", zones.inflate(b, 16)) for b, _p in busy] + [("graphic", b) for b in fixed_busy]
         angle = 0
         found = None
@@ -1178,13 +1178,19 @@ def face_for(project, video, cfg, cache=None, reporter=None, cancel=None):
 
 
 def generate(project, cfg, instruction="", style=None, provider=None, model=None, cache=None,
-             reporter=None, cancel=None, video=None, use_ai=True):
+             reporter=None, cancel=None, video=None, use_ai=True, files=()):
     """Add graphics to a copy of the project. Returns a dict:
        project, count, style, notes, fallback, reason, cost, usage, plan (the items), wipe.
-    Returns None when the style resolves to "off"."""
+    Returns None when the style resolves to "off". `files`: the creator's uploaded pictures and
+    clips (the editorial style shows them in its scenes)."""
     name = resolve_style(cfg, instruction, style)
     if name is None:
         return None
+    if STYLES[name].get("planner") == "editorial":
+        # this look is planned scene by scene (autoedit/editorial.py), not as pop-ups
+        from . import editorial
+        return editorial.generate(project, cfg, instruction, provider, model, cache, reporter, cancel, video,
+                                  use_ai, files=files)
     project = copy.deepcopy(project)
     removed = clear_director_clips(project)
     for track in project["tracks"]:
@@ -1256,6 +1262,12 @@ def regenerate_item(project, clip_id, cfg, instruction="", provider=None, model=
     if old.get("locked"):
         raise DirectorError("That graphic is locked. Unlock it first (a locked graphic is never changed).")
     meta = old.get("director") or {}
+    if meta.get("scene") is not None and STYLES.get(meta.get("style"), {}).get("planner") == "editorial":
+        # an editorial scene's graphic: the scene gets another graphic beat
+        from . import editorial
+        r = editorial.regenerate_scene(project, meta["scene"], cfg, instruction, cancel=cancel, graphic_only=True)
+        clip = next(c for c in graphic_clips_of(r["project"]) if c["id"] in r["clips"])
+        return {"project": r["project"], "clip": clip, "notes": r["notes"]}
     style = meta.get("style") or resolve_style(cfg, instruction, None) or DEFAULT_STYLE
     if style not in STYLES:
         style = DEFAULT_STYLE

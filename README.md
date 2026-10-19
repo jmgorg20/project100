@@ -99,7 +99,7 @@ Be aware of what has and has not been checked:
   add light). The real MediaPipe ran on **one real photo only** (a plumbing check). **Not
   tested: real talking videos**, so how well hands are followed and how the effects look on your
   footage is unknown. See [docs/tracking.md](docs/tracking.md).
-- **Motion graphics (63 templates, 16 of them the Premium Editorial set) and the Director:** every template drawn by a real Chromium
+- **Motion graphics (65 templates, 18 of them the Premium Editorial set) and the Director:** every template drawn by a real Chromium
   and checked on its pixels (Taglish, *ñ*, emoji, long words); the compositing measured on
   rendered frames; the Director's rules (sync to word frames, density, variety, mood, face-safe
   on synthetic face tracks, caption-safe, readability) with a stand-in AI. **Not verified:**
@@ -416,10 +416,16 @@ Guide: [docs/formats.md](docs/formats.md).
 
 **Presets and the storyboard · Mga preset at storyboard.** Pick a **Preset** in the AI panel
 (Viral TikTok, Cinematic Storytelling, Premium UGC Ad, Podcast Clips, Faceless Automation, Calm
-Documentary, Meme). After the edit, press **Storyboard · Mga eksena** to see it as scenes: approve
+Documentary, Meme, PREMIUM EDITORIAL VIRAL). After the edit, press **Storyboard · Mga eksena** to see it as scenes: approve
 all and render, give one scene another look, replace its footage, change its words or lock it.
 *Tingnan ang mga eksena bago i-render.* Command line: `--preset viral_tiktok`,
 `python editor.py storyboard my.project.json`. Guide: [docs/storyboard-presets.md](docs/storyboard-presets.md).
+
+**PREMIUM EDITORIAL VIRAL · Pang-magasin.** A premium magazine edit planned scene by scene: cream
+caption cards, serif headlines, keyword highlights, your own screenshots floating over a dimmed
+background, checklists, UI panels, search-bar typing, countdowns, PiP, B&W transitions; a new
+idea every 2-4 s, timed to your words, using only your own files. *Bagong idea kada 2-4 segundo,
+sabay sa sinasabi mo.* `--preset premium_editorial_viral`. Guide: [docs/premium-editorial.md](docs/premium-editorial.md).
 
 **The service (integration API) · Ang service.** One engine, one API for every client (the partner
 project, the SaaS website, future projects): each with its own API key, presets, quotas, webhooks and

@@ -141,7 +141,8 @@ test.describe("graphics templates", () => {
     await page.goto("/?mock=1&consent=1");
     const select = page.getByTestId("graphics-style");
     await expect(select).toBeVisible();
-    await expect(select.locator("option")).toHaveCount(8);
+    await expect(select.locator("option")).toHaveCount(9);
+    await expect(select.locator("option[value=premium_editorial]")).toHaveCount(1);
     await select.selectOption("promoter");
     await expect(select).toHaveValue("promoter");
   });

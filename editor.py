@@ -213,7 +213,9 @@ def build_parser():
                                          "arrows, emoji) to a project with the Director")
     gx.add_argument("project", help="a .project.json (saved in place unless --output)")
     gx.add_argument("--style", default="promoter", help="promoter, calm_documentary, meme, news, "
-                                                        "luxury, minimal")
+                                                        "luxury, minimal, premium_editorial")
+    gx.add_argument("--files", nargs="*", default=[], help="premium_editorial: your own screenshots, "
+                                                           "photos and clips to show in the scenes")
     gx.add_argument("-i", "--instruction", default="", help="what you want, in plain words")
     gx.add_argument("--provider", choices=["groq", "anthropic"], help="AI provider")
     gx.add_argument("--model", help="AI model")
@@ -1069,7 +1071,7 @@ def cmd_graphics(args, reporter, cancel):
         provider, model = provider_settings(cfg, args.provider, args.model)
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
     result = director.generate(project, cfg, args.instruction, args.style, provider, model, cache,
-                               reporter, cancel, use_ai=not args.no_ai)
+                               reporter, cancel, use_ai=not args.no_ai, files=args.files)
     if result is None:
         raise EditorError("Graphics are off (style 'off').")
     out = save_project(result["project"], Path(args.output).resolve() if args.output else path)

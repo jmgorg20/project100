@@ -11,8 +11,8 @@ from autoedit.config import load_config
 from autoedit.project import validate_project
 from tests.director_helpers import make_project
 
-SEVEN = {"viral_tiktok", "cinematic_storytelling", "premium_ugc_ad", "podcast_clips",
-         "faceless_automation", "calm_documentary", "meme"}
+BUILT_IN = {"viral_tiktok", "cinematic_storytelling", "premium_ugc_ad", "podcast_clips",
+            "faceless_automation", "calm_documentary", "meme", "premium_editorial_viral"}
 
 
 @pytest.fixture(autouse=True)
@@ -33,9 +33,9 @@ def tone(path, seconds=2.0):
     return path
 
 
-def test_the_seven_presets_are_valid():
+def test_the_built_in_presets_are_valid():
     found = presets.all_presets(cfg())
-    assert set(found) == SEVEN
+    assert set(found) == BUILT_IN
     for p in found.values():
         assert p["builtin"] and p["about"] and p["about_tl"]
     assert found["faceless_automation"]["format"] == "voiceover_broll"
@@ -52,7 +52,7 @@ def test_your_own_preset_is_added_or_replaces_a_built_in_one(tmp_path):
                                        encoding="utf-8")
     found = presets.all_presets(cfg(presets_folder=str(mine)))
     assert found["meme"]["grade"] == "warm" and not found["meme"]["builtin"]
-    assert "my_shop" in found and len(found) == 8
+    assert "my_shop" in found and len(found) == len(BUILT_IN) + 1
     assert presets.get("My Shop", cfg(presets_folder=str(mine)))["id"] == "my_shop"
 
 

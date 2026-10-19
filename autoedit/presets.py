@@ -151,6 +151,8 @@ def pin_plan(preset, plan):
         caps["position"] = preset["captions"]["zone"]
     if (preset.get("broll") or {}).get("ai_clips") is False:
         plan["ai_clips"] = []
+    if preset.get("graphics") == "premium_editorial":
+        plan["photos"] = []           # the editorial scenes show your pictures (floating, timed to your words)
     return plan
 
 

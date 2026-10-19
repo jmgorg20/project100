@@ -37,11 +37,12 @@ python editor.py graphics-catalog                                          (list
 | **News / explainer** | headline banners, lower-thirds, numbers, checklists | 2 |
 | **Luxury / premium** | serif and gold titles, fine lines | 1 |
 | **Minimal** | now and then one clean word or underline | 1 |
+| **Premium editorial** | scene by scene, one idea every 2–4 s: serif headlines, checklists, UI panels, your screenshots over a dimmed background, PiP, B&W transitions ([premium-editorial.md](premium-editorial.md)) | 4 |
 
 You can change the numbers in `autoedit/director_styles.py`, or the limit only with
 `graphics: max_per_10s:` in `config.yaml`.
 
-## The template library · Ang mga template (63)
+## The template library · Ang mga template (65)
 
 All of them are made in this app (HTML/CSS drawn by Chromium), with free fonts (SIL Open Font
 License, in `desktop/graphics/fonts`). Emoji use your computer's emoji font.
@@ -68,7 +69,7 @@ long for the box, even at the smallest size, is broken (and the export check say
 
 ### The editorial set (Premium Editorial Viral) · Ang editorial na set
 
-Sixteen templates for the PREMIUM EDITORIAL VIRAL look: cream paper, ink text, serif headlines,
+Eighteen templates for the PREMIUM EDITORIAL VIRAL look: cream paper, ink text, serif headlines,
 one terracotta accent, soft shadows, rounded corners, calm motion. **Only the editorial style
 uses them** (the other looks never pick them); you can add any of them by hand from the Graphics tab.
 
@@ -90,6 +91,8 @@ uses them** (the other looks never pick them); you can add any of them by hand f
 | `screenshot-montage` | one card that slides through your screenshots, with dots |
 | `palette-card` | colour swatches with their hex codes (`items` = `#rrggbb`; can be taken from your picture) |
 | `profile-card` | a social profile: your photo or initials, name, handle, a Follow button that turns to Following |
+| `app-tile` | an app-style tile for a platform you name: **your** logo file, else the name set in type (never a bundled logo) |
+| `stat-cards` | 2–4 number cards ("1,000 followers"), each counting up on the word that says it |
 
 **Your pictures only.** `image` / `images` are media of your project (your screenshots, photos,
 logo). Without them a plain numbered placeholder is drawn; nothing is downloaded or made up, and
@@ -199,7 +202,7 @@ Edge / Chrome (needs Node.js) or left out with a warning, and the edit no longer
 ## What was and was not verified
 
 **Verified (automatically, on Linux):**
-- All 63 templates (47 + the 16 editorial ones) drawn by a real Chromium: not empty, centred where x/y say, same pixels on
+- All 65 templates (47 + the 18 editorial ones) drawn by a real Chromium: not empty, centred where x/y say, same pixels on
   every run (up to tiny anti-aliasing differences), going in and out, within the frame, with
   Taglish text, *ñ*, emoji and very long words (no word breaks in normal sentences).
 - Compositing measured on the rendered pixels: a graphic appears exactly on its frames and where
