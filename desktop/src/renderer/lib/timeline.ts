@@ -250,13 +250,42 @@ export function popOpacity(t: number, d: number): number {
 
 // ---------------------------------------------------------------- captions
 
-export function styleFor(clip: Clip): CaptionStyle {
+export function styleFor(clip: Clip, project?: Project): CaptionStyle {
   const base = data.styles.find((s) => s.name === clip.style || s.number === clip.style) ?? data.styles[1];
-  return { ...base, ...(clip.overrides ?? {}) } as CaptionStyle;
+  const punctuation = project?.settings.captions?.punctuation;
+  return { ...base, ...(clip.overrides ?? {}), ...(punctuation ? { punctuation } : {}) } as CaptionStyle;
+}
+
+const STRIP_MARKS = new Set([...",.!?;:…"]);
+const QUOTES = new Set([...`"“”„«»‘’‚\`'¡¿`]);
+const isDigit = (c: string) => c >= "0" && c <= "9";
+const isLetter = (c: string) => c !== "" && c.toLowerCase() !== c.toUpperCase();
+
+/** A word without punctuation (port of captions.strip_punctuation): , . ! ? ; : and quotes go;
+ * apostrophes and hyphens inside words, numbers like 3,600 / 1.5 and *keyword marks* stay. */
+export function stripPunctuation(text: string): string {
+  const chars = [...text];
+  let out = "";
+  chars.forEach((ch, i) => {
+    const prev = chars[i - 1] ?? "";
+    const next = chars[i + 1] ?? "";
+    if (STRIP_MARKS.has(ch)) {
+      if ((ch === "," || ch === ".") && isDigit(prev) && isDigit(next)) out += ch;
+      return;
+    }
+    if (QUOTES.has(ch)) {
+      if ((ch === "'" || ch === "’") && isLetter(prev) && isLetter(next)) out += ch;
+      return;
+    }
+    out += ch;
+  });
+  const cleaned = out.trim();
+  return cleaned.replace(/\*/g, "") ? cleaned : text;
 }
 
 export function displayText(word: Word, style: CaptionStyle): string {
   let text = word.text.replace(/\\/g, "/").replace(/{/g, "(").replace(/}/g, ")").trim();
+  if ((style as { punctuation?: string }).punctuation !== "keep") text = stripPunctuation(text);
   if (style.uppercase) text = text.toUpperCase();
   else if (style.lowercase) text = text.toLowerCase();
   if (word.highlight && style.keyword_color && style.keyword_uppercase) text = text.toUpperCase();
@@ -312,7 +341,7 @@ export function captionAt(project: Project, t: number): CaptionFrame | null {
     for (const clip of track.clips) {
       const end = clip.start + clip.duration;
       if (t < clip.start || t >= end || !clip.words?.length) continue;
-      const style = styleFor(clip);
+      const style = styleFor(clip, project);
       const useHighlight = clip.highlight_keywords !== false;
       const words = clip.words.map((w) => ({
         ...w,

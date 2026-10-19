@@ -15,7 +15,7 @@ import { createHistory, pushHistory, redoHistory, undoHistory, type History } fr
 import { FrameDialog } from "../components/Dialogs";
 import { Player, mmss, type PlayerHandle } from "../components/Player";
 import { api, mediaUrl } from "../lib/api";
-import { addCaption, addEmoji, correctCaptions, editWordText, setCaptionLook, setCaptionWords, toggleHighlight } from "../../shared/captionEdit";
+import { addCaption, addEmoji, correctCaptions, editWordText, setCaptionLook, setCaptionPunctuation, setCaptionWords, toggleHighlight } from "../../shared/captionEdit";
 import { addFx, addGrade, addTransition, addZoom, setAudioSettings, speedRamp } from "../../shared/effectsEdit";
 import { addGraphic, addWipe, anotherLook, setClipLocked, setGraphic, setWipe } from "../../shared/graphicsEdit";
 import { ExportDialog } from "./ExportDialog";
@@ -703,6 +703,7 @@ export function Editor({ path, onClose, startIn = "timeline" }: { path: string; 
             onHighlight: (id, i) => apply((p) => toggleHighlight(p, id, i)),
             onEmoji: (id, i, e) => apply((p) => addEmoji(p, id, i, e)),
             onLook: (id, look, all) => apply((p) => setCaptionLook(p, all ? "all" : [id], look), `look:${all ? "all" : id}`),
+            onPunctuation: (mode) => apply((p) => setCaptionPunctuation(p, mode), "punctuation"),
             onRetranscribe: (id) => void retranscribe(id),
           }}
           empty={

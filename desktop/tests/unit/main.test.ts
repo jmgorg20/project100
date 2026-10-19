@@ -80,7 +80,7 @@ describe("job arguments", () => {
   it("builds the engine command for each mode", () => {
     expect(jobArgs(job({}), settings, files)).toEqual([
       "ai-edit", "/v/a.mp4", "--output", "/o/a_ai.mp4", "--provider", "groq", "--model", "openai/gpt-oss-120b",
-      "--transcribe-with", "groq", "--instruction-file", "/d/i.txt",
+      "--transcribe-with", "groq", "--caption-punctuation", "remove", "--instruction-file", "/d/i.txt",
     ]);
     expect(jobArgs(job({ auto: false }), settings, files)).toContain("--no-render");
     const followup = jobArgs(job({ mode: "followup", planFile: "/o/a.plan.json", provider: "anthropic" }), settings, files);

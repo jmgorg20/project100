@@ -56,6 +56,7 @@ class CaptionStyle:
     lowercase: bool = False
     zone: str = "lower"
     align: str = "center"
+    punctuation: str = "remove"   # "remove": no , . ! ? ; : or quotes on screen; "keep"
     mode: str = "phrase"
     words_per_line: int = 4
     max_lines: int = 2

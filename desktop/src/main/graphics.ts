@@ -44,13 +44,51 @@ export interface Capturer {
   close(): void;
 }
 
+/** The part of a picture a NativeImage needs (and what tests fake). */
+export interface FrameImage {
+  isEmpty(): boolean;
+  getSize(): { width: number; height: number };
+  crop(rect: { x: number; y: number; width: number; height: number }): FrameImage;
+  resize(size: { width: number; height: number }): FrameImage;
+  toPNG(): Buffer;
+}
+
+export const PAGE_W = 1400;
+export const PAGE_H = 2300;
+
+/**
+ * The top-left w x h CSS pixels of a painted page as a PNG. On Windows the paint is in device
+ * pixels (display scaling 125% / 150%: the picture is bigger than the page), and a window larger
+ * than the screen can be painted smaller than asked: the crop is scaled, and a picture that is
+ * empty or too small is an error that says so, never an empty frame (FFmpeg then has no picture
+ * and fails with "Output file does not contain any stream").
+ */
+export function frameToPng(image: FrameImage, w: number, h: number, pageWidth = PAGE_W): Buffer {
+  const size = image.isEmpty() ? { width: 0, height: 0 } : image.getSize();
+  if (!size.width || !size.height) {
+    throw new Error(`the drawing window gave an empty picture for a ${w}x${h} graphic`);
+  }
+  const scale = size.width / pageWidth;
+  const rect = { x: 0, y: 0, width: Math.round(w * scale), height: Math.round(h * scale) };
+  if (rect.width < 1 || rect.height < 1 || rect.width > size.width || rect.height > size.height) {
+    throw new Error(`the drawing window is ${size.width}x${size.height} pixels, too small for a ${w}x${h} graphic (display scaling ${Math.round(scale * 100)}%)`);
+  }
+  let out = image.crop(rect);
+  if (rect.width !== w || rect.height !== h) out = out.resize({ width: w, height: h });
+  const png = out.toPNG();
+  if (!png.length) throw new Error(`the drawing window gave an empty picture for a ${w}x${h} graphic`);
+  return png;
+}
+
 /** A Capturer on a hidden offscreen BrowserWindow (Electron only). */
 export async function electronCapturer(): Promise<Capturer> {
   const { BrowserWindow } = await import("electron");
   const win = new BrowserWindow({
-    show: false, width: 1400, height: 2300, frame: false, transparent: true, backgroundColor: "#00000000",
-    webPreferences: { offscreen: true, backgroundThrottling: false, contextIsolation: true, sandbox: true },
+    show: false, width: PAGE_W, height: PAGE_H, useContentSize: true, enableLargerThanScreen: true,
+    frame: false, transparent: true, backgroundColor: "#00000000",
+    webPreferences: { offscreen: true, backgroundThrottling: false, contextIsolation: true, sandbox: true, zoomFactor: 1 },
   });
+  win.setContentSize(PAGE_W, PAGE_H);   // Windows may shrink a window taller than the screen
   win.webContents.setFrameRate(60);
   let last: Electron.NativeImage | null = null;
   let waiting: ((img: Electron.NativeImage) => void) | null = null;
@@ -84,15 +122,43 @@ export async function electronCapturer(): Promise<Capturer> {
         }, 500);
       });
       win.webContents.invalidate();
-      const image = await next;
-      return image.crop({ x: 0, y: 0, width: w, height: h }).toPNG();
+      let image: FrameImage = await next;
+      if (image.isEmpty()) image = await win.webContents.capturePage();   // a paint can come back empty
+      return frameToPng(image, w, h, win.getContentSize()[0] || PAGE_W);
     },
     close: () => win.destroy(),
   };
 }
 
+/** Move a finished file into place. On Windows a file that is being read (a render, a preview,
+ * the virus scanner) cannot be replaced for a moment: wait and try again, then replace it. */
+export async function replaceFile(part: string, out: string, tries = 20, rename = fs.renameSync): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      rename(part, out);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code ?? "";
+      if (i >= tries || !["EPERM", "EBUSY", "EACCES", "EEXIST"].includes(code)) {
+        throw new Error(`could not write ${out}: ${code} ${(e as Error).message}`);
+      }
+      if (i === tries - 1) fs.rmSync(out, { force: true });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
+}
+
+/** FFmpeg's exit code as Windows reports it (4294967274) made readable (-22: invalid argument). */
+export function exitText(code: number | null): string {
+  if (code === null) return "it was stopped";
+  const signed = code > 0x7fffffff ? code - 0x100000000 : code;
+  const meaning: Record<number, string> = { [-22]: "invalid argument", [-2]: "file or folder not found", [-13]: "permission denied", [-28]: "disk full" };
+  return `exit code ${signed}${meaning[signed] ? `: ${meaning[signed]}` : ""}`;
+}
+
 function ffmpegSink(ffmpeg: string, out: string, fps: number) {
   const part = `${out}.part.mkv`;
+  let frames = 0;
   const proc = spawn(ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(fps), "-c:v", "png", "-i", "-",
     "-c:v", "ffv1", "-level", "3", "-pix_fmt", "bgra", part], { stdio: ["pipe", "ignore", "pipe"], windowsHide: true });
   let err = "";
@@ -100,14 +166,23 @@ function ffmpegSink(ffmpeg: string, out: string, fps: number) {
   proc.stdin?.on("error", () => undefined);
   const done = new Promise<void>((resolve, reject) => {
     proc.on("error", reject);
-    proc.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`FFmpeg failed (${code}): ${err.slice(-300)}`))));
+    proc.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`FFmpeg could not write ${part} (${exitText(code)}): ${err.slice(-300).trim()}`))));
   });
+  done.catch(() => undefined); // an aborted graphic: its FFmpeg is stopped on purpose (finish() still reports)
   return {
-    write: (buf: Buffer) => new Promise<void>((resolve) => (proc.stdin!.write(buf) ? resolve() : proc.stdin!.once("drain", () => resolve()))),
+    write: (buf: Buffer) => {
+      if (!buf.length) return Promise.reject(new Error(`an empty frame for ${out}`));
+      frames++;
+      return new Promise<void>((resolve) => (proc.stdin!.write(buf) ? resolve() : proc.stdin!.once("drain", () => resolve())));
+    },
     async finish() {
+      if (!frames) {
+        proc.kill();
+        throw new Error(`no frames were drawn for ${out}`);
+      }
       proc.stdin!.end();
       await done;
-      fs.renameSync(part, out);
+      await replaceFile(part, out);
     },
     abort() {
       try {
@@ -119,7 +194,8 @@ function ffmpegSink(ffmpeg: string, out: string, fps: number) {
   };
 }
 
-/** Draw jobs with a capturer; `say` gets progress lines. Pictures on this PC are served by `serveFile`. */
+/** Draw jobs with a capturer; `say` gets progress lines. Pictures on this PC are served by `serveFile`.
+ * A job that fails is skipped ({"type":"job_error"} names it and why); the others are still drawn. */
 export async function drawJobs(
   jobs: DrawJob[], capturer: Capturer, pageUrl: string, ffmpeg: string, say: (e: Record<string, unknown>) => void,
   serveFile: (file: string) => string, aborted: () => boolean,
@@ -129,6 +205,15 @@ export async function drawJobs(
   await capturer.open(pageUrl);
   for (const job of jobs) {
     if (aborted()) throw new Error("cancelled");
+    try {
+      await drawOne(job);
+    } catch (e) {
+      if (aborted()) throw e;
+      say({ type: "job_error", key: job.key, message: (e as Error).message ?? String(e) });
+    }
+  }
+
+  async function drawOne(job: DrawJob) {
     const params = { ...job.params };
     if (typeof params.image === "string" && !/^(https?:|data:)/i.test(params.image)) params.image = serveFile(params.image);
     const info = await capturer.eval<{ w: number; h: number; pad: number; tileW: number; tileH: number; report: unknown }>(

@@ -14,6 +14,7 @@ export function jobArgs(job: Job, settings: Settings, files: { instructionFile: 
     "--provider", job.provider,
     "--model", modelFor(settings, job.provider),
     "--transcribe-with", settings.transcribeWith,
+    "--caption-punctuation", settings.captionPunctuation ?? "remove",
     "--instruction-file", files.instructionFile,
   ];
   if (!job.auto && job.mode !== "apply") args.push("--no-render");
@@ -34,6 +35,7 @@ export function jobArgs(job: Job, settings: Settings, files: { instructionFile: 
   for (const [role, seconds] of Object.entries(job.offsets ?? {})) {
     if (seconds) args.push("--offset", `${role}=${seconds}`);
   }
+  if (job.transcriptFile) args.push("--transcript", job.transcriptFile);
   if (job.photos.length) args.push("--photos", ...job.photos);
   return args;
 }

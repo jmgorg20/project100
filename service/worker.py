@@ -320,7 +320,8 @@ class Agent:
             main = local[inputs["main"][0]]
             cmd = base + ["polish", str(main), "--out", str(out)]
             for flag, value in (("--preset", p.get("preset")), ("--format", p.get("format")),
-                                ("--provider", p.get("provider"))):
+                                ("--provider", p.get("provider")),
+                                ("--caption-punctuation", p.get("caption_punctuation"))):
                 if value:
                     cmd.append(f"{flag}={value}")
             if p.get("instruction"):

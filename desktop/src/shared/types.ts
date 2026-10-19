@@ -195,6 +195,8 @@ export interface Project {
     background?: string;
     audio?: { normalize?: boolean; loudness?: number; true_peak?: number; ducking?: number; denoise?: number };
     fonts?: Record<string, string>;
+    /** Captions without , . ! ? ; : and quotes ("remove", the default) or as transcribed. */
+    captions?: { punctuation?: "remove" | "keep" };
   };
   media: Media[];
   tracks: Track[];
@@ -315,6 +317,8 @@ export type EngineEvent =
   | { type: "stage"; stage: string; label: string }
   | { type: "progress"; stage: string; percent: number }
   | { type: "log"; message: string; stream?: "stderr" }
+  /** Something left out without stopping the edit (e.g. one graphic that could not be drawn). */
+  | { type: "warning"; message: string; stage?: string; clip?: string; path?: string }
   | { type: "transcript"; words: number; cached: boolean; text: string }
   | {
       type: "plan";
@@ -361,6 +365,8 @@ export interface JobRequest {
   formatInputs?: Record<string, string[]>;
   items?: string[];
   offsets?: Record<string, number>;
+  /** A transcript you fixed before the edit (used instead of transcribing again). */
+  transcriptFile?: string;
 }
 
 /** One preset, as `python editor.py ui-data` lists it. */
@@ -393,6 +399,8 @@ export interface Job extends JobRequest {
   stagesDone: string[];
   transcriptWords?: number;
   transcriptCached?: boolean;
+  /** What was left out (with the file and the reason), the edit still finished. */
+  warnings?: string[];
   plan?: Plan;
   /** The preset edit's plan: what each AI change is compared with in the review list. */
   planBaseline?: Plan;
@@ -445,6 +453,10 @@ export interface Settings {
   brollFolder: string;
   /** Search Pexels/Pixabay for B-roll when a key is saved. */
   useStock: boolean;
+  /** New edits: captions without , . ! ? ; : and quotes ("remove") or as said ("keep"). */
+  captionPunctuation: "remove" | "keep";
+  /** Show the transcript to fix its words before the AI edit (Ayusin muna ang captions). */
+  fixCaptionsFirst: boolean;
 }
 
 export interface KeyStatus {

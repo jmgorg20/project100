@@ -6,6 +6,8 @@ import { formatCost } from "../shared/planItems";
 import type { GenStatus, Job, JobMode, Plan, Provider, Settings, VideoHistory } from "../shared/types";
 import { ConsentDialog, FrameDialog, SettingsDialog } from "./components/Dialogs";
 import { GenerationDialog } from "./components/GenerationDialog";
+import { TranscriptDialog } from "./components/TranscriptDialog";
+import type { TranscriptWord } from "../shared/captionEdit";
 import { FormatPicker, NO_FORMAT, formatRequest, missingRoles, type FormatChoice } from "./components/FormatPicker";
 import engineData from "../shared/engine-data.json";
 import type { PresetInfo } from "../shared/types";
@@ -66,6 +68,8 @@ export function App() {
   const [genRunning, setGenRunning] = useState(false);
   // Per video (sent with each edit); start from the limits in the generation settings file.
   const [limits, setLimits] = useState<{ minutes: number; clips: number } | null>(null);
+  const [fixing, setFixing] = useState<{ video: string; file: string; words: TranscriptWord[]; text: string; rest: string[] } | null>(null);
+  const [fixNote, setFixNote] = useState("");
   const instructionRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -136,15 +140,37 @@ export function App() {
   // Voice-over with B-roll has no video of you: the chosen voice-over is what gets edited.
   const voiceover = formatChoice.format === "voiceover_broll" ? formatChoice.inputs.voiceover?.[0] : undefined;
   const formatBlocked = missingRoles(formatChoice).length > 0;
-  const startJobs = (list: string[], mode: JobMode, text: string, planFile?: string) =>
+  const startJobs = (list: string[], mode: JobMode, text: string, planFile?: string, transcriptFile?: string) =>
     api.addJobs(
       list.map((video) => ({
         video, photos, instruction: text, provider, auto, mode, planFile,
         maxGenMinutes: limits?.minutes, maxAiClips: limits?.clips, graphics: graphicsStyle,
         ...formatRequest(formatChoice),
         ...(preset ? { preset } : {}),
+        ...(transcriptFile ? { transcriptFile } : {}),
       })),
     );
+
+  /** "Edit with AI": with "fix the words first" on, each video is transcribed, you fix its words,
+   * then its edit starts (one video after another). */
+  const runEdit = async (list: string[], text: string) => {
+    if (!settings?.fixCaptionsFirst || !list.length) return startJobs(list, "new", text);
+    const [video, ...rest] = list;
+    setFixNote(`Listening to ${base(video)}… · Pinapakinggan…`);
+    const r = await api.transcribe(video, text, photos);
+    setFixNote(r.error ? `Could not transcribe ${base(video)}: ${r.error}` : "");
+    if (r.file && r.words) setFixing({ video, file: r.file, words: r.words, text, rest });
+    else if (rest.length) runEdit(rest, text);
+  };
+  const finishFix = async (words: TranscriptWord[]) => {
+    if (!fixing) return;
+    const saved = await api.saveTranscript(fixing.file, words);
+    const current = fixing;
+    setFixing(null);
+    if (!saved.ok) setFixNote(saved.error ?? "Could not save the words.");
+    else startJobs([current.video], "new", current.text, undefined, current.file);
+    if (current.rest.length) runEdit(current.rest, current.text);
+  };
 
   const saveSettings = async (patch: Partial<Settings>) => setSettings(await api.setSettings(patch));
 
@@ -375,11 +401,13 @@ export function App() {
           <button
             className="btn primary"
             disabled={formatBlocked || (!targets.length && !voiceover)}
-            onClick={() => startJobs(voiceover ? [voiceover] : targets, "new", instruction)}
+            onClick={() => (voiceover ? startJobs([voiceover], "new", instruction) : runEdit(targets, instruction))}
             data-testid="run"
           >
             {targets.length > 1 ? `Edit ${targets.length} videos with AI` : redoing ? "Redo with these instructions" : "Edit with AI"}
           </button>
+          {fixNote && <p className="muted small" data-testid="fix-note">{fixNote}</p>}
+          {fixing && <TranscriptDialog words={fixing.words} onCancel={() => setFixing(null)} onDone={finishFix} />}
 
           {selectedActive?.status === "review" && selectedActive.plan && (
             <PlanReview
@@ -391,11 +419,16 @@ export function App() {
           )}
 
           {selectedActive?.status === "running" && selectedActive.summary && <SummaryCard summary={selectedActive.summary} title="What the AI is doing" />}
+          {(selectedJob?.warnings?.length ?? 0) > 0 && (
+            <ul className="muted small job-warnings" data-testid="job-warnings" style={{ overflowWrap: "anywhere", userSelect: "text" }}>
+              {selectedJob!.warnings!.map((w, i) => <li key={i}>⚠ {w}</li>)}
+            </ul>
+          )}
 
           {selectedJob?.status === "failed" && (
             <div className="card" role="alert">
               <h3>That did not work</h3>
-              <p className="error" style={{ whiteSpace: "pre-wrap" }}>{selectedJob.error}</p>
+              <p className="error" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", userSelect: "text" }} data-testid="job-error">{selectedJob.error}</p>
               <button className="btn small" onClick={() => startJobs([selectedJob.video], selectedJob.mode, selectedJob.instruction, selectedJob.planFile)}>Try again</button>
             </div>
           )}

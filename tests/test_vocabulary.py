@@ -70,7 +70,7 @@ def test_transcribe_sends_the_vocabulary_and_handles_a_part_of_the_file(tmp_path
     monkeypatch.setattr(requests, "post", fake_post)
     video = synthetic.make_video(tmp_path / "talk.mp4")
     got = transcribe.transcribe(video, cfg, tmp_path, start=2.0, end=3.5)
-    assert seen["data"]["prompt"] == "GCash"
+    assert seen["data"]["prompt"].startswith("GCash. Taglish")       # your words first, then the Taglish line
     assert [(w.text, w.start) for w in got] == [("g", 2.1), ("cash", 2.25)]   # file time
     assert [w.text for w in fix_words(got, cfg)] == ["GCash"]
     assert probe(tmp_path / "speech.mp3")["duration"] == pytest.approx(1.5, abs=0.1)  # that part only
@@ -138,8 +138,8 @@ def test_corrections_also_fix_transcripts_saved_before(tmp_path):
     cfg["transcription"]["vocabulary_file"] = str(vocab)
     cache = Cache(tmp_path / "cache")
     video = synthetic.make_video(tmp_path / "talk.mp4")
-    t = cfg["transcription"]
-    key = f"{cache.fingerprint(video)}-{t['provider']}-{t['groq_model']}-{cfg['language']}"
+    from autoedit.ai_edit import transcript_key
+    key = transcript_key(video, cfg, cache)
     cache.put("transcripts", key, {"language": "tl", "words": [
         {"word": "sa", "start": 0, "end": 0.2}, {"word": "g", "start": 0.3, "end": 0.4},
         {"word": "cash", "start": 0.45, "end": 0.8}]})

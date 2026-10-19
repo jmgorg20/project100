@@ -31,7 +31,7 @@ from .pipeline import build_edit_project, unique_output_path
 from .project import save_project, timeline_duration
 from .project_render import render_project
 from .transcribe import transcribe
-from .words import save_transcript, words_from_data
+from .words import load_transcript, save_transcript, words_from_data
 
 PROMPT_VERSION = 4
 MAX_ATTEMPTS = 2
@@ -86,6 +86,13 @@ instruction, describing the edit.
 
 Output the JSON object only."""
 
+
+
+def work_name(path):
+    """A short, safe folder name for a video's work files (long names would push the files inside
+    past Windows' 260-character limit)."""
+    from .graphics import safe_filename
+    return safe_filename(Path(path).stem, 40)
 
 def mmss(seconds):
     seconds = max(0, int(round(seconds)))
@@ -339,17 +346,33 @@ def graphics_lines(graphics):
     return lines
 
 
-def load_words(video, cfg, cache, job_dir, duration):
-    """The transcript, from the cache when this exact video was transcribed before."""
+TAGLISH_HINT_VERSION = "taglish1"
+
+
+def transcript_key(video, cfg, cache):
+    """The cache key of a transcript: the file, the transcriber, the language, and whether the
+    Taglish hint was sent. Your instruction is not part of it, so changing the instruction and
+    editing again does not transcribe (or pay) again."""
+    from .transcribe import taglish_hint_on
     t = cfg["transcription"]
     provider = str(t["provider"]).lower()
     model = t["groq_model"] if provider == "groq" else t["local_model"]
-    key = f"{cache.fingerprint(video)}-{provider}-{model}-{cfg['language']}" if cache else None
+    key = f"{cache.fingerprint(video)}-{provider}-{model}-{cfg['language']}"
+    return key + (f"-{TAGLISH_HINT_VERSION}" if taglish_hint_on(cfg) else "")
+
+
+def load_words(video, cfg, cache, job_dir, duration, hints=()):
+    """The transcript, from the cache when this exact video was transcribed before (with the
+    same hint). `hints`: your instruction and file names, sent to Whisper as a hint."""
+    t = cfg["transcription"]
+    provider = str(t["provider"]).lower()
+    model = t["groq_model"] if provider == "groq" else t["local_model"]
+    key = transcript_key(video, cfg, cache) if cache else None
     from .vocabulary import fix_words
     data = cache.get("transcripts", key) if cache else None
     if data:
         return fix_words(words_from_data(data), cfg), True, 0.0
-    words = transcribe(video, cfg, job_dir)
+    words = transcribe(video, cfg, job_dir, hints=hints)
     if cache:
         path = cache.folder / "transcripts" / f"{key}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -362,7 +385,7 @@ def load_words(video, cfg, cache, job_dir, duration):
 def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=None,
                   render=True, output=None, previous_plan=None, plan=None, reporter=None,
                   cancel=None, gen_paths=None, max_gen_minutes=None, max_ai_clips=None,
-                  graphics=None, format=None, inputs=None, preset=None):
+                  graphics=None, format=None, inputs=None, preset=None, transcript=None):
     """Make an AI edit of one video. Returns a dict describing the result.
 
     `plan`: use this plan as is (e.g. the creator accepted only some AI changes); no AI call.
@@ -379,6 +402,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
     `inputs`: the format's other files by role, e.g. {"screen": [path]}, {"takes": [a, b]}.
     `preset`: a preset id (presets/*.json): its format, graphics, captions, grade, pacing, music
     and sounds are the defaults (an explicit `format` / `graphics` still wins).
+    `transcript`: a transcript file (e.g. one you fixed with `python editor.py transcribe`) used
+    instead of transcribing the video again.
     """
     from . import presets as pre
     from .progress import TextReporter
@@ -422,7 +447,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
     if look:
         plan_instruction = pre.instruction_for(look, plan_instruction)
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
-    job_dir = project_path(cfg["work_folder"]) / f"{video.stem}-ai-{time.strftime('%Y%m%d-%H%M%S')}"
+    job_dir = project_path(cfg["work_folder"]) / f"{work_name(video)}-ai-{time.strftime('%Y%m%d-%H%M%S')}"
     job_dir.mkdir(parents=True, exist_ok=True)
     out_folder = project_path(cfg["output"]["folder"])
     output = Path(output).resolve() if output else unique_output_path(out_folder, video.stem)
@@ -433,7 +458,13 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
 
     try:
         reporter.stage("transcript", "Listening to your video")
-        words, cached, transcript_cost = load_words(video, cfg, cache, job_dir, duration)
+        if transcript:
+            from .vocabulary import fix_words
+            words, cached, transcript_cost = fix_words(load_transcript(transcript), cfg), True, 0.0
+        else:
+            hints = [instruction, *photos, *(Path(f).name for fs in (inputs or {}).values() for f in fs
+                                             if isinstance(f, (str, Path)))]
+            words, cached, transcript_cost = load_words(video, cfg, cache, job_dir, duration, hints)
         reporter.event("transcript", words=len(words), cached=cached,
                        text=" ".join(w.text for w in words)[:4000])
         check_cancel()
@@ -606,8 +637,7 @@ def estimate_cost(video, cfg, instruction="", photo_names=(), provider=None, mod
     t = cfg["transcription"]
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
     tmodel = t["groq_model"] if t["provider"] == "groq" else t["local_model"]
-    key = f"{cache.fingerprint(video)}-{t['provider']}-{tmodel}-{cfg['language']}"
-    cached = cache.get("transcripts", key) is not None
+    cached = cache.get("transcripts", transcript_key(video, cfg, cache)) is not None
     transcript = 0.0 if cached or t["provider"] != "groq" else \
         transcription_cost(prices, tmodel, info["duration"])
     words_guess = info["duration"] * 2.6          # about 2.6 words per second of talking
@@ -648,7 +678,7 @@ def voiceover_edit(audio, broll, cfg, instruction="", provider=None, model=None,
     if look:
         cfg["style"] = look["captions"]["style"]           # the preset's captions win
     cache = Cache(project_path(cfg["ai"]["cache_folder"]))
-    job_dir = project_path(cfg["work_folder"]) / f"{audio.stem}-vo-{time.strftime('%Y%m%d-%H%M%S')}"
+    job_dir = project_path(cfg["work_folder"]) / f"{work_name(audio)}-vo-{time.strftime('%Y%m%d-%H%M%S')}"
     job_dir.mkdir(parents=True, exist_ok=True)
     out_folder = project_path(cfg["output"]["folder"])
     output = Path(output).resolve() if output else unique_output_path(out_folder, audio.stem)

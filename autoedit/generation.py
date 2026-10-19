@@ -494,7 +494,8 @@ def compare(paths, settings, hardware_key, table, content_type, prompt, seed, re
                                      timeout=settings["limits"]["job_timeout_minutes"] * 60)
             kept = None
             if output:
-                kept = folder / f"{row['name']}{Path(output).suffix}"
+                from .graphics import safe_filename
+                kept = folder / f"{safe_filename(row['name'])}{Path(output).suffix}"
                 shutil.copy(output, kept)
             entry = {"tier": row["name"], "label": row["label"], "model_name": row["model_name"],
                      "success": result.success, "reason": result.reason,
