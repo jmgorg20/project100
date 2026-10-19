@@ -317,12 +317,33 @@ def effect_layers(project, fps, clip_type, key):
 
 
 def zoom_layers(project, fps):
-    """[((amount, anchor_y, ease, start), [(frame, frame)])]: the zoom layers, in render order."""
-    layers = effect_layers(project, fps, "zoom",
-                           lambda c: (float(c["amount"]),
-                                      float(c.get("anchor_y", DEFAULT_ANCHOR_Y)),
-                                      float(c.get("ease", 0)), c["start"] if c.get("ease") else 0))
-    return [(k, r) for k, r in layers if k[0] > 1.0]
+    """[((amount, anchor_y, ease, start, from, smooth), [(frame, frame)])]: the zoom layers, in
+    render order. `from` (the zoom when an eased zoom starts) is 1 unless the clip says otherwise:
+    from 1.3 to amount 1 is a smooth zoom-out."""
+    def key(c):
+        eased = bool(c.get("ease"))
+        return (float(c["amount"]), float(c.get("anchor_y", DEFAULT_ANCHOR_Y)), float(c.get("ease", 0)),
+                c["start"] if eased else 0, float(c.get("from", 1.0)) if eased else 1.0,
+                bool(c.get("smooth")) if eased else False)
+    layers = effect_layers(project, fps, "zoom", key)
+    return [(k, r) for k, r in layers if max(k[0], k[4]) > 1.0]
+
+
+def zoom_progress(t, t0, ease, smooth):
+    """0..1 progress of an eased zoom at time t (Python twin of zoom_expression)."""
+    x = min(1.0, max(0.0, (t - t0) / ease))
+    return x * x * (3 - 2 * x) if smooth else x
+
+
+def zoom_factor(amount, ease, t0, start, smooth, t):
+    return start + (amount - start) * zoom_progress(t, t0, ease, smooth)
+
+
+def zoom_expression(amount, ease, t0, start, smooth):
+    """FFmpeg expression (in t) of the zoom factor of an eased zoom."""
+    x = f"min(1,max(0,(t-{t0:.4f})/{ease:g}))"
+    curve = f"({x})*({x})*(3-2*({x}))" if smooth else x
+    return f"({start:g}+{amount - start:g}*{curve})"
 
 
 def add_zooms(graph, current, project, fps):
@@ -334,13 +355,14 @@ def add_zooms(graph, current, project, fps):
     labels = [f"zsrc{i}" for i in range(len(layers) + 1)]
     graph.add(f"[{current}]split={len(labels)}" + "".join(f"[{l}]" for l in labels))
     current = labels[0]
-    for i, ((amount, anchor, ease, t0), ranges) in enumerate(layers, start=1):
+    for i, ((amount, anchor, ease, t0, start, smooth), ranges) in enumerate(layers, start=1):
         if ease > 0:
-            # Grow from 100% to `amount` over `ease` seconds (t = timeline time), keep the
-            # 1080x1920 window centred horizontally and at `anchor` vertically.
-            # The growing picture is placed with overlay (its x/y follow each frame's size;
-            # a crop after a size-changing scale would keep using the first frame's size).
-            z = f"(1+{amount - 1:g}*min(1,max(0,(t-{t0:.4f})/{ease:g})))"
+            # Grow (or shrink) from `start` (100% unless set) to `amount` over `ease` seconds
+            # (t = timeline time), keeping the 1080x1920 window centred horizontally and at
+            # `anchor` vertically. The changing picture is placed with overlay (its x/y follow
+            # each frame's size; a crop after a size-changing scale would keep using the first
+            # frame's size).
+            z = zoom_expression(amount, ease, t0, start, smooth)
             graph.add(f"[{labels[i]}]scale=w='trunc({W}*{z}/2)*2':h='trunc({H}*{z}/2)*2':"
                       f"eval=frame,setsar=1[zoomed{i}]",
                       f"[{current}][zoomed{i}]overlay=x='(W-w)/2':y='(H-h)*{anchor:g}':"
@@ -464,6 +486,13 @@ def add_fx(graph, current, project, fps):
                 shift = int(round(6 + 34 * i))
                 graph.add(f"[{current}]rgbashift=rh={shift}:bh=-{shift}:gv={shift // 3}:{on},"
                           f"noise=alls={int(10 + 30 * i)}:allf=t:{on}[{out}]")
+            elif effect == "bw":
+                # the colour drains to black and white over the first 35%, stays, and comes
+                # back over the last 35% (a B&W transition on a cut)
+                ramp = max(d * 0.35, 1 / fps)
+                held = f"min(1,max(0,min((t-{t0:.4f})/{ramp:.4f},({t0 + d:.4f}-t)/{ramp:.4f})))"
+                graph.add(f"[{current}]eq=saturation='1-{min(1.0, 0.4 + 0.6 * i):g}*{held}':"
+                          f"eval=frame:{on}[{out}]")
             elif effect == "whip":
                 graph.add(f"[{current}]gblur=sigma={8 + 52 * i:g}:sigmaV=0:steps=2:{on}[{out}]")
             elif effect == "shake":
@@ -475,6 +504,64 @@ def add_fx(graph, current, project, fps):
             else:
                 continue
             current = out
+            k += 1
+    return current
+
+
+def envelope_expression(t0, d, fade, var="t"):
+    """FFmpeg expression: 0 -> 1 over `fade` seconds from t0, 1, then -> 0 over the last `fade`
+    seconds of [t0, t0 + d] (1 throughout when fade is 0). Smoothstep-eased."""
+    if fade <= 0:
+        return "1"
+    f = min(fade, d / 2)
+    x = f"min(1,max(0,min(({var}-{t0:.4f})/{f:.4f},({t0 + d:.4f}-{var})/{f:.4f})))"
+    return f"(({x})*({x})*(3-2*({x})))"
+
+
+def add_dims(graph, current, project, fps):
+    """Background dimming: the picture gets darker (and optionally blurred) so a card on top
+    stands out. The darkened copy is mixed in with an eased fade (blend, per frame)."""
+    k = 0
+    for track in visible_tracks(project, "effect"):
+        for clip in sorted(track["clips"], key=lambda c: c["start"]):
+            if clip["type"] != "dim":
+                continue
+            f0, f1 = clip_frames(clip, fps)
+            if f1 <= f0:
+                continue
+            t0, d = f0 / fps, (f1 - f0) / fps
+            amount = float(clip.get("amount", 0.45))
+            blur = float(clip.get("blur", 0))
+            keep = 1 - amount
+            dark = (f"lutyuv=y='val*{keep:g}':u='128+(val-128)*{keep:g}':v='128+(val-128)*{keep:g}'")
+            if blur > 0:
+                dark = f"gblur=sigma={blur / 2:g}:steps=2," + dark
+            mix = envelope_expression(t0, d, float(clip.get("fade", 0.3)), var="T")
+            on = f"enable='{frames_expression([(f0, f1)], fps)}'"
+            graph.add(f"[{current}]split[dima{k}][dimb{k}]", f"[dimb{k}]{dark}[dimd{k}]",
+                      f"[dima{k}][dimd{k}]blend=all_expr='A+(B-A)*{mix}':{on}[dim{k}]")
+            current = f"dim{k}"
+            k += 1
+    return current
+
+
+def add_vignettes(graph, current, project, fps):
+    """A dark vignette (FFmpeg's vignette filter): the edges darken; `strength` sets the angle
+    of the lens fall-off, `fade` eases it in and out."""
+    k = 0
+    for track in visible_tracks(project, "effect"):
+        for clip in sorted(track["clips"], key=lambda c: c["start"]):
+            if clip["type"] != "vignette":
+                continue
+            f0, f1 = clip_frames(clip, fps)
+            if f1 <= f0:
+                continue
+            t0, d = f0 / fps, (f1 - f0) / fps
+            angle = 0.25 + 0.6 * float(clip.get("strength", 0.5))
+            env = envelope_expression(t0, d, float(clip.get("fade", 0)))
+            graph.add(f"[{current}]vignette=angle='{angle:.4f}*{env}':eval=frame:"
+                      f"enable='{frames_expression([(f0, f1)], fps)}'[vig{k}]")
+            current = f"vig{k}"
             k += 1
     return current
 
@@ -506,11 +593,140 @@ def add_graphics(graph, current, layers, fps):
     return current
 
 
-def add_overlays(graph, current, project, media, base_dir, fps, masks=None):
+MOTION_DEFAULT = 0.35
+SLIDE = {"slide_up": (0, 1), "slide_down": (0, -1), "slide_left": (1, 0), "slide_right": (-1, 0)}
+
+
+def smooth01(expr):
+    """Smoothstep of an expression already clipped to 0..1 (FFmpeg)."""
+    return f"(({expr})*({expr})*(3-2*({expr})))"
+
+
+def overlay_motion(clip, start, d):
+    """Entrance / exit of an overlay: (alpha fade filters, scale filter, dx expr, dy expr).
+    Times inside the filters are the clip's own (from 0); dx / dy are in timeline time t."""
+    enter, leave = clip.get("enter", "none"), clip.get("exit", "none")
+    if enter == "none" and leave == "none":
+        return "", "", "0", "0"
+    md = min(float(clip.get("motion", MOTION_DEFAULT)), d / 2)
+    fades = ""
+    if enter != "none":
+        fades += f",fade=t=in:st=0:d={md:.3f}:alpha=1"
+    if leave != "none":
+        fades += f",fade=t=out:st={max(0.0, d - md):.3f}:d={md:.3f}:alpha=1"
+    e_in = smooth01(f"min(1,max(0,t/{md:.4f}))")
+    e_out = smooth01(f"min(1,max(0,(t-{d - md:.4f})/{md:.4f}))")
+    scale = ""
+    if "scale" in (enter, leave):
+        k_in = f"(0.82+0.18*{e_in})" if enter == "scale" else "1"
+        k_out = f"(1-0.18*{e_out})" if leave == "scale" else "1"
+        scale = f",scale=w='trunc(iw*{k_in}*{k_out}/2)*2':h=-2:eval=frame"
+    dist = 160
+    g_in = smooth01(f"min(1,max(0,(t-{start:.4f})/{md:.4f}))")
+    g_out = smooth01(f"min(1,max(0,(t-{start + d - md:.4f})/{md:.4f}))")
+    dx, dy = ["0"], ["0"]
+    if enter in SLIDE:
+        sx, sy = SLIDE[enter]
+        dx.append(f"{sx * dist}*(1-{g_in})")
+        dy.append(f"{sy * dist}*(1-{g_in})")
+    if leave in SLIDE:
+        sx, sy = SLIDE[leave]                 # leaves the way it travels: slide_up goes up
+        dx.append(f"{-sx * dist}*{g_out}")
+        dy.append(f"{-sy * dist}*{g_out}")
+    return fades, scale, "+".join(dx), "+".join(dy)
+
+
+def fitted_size(src_w, src_h, box_w, box_h):
+    """Size (even numbers) of a src_w x src_h picture scaled to fit inside box_w x box_h."""
+    k = min(box_w / src_w, box_h / src_h)
+    return max(2, int(round(src_w * k / 2)) * 2), max(2, int(round(src_h * k / 2)) * 2)
+
+
+def has_overlay_style(clip):
+    return not clip.get("mask") and bool(clip.get("radius") or clip.get("shadow") or clip.get("border"))
+
+
+def _rounded_mask(w, h, radius, scale=4):
+    from PIL import Image, ImageDraw
+    big = Image.new("L", (w * scale, h * scale), 0)
+    ImageDraw.Draw(big).rounded_rectangle((0, 0, w * scale - 1, h * scale - 1),
+                                          radius=max(0, radius) * scale, fill=255)
+    return big.resize((w, h), Image.LANCZOS)
+
+
+def overlay_style_assets(clip, src_w, src_h, out_dir):
+    """Draw the pictures a styled overlay needs (Pillow): the rounded-corner mask, the soft
+    shadow under it and the border on top, on a canvas with a margin for the shadow.
+    Returns {"w", "h", "margin", "mask", "under", "over"} (paths or None)."""
+    from PIL import Image, ImageDraw, ImageFilter
+    w, h = fitted_size(src_w, src_h, float(clip["width"]), float(clip["height"]))
+    radius = min(float(clip.get("radius", 0)), min(w, h) / 2)
+    shadow = float(clip.get("shadow", 0))
+    border = clip.get("border")
+    margin = int(round(24 + 56 * shadow)) if shadow > 0 else (int(border["width"]) + 2 if border else 0)
+    margin += margin % 2
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    base = out_dir / f"ovstyle-{clip['id']}"
+    info = {"w": w, "h": h, "margin": margin, "mask": None, "under": None, "over": None}
+    if radius > 0:
+        _rounded_mask(w, h, radius).save(f"{base}-mask.png")
+        info["mask"] = f"{base}-mask.png"
+    cw, ch = w + 2 * margin, h + 2 * margin
+    under = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    if shadow > 0:
+        blur = 10 + 26 * shadow
+        drop = int(round(6 + 18 * shadow))
+        shape = Image.new("L", (cw, ch), 0)
+        ImageDraw.Draw(shape).rounded_rectangle((margin, margin + drop, margin + w - 1, margin + h - 1 + drop),
+                                                radius=radius, fill=int(255 * (0.35 + 0.4 * shadow)))
+        under.putalpha(shape.filter(ImageFilter.GaussianBlur(blur)))
+    under.save(f"{base}-under.png")
+    info["under"] = f"{base}-under.png"
+    if border:
+        color = border["color"].lstrip("#")
+        rgb = tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))
+        bw = float(border["width"])
+        big = 4
+        ring = Image.new("RGBA", (cw * big, ch * big), (0, 0, 0, 0))
+        ImageDraw.Draw(ring).rounded_rectangle(
+            ((margin - bw / 2) * big, (margin - bw / 2) * big, (margin + w + bw / 2) * big - 1,
+             (margin + h + bw / 2) * big - 1),
+            radius=(radius + bw / 2) * big, outline=(*rgb, 255), width=int(round(bw * big)))
+        ring.resize((cw, ch), Image.LANCZOS).save(f"{base}-over.png")
+        info["over"] = f"{base}-over.png"
+    return info
+
+
+def prepare_overlay_styles(project, base_dir, work_dir):
+    """{clip id: overlay_style_assets(...)} for every overlay with rounded corners, a shadow or
+    a border (the source size comes from the media entry, or from the file)."""
+    from .ffmpeg_tools import probe
+    media = media_by_id(project)
+    out = {}
+    for track in visible_tracks(project, "overlay"):
+        for clip in track["clips"]:
+            if not has_overlay_style(clip):
+                continue
+            m = media[clip["media"]]
+            w, h = m.get("width"), m.get("height")
+            if not w or not h:
+                info = probe(resolve_media_path(m, base_dir))
+                w, h = info["width"], info["height"]
+            if not w or not h:
+                raise EditorError(f"The size of '{m.get('name') or m['id']}' is not known.")
+            out[clip["id"]] = overlay_style_assets(clip, w, h, Path(work_dir) / "overlay-styles")
+    return out
+
+
+def add_overlays(graph, current, project, media, base_dir, fps, masks=None, styles=None):
     """Photos, B-roll and cut-outs over the picture. A clip with `mask` is cut out first: a
-    green/blue screen keyed out (chroma), or a person mask video (masks[clip id], see segment.py)."""
+    green/blue screen keyed out (chroma), or a person mask video (masks[clip id], see segment.py).
+    `styles` (prepare_overlay_styles): rounded corners, a soft shadow and a border, drawn as
+    pictures and composed here; `enter` / `exit` move the overlay in and out smoothly."""
     from .segment import chroma_filter
     masks = masks or {}
+    styles = styles or {}
     k = 0
     for track in visible_tracks(project, "overlay"):
         for clip in sorted(track["clips"], key=lambda c: c["start"]):
@@ -544,22 +760,53 @@ def add_overlays(graph, current, project, media, base_dir, fps, masks=None):
                 src = f"[ova{k}]"
             elif mask and mask["type"] == "person":
                 raise EditorError(f"The cut-out of clip '{clip['id']}' has no person mask yet.")
-            chain = (f"{src}scale=w={round(clip['width'])}:h={round(clip['height'])}:"
-                     f"force_original_aspect_ratio=decrease,format=rgba")
+            style = styles.get(clip["id"]) if has_overlay_style(clip) else None
+            if style:
+                chain = self_styled(graph, src, style, d, fps, k)
+            else:
+                chain = (f"{src}scale=w={round(clip['width'])}:h={round(clip['height'])}:"
+                         f"force_original_aspect_ratio=decrease,format=rgba")
             if clip.get("animation", "none") == "pop":
                 chain += (f",scale=w='trunc(iw*({pop_scale_expression(d)})/2)*2':h=-2:eval=frame,"
                           f"fade=t=in:st=0:d=0.15:alpha=1,"
                           f"fade=t=out:st={max(0.0, d - 0.2):.3f}:d=0.2:alpha=1")
+            fades, scale, dx, dy = overlay_motion(clip, start, d)
+            chain += scale + fades
             opacity = float(clip.get("opacity", 1.0))
             if opacity < 1:
                 chain += f",colorchannelmixer=aa={opacity:g}"
             graph.add(f"{chain},setpts=PTS+{start:.4f}/TB[ovl{k}]",
-                      f"[{current}][ovl{k}]overlay=x='{clip['x']:g}-w/2':y='{clip['y']:g}-h/2':"
+                      f"[{current}][ovl{k}]overlay=x='{clip['x']:g}-w/2+{dx}':"
+                      f"y='{clip['y']:g}-h/2+{dy}':"
                       f"eval=frame:eof_action=pass:"
                       f"enable='{frames_expression([(f0, f1)], fps)}'[ovout{k}]")
             current = f"ovout{k}"
             k += 1
     return current
+
+
+def self_styled(graph, src, style, d, fps, k):
+    """The filter chain (a label to continue from) of a styled overlay: the picture scaled to its
+    fitted size, its corners rounded (mask), laid on the shadow canvas, the border on top."""
+    def still(path, tag):
+        idx = graph.add_input(["-loop", "1", "-framerate", fps, "-t", f"{d:.4f}", "-i", path])
+        graph.add(f"[{idx}:v]format=rgba,setpts=PTS-STARTPTS,fps={fps},trim=duration={d:.4f}[{tag}]")
+        return tag
+    w, h, m = style["w"], style["h"], style["margin"]
+    graph.add(f"{src}scale=w={w}:h={h},setsar=1,format=rgba[ovp{k}]")
+    pic = f"ovp{k}"
+    if style["mask"]:
+        mask = still(style["mask"], f"ovmk{k}")
+        graph.add(f"[{mask}]format=gray[ovmg{k}]", f"[{pic}][ovmg{k}]alphamerge[ovr{k}]")
+        pic = f"ovr{k}"
+    under = still(style["under"], f"ovu{k}")
+    graph.add(f"[{under}][{pic}]overlay=x={m}:y={m}:format=auto:eof_action=pass[ovc{k}]")
+    canvas = f"ovc{k}"
+    if style["over"]:
+        over = still(style["over"], f"ovb{k}")
+        graph.add(f"[{canvas}][{over}]overlay=0:0:format=auto[ovcb{k}]")
+        canvas = f"ovcb{k}"
+    return f"[{canvas}]format=rgba"
 
 
 # ---------------------------------------------------------------- captions
@@ -713,12 +960,13 @@ def add_audio_tracks(graph, project, media, base_dir, fps, dialog):
 # ---------------------------------------------------------------- the command
 
 def build_command(project, base_dir, output, ass_name=None, export=None, frame=None,
-                  trackfx=None, graphics=None, masks=None):
+                  trackfx=None, graphics=None, masks=None, styles=None):
     """Return (input_args, filter_graph_text, output_args).
 
     `frame`: render only this frame number (0-based) to `output` as a picture.
     `trackfx`: the drawn tracked-effect video {"path", "f0", "f1"} (see trackfx.prepare_layer).
     `graphics`: the drawn motion graphics (graphics.render_layers), laid over the picture.
+    `styles`: the drawn overlay shapes (prepare_overlay_styles): rounded corners, shadows, borders.
     """
     export = {**DEFAULT_EXPORT, **(export or {})}
     fps = project["settings"]["fps"]
@@ -734,9 +982,11 @@ def build_command(project, base_dir, output, ass_name=None, export=None, frame=N
     current = add_grades(graph, current, project, fps, total_frames)
     current = add_wipes(graph, current, project, fps)
     current = add_fx(graph, current, project, fps)
+    current = add_dims(graph, current, project, fps)
+    current = add_vignettes(graph, current, project, fps)
     if trackfx:
         current = add_trackfx(graph, current, trackfx, fps, total_frames)
-    current = add_overlays(graph, current, project, media, base_dir, fps, masks)
+    current = add_overlays(graph, current, project, media, base_dir, fps, masks, styles)
     if graphics:
         current = add_graphics(graph, current, graphics, fps)
     if ass_name:
@@ -843,8 +1093,10 @@ def _run(project, output, base_dir, work_dir, fonts_folder, export, reporter, ca
             ass_name = "captions.ass"
             (job / ass_name).write_text(ass_text, encoding="utf-8")
         layer = prepare_trackfx(project, base_dir, job, frame, cancel, reporter)
+        styles = prepare_overlay_styles(project, base_dir, job)
         inputs, graph, outputs = build_command(project, base_dir, part, ass_name, export, frame,
-                                               trackfx=layer, graphics=gfx_layers, masks=masks)
+                                               trackfx=layer, graphics=gfx_layers, masks=masks,
+                                               styles=styles)
         script = job / "filters.txt"
         script.write_text(graph, encoding="utf-8")
         fps = project["settings"]["fps"]

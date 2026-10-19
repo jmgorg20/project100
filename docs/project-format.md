@@ -39,12 +39,14 @@ track may not overlap; use another track of the same kind instead.
 |---|---|---|
 | `video` (only one: the main track) | `video` | `in`, `out`, `volume` (0-4, 1 = as recorded), `fit` (`fill` crops to fill the frame, `blur` shows the whole picture over a blurred copy), optional `layout` (`{"type": "split" or "pip", "screen": <media id>}` combines it with a screen recording that started at the same moment). Version 2: `speed` (0.25-4), `fade_in`/`fade_out` (its sound, seconds), `crop` (see below) |
 | | `image` | `fit`; version 2: `crop` |
-| `overlay` (photos, B-roll, logo) | `image` or `video` | `x`, `y` (centre, pixels on the 1080x1920 frame), `width`, `height` (the picture is scaled to fit inside), `opacity` (0-1), `animation` (`none`, `pop`); `video` also needs `in`/`out`, and may have `speed` |
-| `effect` | `zoom` | `amount` (1-5), `anchor_y` (0 = zoom towards the top, 0.5 = the middle; default 0.4); `ease` (seconds to grow from 100%; 0 or missing = punch-in) |
+| `overlay` (photos, B-roll, logo) | `image` or `video` | `x`, `y` (centre, pixels on the 1080x1920 frame), `width`, `height` (the picture is scaled to fit inside), `opacity` (0-1), `animation` (`none`, `pop`); `video` also needs `in`/`out`, and may have `speed`. Shape and motion (optional): `radius` (rounded corners, pixels), `shadow` (soft drop shadow, 0-1), `border` (`{"color": "#rrggbb", "width": 1-24}`), `enter` / `exit` (`none`, `fade`, `slide_up`, `slide_down`, `slide_left`, `slide_right`, `scale`, eased), `motion` (seconds the entrance / exit take, default 0.35). Rounded corners, shadow and border are not used on cut-outs (`mask`). A video overlay with these is a floating picture-in-picture window. |
+| `effect` | `zoom` | `amount` (1-5), `anchor_y` (0 = zoom towards the top, 0.5 = the middle; default 0.4); `ease` (seconds to grow from 100%; 0 or missing = punch-in); with `ease`: `from` (the zoom at the start, default 1: `from` 1.3 to `amount` 1 = a smooth zoom-out back to the wide shot) and `smooth` (true = slow-fast-slow) |
 | | `grade` | `grade`: `natural_clean`, `none`, `warm`, `black_and_white`, `orange_teal`, `high_contrast`; `intensity` (0-1, default 1: blended with the original) |
-| | `fx` | `effect`: `shake`, `flash` (to white), `dip` (to black), `glitch` (colour split + noise), `whip` (sideways motion blur); `intensity` (0-1, default 0.6). Flash and dip peak in the middle of the clip. Used for transitions too (a short `fx` clip centred on a cut). |
+| | `fx` | `effect`: `shake`, `flash` (to white), `dip` (to black), `glitch` (colour split + noise), `whip` (sideways motion blur), `bw` (the colour drains to black and white and comes back: a B&W transition); `intensity` (0-1, default 0.6). Flash and dip peak in the middle of the clip. Used for transitions too (a short `fx` clip centred on a cut). |
 | | `trackfx` | An effect that follows a tracked point: `effect` (`glow`, `spark`, `aura`, `energy`, `clip`), `point` (`palm`, `wrist`, `thumb_tip`, `index_tip`, `middle_tip`, `ring_tip`, `pinky_tip`, `fingertips`, `face`, `body`), `hand` (`left`, `right`, `any`), `intensity`, `color` (`#rrggbb`), `size` (0.1-4), `smooth` (0-1), `fade_in`, `fade_out`; `effect: "clip"` needs `media` (your clip) and may set `blend` (`screen` for a black background, or `alpha`). See [tracking.md](tracking.md). |
 | | `wipe` | A before/after wipe: `grade` (as above) on the side the divider has passed, `intensity`, `direction` (`right`, `left`, `down`, `up`), `sweep` (seconds, 0.2-3), `stop` (where the divider stays, 0.05-0.95 of the frame), `divider` (false = no white line) |
+| | `dim` | Background dimming under a card: `amount` (0.05-0.9 darker, default 0.45), `blur` (pixels, default 0), `fade` (seconds in and out, default 0.3) |
+| | `vignette` | Dark edges: `strength` (0-1, default 0.5), `fade` (seconds in and out, default 0) |
 | `graphics` (pop-up words, cards...) | `graphic` | `template` (an id from `autoedit/graphics_catalog.json`), `x`, `y` (the centre, **fractions** of the frame: 0.5, 0.5 = the middle), `params` (`text` with `*word*` emphasis, `text2`, `items`, `number`, `prefix`, `suffix`, `image` (a media id), `emoji`, `icon`, `font`, `color`, `accent`, `bg`, `size` 0.4-2.5, `intensity` 0-1, `align`, `case`, `angle`), optional `attach` (`{"kind": "flash" / "whip" / "punch", "intensity"}`: a transition on the picture at its first frame), `locked` (true: not changed by the app or the AI), `director` (notes: style, mood, the spoken words). See [graphics.md](graphics.md). |
 | `caption` | `caption` | `style` (name or number 1-13), `highlight_keywords` (true/false), `overrides` (size, colours, outline, `zone` `lower`/`center`/`top`/`divider`, `align`, case, words per line...), `words` (each `text`, `start`, `end` in seconds **from the start of the clip**, `highlight`) |
 | `audio` (needs a `role`: `original`, `voiceover`, `music`, `sfx`) | `audio` | `in`, `out`, `volume`, `fade_in`, `fade_out` (seconds); version 2: `speed` |
@@ -118,8 +120,10 @@ One FFmpeg command, in this order:
    framing are decoded together in one pass (like the original editor). Reordered clips,
    other files, stills and gaps become separate pieces joined with `concat`.
 2. **Zoom** effect clips, then **colour grade** clips (on overlapping clips, the later
-   track wins), then **fx** clips (shake, flash, dip, glitch, whip) in track order.
-3. **Overlay** tracks, in track order (later tracks on top).
+   track wins), then **fx** clips (shake, flash, dip, glitch, whip, bw) in track order, then
+   **dim** and **vignette** clips (so cards and screenshots on top stay bright).
+3. **Overlay** tracks, in track order (later tracks on top). Rounded corners, shadows and
+   borders are drawn once as pictures (Pillow) and composed with the overlay.
 4. **Captions** (on top of everything).
 5. **Sound:**
    - The main track's sound plus the `original`/`voice-over` tracks form the speech.
