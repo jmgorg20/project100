@@ -125,12 +125,13 @@ def chunk_words(words, style):
 def word_tags(word, index, active, style, box_layer=False):
     """ASS override tags for one word, given which word is being spoken."""
     hidden = style.mode in ("typewriter", "pop") and index > active
+    later = style.mode == "reveal" and index > active        # not said yet: faint, then ink on its word
     if box_layer:
         # Box layer: everything invisible except the box behind the spoken word.
         return r"\1a&HFF&\3a&H00&" if index == active and not hidden else r"\alpha&HFF&"
     if hidden:
         return r"\alpha&HFF&"
-    tags = ""
+    tags = r"\alpha&HA8&" if later else ""
     if word.highlight and style.keyword_color:
         tags += rf"\c{ass_color(style.keyword_color)}"
     if index == active:
@@ -271,8 +272,15 @@ def build_events(words, style, zone=None, measurer=None, names=("Main", "Box"), 
     return events
 
 
+def font_of(style, fonts):
+    """(family, bold) of a caption style: its own family (e.g. a serif) or the project's font for
+    its weight (regular / bold / heavy)."""
+    family, bold = fonts[style.font]
+    return (style.family, bold) if getattr(style, "family", None) else (family, bold)
+
+
 def style_line(name, style: CaptionStyle, fonts, box=False, box_color=None, padding=None):
-    font_name, bold = fonts[style.font]
+    font_name, bold = font_of(style, fonts)
     if box:
         border_style, outline = 3, padding
         outline_color = ass_color(box_color)
@@ -293,7 +301,7 @@ def style_lines(style, fonts, fonts_folder=None, names=("Main", "Box")):
     """ASS [V4+ Styles] lines for one caption style, plus the text measurer for word boxes."""
     measurer = None
     if style.card:
-        family, bold = fonts[style.font]
+        family, bold = font_of(style, fonts)
         font_file = find_font_file(family, bold, fonts_folder or "")
         if font_file:
             measurer = TextMeasurer(font_file, style.size)
@@ -306,7 +314,7 @@ def style_lines(style, fonts, fonts_folder=None, names=("Main", "Box")):
     lines = [style_line(names[0], style, fonts, box=style.box,
                         box_color=style.box_color, padding=style.box_padding)]
     if style.active_box:
-        family, bold = fonts[style.font]
+        family, bold = font_of(style, fonts)
         font_file = find_font_file(family, bold, fonts_folder or "")
         if font_file:
             measurer = TextMeasurer(font_file, style.size)

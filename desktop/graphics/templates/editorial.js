@@ -728,6 +728,7 @@ defineTemplate({
   if (!p.image) c.fit(tile, { maxW: 164, maxH: 150, max: 60, min: 22 });
   const label = mk("div", { fontFamily: inter.fontFamily, fontWeight: "700", fontSize: "30px", color: "#ffffff", textShadow: "0 3px 12px rgba(0,0,0,.55)", whiteSpace: "nowrap" }, plainText(p.text), wrap);
   c.fit(label, { maxW: 260, maxH: 44, max: 30, min: 18, lines: 1 });
+  if (!p.image) label.style.visibility = "hidden";   // the tile already shows the name
   const { h } = dims(wrap);
   return {
     w: 260, h,
@@ -787,4 +788,233 @@ defineTemplate({
       });
     },
   };
+});
+
+// ---------------------------------------------------------------- 19. magazine cover
+defineTemplate({
+  id: "magazine-cover", name: "Magazine cover", tl: "Pabalat ng magasin", category: "text", styles: ONLY,
+  moods: ["luxury", "hype", "serious", "news", "emotion"], zone: "any", anchor: { x: 0.5, y: 0.42 }, box: { w: 840, h: 1080 }, duration: 3.4, maxDuration: 8,
+  maxChars: 18, bg: false, pad: 60, covers: true,
+  fields: ["text", "text2", "items", "number", "color", "accent", "size", "intensity", "cues"],
+  inputs: [{ key: "text", type: "text", required: true }, { key: "text2", type: "text", required: false }, { key: "items", type: "list", required: false }],
+  defaults: { color: "#f4efe6", accent: ACCENT, number: 1 },
+  sample: { text: "SIKRETO", text2: "Tatlong sikreto ng viral na video", items: ["Disiplina", "Paano kumita online", "30 araw"], number: 1 },
+}, (c) => {
+  // The words are yours (the masthead, the line under it, the cover lines); only the frame is design.
+  const { p } = c;
+  const page = mk("div", { position: "relative", width: "840px", height: "1080px", boxSizing: "border-box", border: `2px solid ${rgba(p.color, 0.55)}`, padding: "34px 40px", color: p.color, fontFamily: inter.fontFamily }, null, c.root);
+  const top = mk("div", { display: "flex", justifyContent: "space-between", fontSize: "22px", fontWeight: "700", letterSpacing: "0.3em", textTransform: "uppercase", opacity: "0.85" }, null, page);
+  mk("div", {}, `No. ${String(Math.max(1, Math.round(p.number || 1))).padStart(2, "0")}`, top);
+  const mast = mk("div", { fontFamily: serif.fontFamily, fontWeight: "800", lineHeight: "0.9", letterSpacing: "-0.02em", textAlign: "center", marginTop: "18px", whiteSpace: "nowrap", textShadow: "0 8px 30px rgba(0,0,0,.35)" }, plainText(p.text).toUpperCase(), page);
+  c.fit(mast, { maxW: 760, maxH: 200, max: 200, min: 70, lines: 1 });
+  const kicker = mk("div", { fontFamily: serif.fontFamily, fontStyle: "italic", fontSize: "40px", textAlign: "center", marginTop: "14px", color: p.color }, plainText(p.text2), page);
+  if (p.text2) c.fit(kicker, { maxW: 740, maxH: 110, max: 44, min: 24 }); else kicker.style.display = "none";
+  const lines = mk("div", { position: "absolute", left: "40px", bottom: "160px", width: "420px", display: "flex", flexDirection: "column", gap: "18px" }, null, page);
+  const cover = p.items.slice(0, 3).map((t) => {
+    const row = mk("div", { borderLeft: `6px solid ${p.accent}`, paddingLeft: "16px", fontFamily: serif.fontFamily, fontWeight: "700", fontSize: "38px", lineHeight: "1.1", textShadow: "0 4px 16px rgba(0,0,0,.45)" }, plainText(t), lines);
+    c.fit(row, { maxW: 390, maxH: 92, max: 40, min: 22 });
+    return row;
+  });
+  const code = mk("div", { position: "absolute", left: "40px", bottom: "40px", width: "150px", height: "110px", background: "#ffffff", padding: "10px", boxSizing: "border-box", display: "flex", gap: "3px", alignItems: "stretch" }, null, page);
+  for (let i = 0; i < 26; i++) mk("div", { flex: "none", width: `${[2, 4, 2, 6, 3][i % 5]}px`, background: "#111" }, null, code);
+  const { w, h } = { w: 840, h: 1080 };
+  const times = cueTimes(p, cover.length + 1, c.dur, { from: 0.25, to: Math.min(c.dur * 0.6, 0.25 + (cover.length + 1) * 0.45) });
+  return {
+    w, h,
+    update(t, dur) {
+      const e = envelope(t, dur, 0.5, 0.45);
+      page.style.opacity = String(c01(e.i * 1.8) * (1 - ease.inOut(e.o)));
+      const k = arrive(t, times[0], 0.7);
+      mast.style.opacity = String(k);
+      setT(mast, { s: lerp(1.12, 1, ease.out(k)), y: (1 - k) * -30 });
+      setT(page, { s: 1 + 0.015 * c01(t / Math.max(dur, 0.1)) });
+      kicker.style.opacity = String(arrive(t, times[0] + 0.35));
+      cover.forEach((row, i) => { const a = arrive(t, times[i + 1], 0.5); row.style.opacity = String(a); setT(row, { x: (1 - a) * -40 }); });
+      code.style.opacity = String(arrive(t, times[0] + 0.6));
+    },
+  };
+});
+
+// ---------------------------------------------------------------- 20. strikethrough text
+defineTemplate({
+  id: "strike-text", name: "Struck-out words", tl: "Binurang salita", category: "text", styles: ONLY,
+  moods: ["serious", "emotion", "hype", "luxury", "calm"], zone: "upper", anchor: { x: 0.5, y: 0.2 }, box: { w: 900, h: 420 }, duration: 3, maxDuration: 8,
+  words: true, maxChars: 48, bg: false, pad: 70,
+  fields: ["text", "text2", "color", "accent", "size", "intensity", "cues"],
+  inputs: [{ key: "text", type: "text", required: true }, { key: "text2", type: "text", required: true }],
+  defaults: { color: "#ffffff", accent: ACCENT },
+  sample: { text: "wala akong follower", text2: "ito na ako" },
+}, (c) => {
+  // `text` (what was) is struck out on the first cue; `text2` (what is now) arrives big on the second.
+  const { p } = c;
+  const wrap = mk("div", { display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "8px", width: "900px", color: p.color, textAlign: "center" }, null, c.root);
+  const oldRow = mk("div", { position: "relative", display: "inline-block", fontFamily: serif.fontFamily, fontSize: "44px", fontStyle: "italic", opacity: "0.85", textShadow: "0 3px 14px rgba(0,0,0,.5)" }, plainText(p.text), wrap);
+  c.fit(oldRow, { maxW: 800, maxH: 110, max: 46, min: 24 });
+  const line = mk("div", { position: "absolute", left: "-4%", top: "54%", width: "108%", height: "4px", background: p.accent, transformOrigin: "0 50%" }, null, oldRow);
+  const now = mk("div", { fontFamily: serif.fontFamily, fontWeight: "800", lineHeight: "0.95", letterSpacing: "-0.02em", whiteSpace: "nowrap", textShadow: "0 8px 30px rgba(0,0,0,.45)" }, plainText(p.text2).toUpperCase(), wrap);
+  c.fit(now, { maxW: 880, maxH: 200, max: 180, min: 50, lines: 1 });
+  const { h } = dims(wrap);
+  const [strikeAt, nowAt] = cueTimes(p, 2, c.dur, { from: 0.5, to: Math.min(c.dur * 0.6, 1.3) });
+  return {
+    w: 900, h,
+    update(t, dur) {
+      const e = envelope(t, dur, 0.35, 0.4);
+      wrap.style.opacity = String(c01(e.i * 2) * (1 - ease.inOut(e.o)));
+      line.style.transform = `scaleX(${arrive(t, strikeAt, 0.35)})`;
+      oldRow.style.opacity = String(lerp(0.9, 0.45, arrive(t, nowAt, 0.4)));
+      const k = arrive(t, nowAt, 0.55);
+      now.style.opacity = String(k);
+      setT(now, { s: lerp(1.25, 1, ease.out(k)), y: (1 - k) * 20 });
+    },
+  };
+});
+
+// ---------------------------------------------------------------- 21. text-tile mosaic
+const TILE_COLOURS = ["#17140f", "#c8553d", "#1f2a44", "#e9dfcf", "#d9a5a5", "#6d5a8c", "#2f4f3e", "#f2c46d"];
+defineTemplate({
+  id: "tile-mosaic", name: "Mosaic of word tiles", tl: "Mosaic ng salita", category: "card", styles: ONLY,
+  moods: ["hype", "playful", "luxury", "tech", "money"], zone: "any", anchor: { x: 0.5, y: 0.47 }, box: { w: 864, h: 1044 }, duration: 3.2, maxDuration: 8,
+  maxChars: 32, bg: true, pad: 30, covers: true,
+  fields: ["items", "color", "accent", "size", "intensity", "cues"],
+  inputs: [{ key: "items", type: "list", required: true }],
+  defaults: { color: "#ffffff", accent: ACCENT },
+  sample: { items: ["Disiplina", "Paano kumita online", "TikTok", "30 araw", "Hook", "Kwento", "Call to action", "1,000 followers"] },
+}, (c) => {
+  // 3 x 3 tiles of your words around a window in the middle (your video shows through it).
+  const { p } = c;
+  const grid = mk("div", { display: "grid", gridTemplateColumns: "repeat(3, 280px)", gridTemplateRows: "repeat(3, 340px)", gap: "12px", width: "864px" }, null, c.root);
+  const words = p.items.slice(0, 8);
+  const tiles = [];
+  let k = 0;
+  for (let i = 0; i < 9; i++) {
+    if (i === 4 || k >= words.length) { mk("div", {}, null, grid); continue; }  // the window
+    const bg = TILE_COLOURS[k % TILE_COLOURS.length];
+    const tile = mk("div", { width: "280px", height: "340px", background: bg, color: readableOn(bg), borderRadius: "20px", padding: "22px", boxSizing: "border-box", display: "flex", alignItems: "flex-end", boxShadow: SOFT }, null, grid);
+    const words1 = mk("div", { width: "236px", fontFamily: k % 2 ? serif.fontFamily : inter.fontFamily, fontWeight: "800", textTransform: k % 2 ? "none" : "uppercase", lineHeight: "1.02", overflowWrap: "normal", wordBreak: "keep-all" }, plainText(words[k]), tile);
+    c.fit(words1, { maxW: 236, maxH: 200, max: 56, min: 22 });
+    tiles.push(tile);
+    k++;
+  }
+  const times = cueTimes(p, tiles.length, c.dur, { from: 0.15, to: Math.min(c.dur * 0.5, 0.15 + tiles.length * 0.12) });
+  return {
+    w: 864, h: 3 * 340 + 24,
+    update(t, dur) {
+      const e = envelope(t, dur, 0.3, 0.4);
+      grid.style.opacity = String(1 - ease.inOut(e.o));
+      tiles.forEach((tile, i) => { const a = ease.back(prog(t, times[i], times[i] + 0.45), 1.2); tile.style.opacity = String(c01(a * 2)); setT(tile, { s: lerp(0.7, 1, a) }); });
+    },
+  };
+});
+
+// ---------------------------------------------------------------- 22. timeline card
+defineTemplate({
+  id: "timeline-card", name: "Timeline card", tl: "Timeline card", category: "card", styles: ONLY,
+  moods: ["tech", "calm", "serious", "playful", "hype"], zone: "upper", anchor: { x: 0.5, y: 0.22 }, box: { w: 880, h: 420 }, duration: 3.2, maxDuration: 8,
+  maxChars: 30, bg: true, pad: 60,
+  fields: ["text", "items", "color", "accent", "bg", "size", "intensity", "cues"],
+  inputs: [{ key: "text", type: "text", required: false }, { key: "items", type: "list", required: false }],
+  defaults: { bg: "#efe6d8", color: INK, accent: ACCENT },
+  sample: { text: "Araw-araw", items: ["hook", "kwento", "call to action"] },
+}, (c) => {
+  // An editing timeline: your words as the track names; coloured clips; a playhead sweeping across.
+  const { p } = c;
+  const card = mk("div", { width: "880px", boxSizing: "border-box", background: p.bg, color: p.color, borderRadius: "22px", padding: "22px 26px", boxShadow: SOFT, fontFamily: inter.fontFamily }, null, c.root);
+  const head = mk("div", { display: "flex", justifyContent: "space-between", fontSize: "24px", fontWeight: "700", marginBottom: "14px" }, null, card);
+  mk("div", {}, plainText(p.text) || "Timeline", head);
+  const clock = mk("div", { fontFamily: mono.fontFamily, color: p.accent }, "00:00:00", head);
+  const area = mk("div", { position: "relative" }, null, card);
+  const tracks = (p.items.length ? p.items : ["", "", ""]).slice(0, 4);
+  const palette = [p.accent, "#2c2c2c", "#b9a27e", "#d68a8a", "#7b6aa0"];
+  const clips = [];
+  tracks.forEach((name, r) => {
+    const row = mk("div", { display: "flex", alignItems: "center", gap: "10px", height: "48px", marginBottom: "10px" }, null, area);
+    const lab = mk("div", { width: "170px", fontSize: "20px", fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: rgba(p.color, 0.7) }, plainText(name), row);
+    if (!name) lab.textContent = `V${r + 1}`;
+    const lane = mk("div", { position: "relative", flex: "1", height: "34px" }, null, row);
+    let x = (r * 7) % 12;
+    for (let i = 0; i < 6 && x < 96; i++) {
+      const wdt = 8 + ((r * 5 + i * 7) % 14);
+      clips.push(mk("div", { position: "absolute", left: `${x}%`, width: `${Math.min(wdt, 98 - x)}%`, top: "0", height: "100%", borderRadius: "6px", background: palette[(r + i) % palette.length], transformOrigin: "0 50%" }, null, lane));
+      x += wdt + 2;
+    }
+  });
+  const head2 = mk("div", { position: "absolute", top: "-6px", bottom: "0", width: "3px", background: p.accent, left: "180px" }, null, area);
+  const { w, h } = dims(card);
+  return {
+    w, h,
+    update(t, dur) {
+      settle(card, t, dur);
+      clips.forEach((cl, i) => { cl.style.transform = `scaleX(${arrive(t, 0.2 + i * 0.03, 0.4)})`; });
+      const run = prog(t, 0.4, Math.max(0.8, dur - 0.4));
+      head2.style.left = `${180 + run * 640}px`;
+      const secs = Math.floor(run * 59);
+      clock.textContent = `00:00:${String(secs).padStart(2, "0")}`;
+    },
+  };
+});
+
+// ---------------------------------------------------------------- 23. chat cards
+defineTemplate({
+  id: "chat-cards", name: "Chat messages", tl: "Mga mensahe", category: "card", styles: ONLY,
+  moods: ["playful", "tech", "calm", "emotion", "hype"], zone: "upper", anchor: { x: 0.5, y: 0.2 }, box: { w: 860, h: 200 }, duration: 3.2, maxDuration: 8,
+  maxChars: 80, bg: true, pad: 60,
+  fields: ["text", "items", "image", "color", "accent", "bg", "size", "intensity", "cues"],
+  inputs: [{ key: "items", type: "list", required: true }, { key: "text", type: "text", required: false }, { key: "image", type: "image", required: false }],
+  defaults: { bg: "#ffffff", color: INK, accent: ACCENT },
+  sample: { text: "@yourhandle", items: ["Comment mo ang salitang GUIDE"] },
+}, (c) => {
+  // Message cards: who (`text`: your handle or name, as you gave it) and what was said (`items`),
+  // typed in, one card per cue.
+  const { p } = c;
+  const col = mk("div", { display: "flex", flexDirection: "column", gap: "14px", width: "860px" }, null, c.root);
+  const who = plainText(p.text);
+  const initials = who.replace(/^@/, "").slice(0, 1).toUpperCase() || "•";
+  const cards = p.items.slice(0, 3).map((msg, i) => {
+    const card = mk("div", { display: "flex", gap: "16px", alignItems: "flex-start", background: p.bg, color: p.color, borderRadius: "22px", padding: "18px 22px", boxShadow: SOFT, fontFamily: inter.fontFamily }, null, col);
+    const av = p.image && i === 0
+      ? picture(card, p.image, { width: "54px", height: "54px", borderRadius: "50%", flex: "none" })
+      : mk("div", { width: "54px", height: "54px", borderRadius: "50%", flex: "none", background: i % 2 ? "#d68a8a" : p.accent, color: "#fff", display: "grid", placeItems: "center", fontWeight: "800", fontSize: "26px" }, initials, card);
+    void av;
+    const body = mk("div", { minWidth: "0", flex: "1" }, null, card);
+    if (who) mk("div", { fontWeight: "800", fontSize: "24px", marginBottom: "4px" }, who, body);
+    const text = mk("div", { fontSize: "30px", lineHeight: "1.25" }, "", body);
+    return { card, text, msg: plainText(msg) };
+  });
+  // measure with the full text, then type it
+  cards.forEach((cd) => { cd.text.textContent = cd.msg; });
+  const { w, h } = dims(col);
+  const times = cueTimes(p, cards.length, c.dur, { from: 0.2, to: Math.min(c.dur * 0.6, 0.2 + cards.length * 0.8) });
+  return {
+    w, h,
+    update(t, dur) {
+      const e = envelope(t, dur, 0.3, 0.4);
+      col.style.opacity = String(1 - ease.inOut(e.o));
+      cards.forEach((cd, i) => {
+        const a = arrive(t, times[i], 0.4);
+        cd.card.style.opacity = String(a);
+        setT(cd.card, { y: (1 - a) * 30 });
+        const n = Math.round(c01((t - times[i] - 0.15) / Math.max(0.4, cd.msg.length * 0.035)) * cd.msg.length);
+        cd.text.textContent = cd.msg.slice(0, n);
+      });
+    },
+  };
+});
+
+// ---------------------------------------------------------------- 24. label pill (under a PiP)
+defineTemplate({
+  id: "label-pill", name: "Label pill", tl: "Label", category: "pill", styles: ONLY,
+  moods: ["calm", "tech", "playful", "money", "hype", "serious"], zone: "any", anchor: { x: 0.5, y: 0.3 }, box: { w: 520, h: 90 }, duration: 2.6, maxDuration: 8,
+  maxChars: 32, bg: true, pad: 40,
+  fields: ["text", "color", "accent", "bg", "size", "intensity"],
+  inputs: [{ key: "text", type: "text", required: true }],
+  defaults: { bg: "#ffffff", color: INK, accent: ACCENT },
+  sample: { text: "ang resulta ko" },
+}, (c) => {
+  const { p } = c;
+  const pill = mk("div", { display: "inline-flex", alignItems: "center", gap: "10px", background: p.bg, color: p.color, borderRadius: "999px", padding: "12px 26px", boxShadow: SOFT, fontFamily: inter.fontFamily, fontWeight: "800", fontSize: "32px", whiteSpace: "nowrap" }, null, c.root);
+  mk("div", { width: "14px", height: "14px", borderRadius: "50%", background: p.accent, flex: "none" }, null, pill);
+  const label = mk("div", {}, plainText(p.text), pill);
+  c.fit(label, { maxW: 440, maxH: 44, max: 34, min: 18, lines: 1 });
+  const { w, h } = dims(pill);
+  return { w, h, update(t, dur) { settle(pill, t, dur, { tin: 0.35, from: 0.85, rise: 14 }); } };
 });

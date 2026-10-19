@@ -93,6 +93,12 @@ PLATFORMS = {"tiktok": "TikTok", "facebook": "Facebook", "fb": "Facebook", "yout
              "snapchat": "Snapchat", "pinterest": "Pinterest", "twitch": "Twitch", "kumu": "Kumu",
              "telegram": "Telegram", "whatsapp": "WhatsApp", "viber": "Viber", "messenger": "Messenger",
              "gcash": "GCash", "canva": "Canva", "capcut": "CapCut", "chatgpt": "ChatGPT"}
+RECAP = {"kaya", "recap", "tandaan", "summary", "so", "basically", "madaling", "lahat"}
+SCHEDULE = {"timeline", "schedule", "routine", "araw-araw", "everyday", "linggo-linggo", "gabi-gabi",
+            "umaga-umaga", "iskedyul"}
+COMMENT = {"comment", "comments", "i-comment", "icomment", "mag-comment", "dm", "i-dm", "message", "i-message",
+           "tanong", "tanungin", "magtanong"}
+PHONE = {"phone", "cellphone", "cp", "app", "mobile", "selpon"}
 STOP_ITEM = {"ang", "ng", "sa", "mga", "the", "a", "an", "my", "ko", "mo", "and", "at", "tsaka", "saka"}
 STAT_STOP = {"sa", "ng", "na", "in", "of", "the", "loob"}
 
@@ -244,9 +250,11 @@ def find_screenshots(words, spans):
         toks = {norm(words[k]["text"]) for k in range(a, b + 1)}
         if toks & SCREEN_WORDS and (toks & LOOK_WORDS or toks & {"screenshot", "screenshots"}):
             key = next(k for k in range(a, b + 1) if norm(words[k]["text"]) in SCREEN_WORDS)
-            out.append(Cue("screenshot", a, b, text=phrase(words, range(a, b + 1)),
-                           items=[(k, norm(words[k]["text"])) for k in range(a, b + 1)
-                                  if len(norm(words[k]["text"])) > 2], number=key, priority=7))
+            cue = Cue("screenshot", a, b, text=phrase(words, range(a, b + 1)),
+                      items=[(k, norm(words[k]["text"])) for k in range(a, b + 1)
+                             if len(norm(words[k]["text"])) > 2], number=key, priority=7)
+            cue.phone = bool(toks & PHONE)          # "sa phone / app ko": in a phone frame
+            out.append(cue)
     return out
 
 
@@ -334,6 +342,42 @@ def find_follow(words, spans):
     return out
 
 
+def find_recap(words, spans):
+    """A sentence that sums up ("Kaya tandaan...", "In short...", "Sa madaling salita..."): a mosaic of
+    what was said before it."""
+    out = []
+    for a, b in spans[1:]:
+        first = {norm(words[k]["text"]) for k in range(a, min(a + 3, b + 1))}
+        if first & RECAP and (first & {"tandaan", "recap", "summary", "madaling", "lahat"} or "in" in first):
+            out.append(Cue("recap", a, b, text=phrase(words, range(a, b + 1)), priority=6))
+    return out
+
+
+def find_schedule(words, spans, taken):
+    out = []
+    for a, b in spans:
+        if any(a <= k <= b for k in taken):
+            continue
+        hit = next((k for k in range(a, b + 1) if norm(words[k]["text"]) in SCHEDULE), None)
+        if hit is not None:
+            colon = next((k for k in range(a, b) if ends_with(words[k], ":")), None)
+            items = split_items(words, colon + 1, b) if colon is not None else []
+            out.append(Cue("timeline", a, b, text=shown(words[hit]), items=items[:4] if len(items) >= 2 else [],
+                           priority=6))
+    return out
+
+
+def find_comments(words, spans, taken):
+    out = []
+    for a, b in spans:
+        if any(a <= k <= b for k in taken):
+            continue
+        hit = next((k for k in range(a, b + 1) if norm(words[k]["text"]) in COMMENT), None)
+        if hit is not None:
+            out.append(Cue("comment", a, b, text=phrase(words, range(a, b + 1)), number=hit, priority=6))
+    return out
+
+
 def extract(words):
     """Every cue in the words, in spoken order. Overlapping cues of the same sentence are kept (the
     planner decides which become graphics)."""
@@ -346,7 +390,25 @@ def extract(words):
         find_search(words, spans) + find_screenshots(words, spans) + find_lists(words, spans) + \
         find_platforms(words, spans) + find_handles(words) + \
         [c for c in find_stats(words, spans) if not counted & set(range(c.i0, c.i1 + 1))] + \
-        find_follow(words, spans)
+        find_follow(words, spans) + find_recap(words, spans)
+    # a list of what is done every day ("Ang routine ko araw-araw: gising, kape, edit") is a timeline
+    for c in cues:
+        if c.kind == "checklist" and any(norm(words[k]["text"]) in SCHEDULE for k in range(c.i0, c.items[0][0])):
+            hit = next(k for k in range(c.i0, c.items[0][0]) if norm(words[k]["text"]) in SCHEDULE)
+            c.kind, c.text = "timeline", shown(words[hit]).strip(".,!?:;")
+    # a summing-up sentence with a list ("Kaya tandaan: plano, routine, at pahinga") is a recap of those
+    for r in [c for c in cues if c.kind == "recap"]:
+        lst = next((c for c in cues if c.kind == "checklist" and c.i0 <= r.i1 and r.i0 <= c.i1), None)
+        if lst is not None:
+            r.items = lst.items
+            cues.remove(lst)
+    # schedules and comments only where nothing else was said (a list, a before / after...)
+    taken = {k for c in cues if c.kind in ("checklist", "storyboard", "before_after", "search", "follow", "timeline", "recap")
+             for k in range(c.i0, (c.items[-1][0] if c.kind == "before_after" else c.i1) + 1)}
+    cues += find_schedule(words, spans, taken) + find_comments(words, spans, taken)
+    # the word to comment ("Comment mo ang salitang GUIDE") is the comment card's, not a title of its own
+    asked = [(c.i0, c.i1) for c in cues if c.kind == "comment"]
+    cues = [c for c in cues if not (c.kind == "keyword" and any(a <= c.i0 <= b for a, b in asked))]
     # a platform named inside a search query ("i-search mo ... sa YouTube") is part of the query
     queried = [(c.items[0][0], c.i1) for c in cues if c.kind == "search"]
     for c in cues:
@@ -354,6 +416,6 @@ def extract(words):
             c.items = [(k, n) for k, n in c.items if not any(a <= k <= b for a, b in queried)]
     cues = [c for c in cues if c.kind != "platforms" or c.items]
     # a list sentence is not also a search / stats cue
-    listed = {(c.i0, c.i1) for c in cues if c.kind in ("checklist", "storyboard")}
+    listed = {(c.i0, c.i1) for c in cues if c.kind in ("checklist", "storyboard", "timeline")}
     cues = [c for c in cues if not (c.kind in ("stats",) and any(a <= c.i0 <= b for a, b in listed))]
     return sorted(cues, key=lambda c: (words[c.i0]["start"], -c.priority))

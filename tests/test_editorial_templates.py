@@ -25,7 +25,8 @@ def test_the_editorial_set_is_complete():
     assert set(IDS) == {"editorial-headline", "subtitle-card", "kinetic-words", "marker-highlight",
                         "screenshot-collage", "mosaic-grid", "search-bar", "ui-panel", "editorial-checklist",
                         "countdown-timer", "storyboard-doc", "phone-mockup", "logo-badge",
-                        "screenshot-montage", "palette-card", "profile-card", "app-tile", "stat-cards"}
+                        "screenshot-montage", "palette-card", "profile-card", "app-tile", "stat-cards",
+                        "magazine-cover", "strike-text", "tile-mosaic", "timeline-card", "chat-cards", "label-pill"}
 
 
 @pytest.fixture
