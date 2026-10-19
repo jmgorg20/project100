@@ -307,6 +307,28 @@ function registerIpc(): void {
     const items = r.result.items as Record<string, unknown>[];
     return items[0];
   });
+  ipcMain.handle("engine:transcribe", async (_e, video: string, instruction: string, photos: string[]) => {
+    const out = path.join(dataDir(), "transcripts", `${path.basename(video, path.extname(video))}-${Date.now()}.transcript.json`);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    const args = ["transcribe", video, "--output", out, "--transcribe-with", settings.transcribeWith, "-i", instruction];
+    if (photos.length) args.push("--photos", ...photos);
+    const r = await engineOnce(args);
+    if (r.error || !r.result) return { error: r.error ?? "No transcript." };
+    return { file: out, words: r.result.words };
+  });
+  ipcMain.handle("transcript:save", (_e, file: string, words: { text: string; start: number; end: number }[]) => {
+    // only the app's own transcript files can be written
+    const folder = path.join(dataDir(), "transcripts");
+    if (path.dirname(path.resolve(file)) !== path.resolve(folder) || !Array.isArray(words)) {
+      return { ok: false, error: "That is not one of the app's transcript files." };
+    }
+    const clean = words
+      .filter((w) => w && typeof w.text === "string" && w.text.trim() && Number.isFinite(w.start) && Number.isFinite(w.end))
+      .map((w) => ({ word: w.text.trim(), start: w.start, end: Math.max(w.start, w.end) }));
+    if (!clean.length) return { ok: false, error: "The transcript has no words left." };
+    writeAtomic(file, JSON.stringify({ language: "tl", words: clean }, null, 1));
+    return { ok: true };
+  });
   ipcMain.handle("engine:frame", async (_e, projectFile: string, seconds: number) => {
     const out = path.join(dataDir(), "frames", `frame-${Date.now()}.png`);
     fs.mkdirSync(path.dirname(out), { recursive: true });

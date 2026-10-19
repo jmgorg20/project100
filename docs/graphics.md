@@ -153,9 +153,48 @@ too little contrast, or runs past the end of the video. You can still export.
 Each graphic is drawn frame by frame by a Chromium (in the app: a hidden window; on the command
 line: Playwright's Chromium, or Microsoft Edge / Chrome) into a small lossless video with
 transparency (FFV1), saved in `work\cache\graphics` under a key made from everything that
-changes its pixels. Moving a graphic does not redraw it; changing its text or length does. FFmpeg
+changes its pixels. When that folder cannot be written (an install under Program Files) or its
+path is too long for Windows, the user's own cache is used instead
+(`%LOCALAPPDATA%\AutoEditor\graphics`; `AUTOEDIT_GRAPHICS_CACHE` sets any folder). Cache file
+names are 24 letters and digits, valid on every system.
+
+**When a graphic cannot be drawn** it is left out of the video and the edit goes on: a warning
+names the clip, the template, the full file path and the reason (in the app, under the video; on
+the command line, a `WARNING:` line). If the app's hidden drawing window fails, the graphic is
+drawn again with the command line renderer (Node.js + Edge or Chrome) when this PC has it. Moving a graphic does not redraw it; changing its text or length does. FFmpeg
 then lays these videos over the picture. The preview in the editor draws the same templates live
 in the page (a little lighter), so place and timing match the export.
+
+## The Windows "Output file does not contain any stream" error
+
+Seen on a real Windows PC: *Could not draw the graphics: FFmpeg failed (4294967274) ... Output
+file does not contain any stream ... Invalid argument*. 4294967274 is FFmpeg's -22 ("invalid
+argument") as Windows prints it. The cache path was valid. FFmpeg failed because **no picture
+reached it**: the app's hidden drawing window gave back empty pictures. Two likely reasons, both
+handled now:
+
+- **Display scaling** (125% / 150%): the window paints in screen pixels, and the old crop
+  assumed 100%.
+- **A window taller than the screen**: Windows can shrink it.
+
+Now:
+
+- The drawing window keeps its full size and the crop follows the display scaling.
+- An empty picture is retried once and otherwise reported for that one graphic, never sent to
+  FFmpeg.
+- The graphic is drawn with the command line renderer instead when possible.
+- If even that fails, the edit finishes without that graphic and says why.
+- The error text is not cut off any more: the full path wraps.
+- Finished files are replaced with retries when Windows keeps them busy (a render or the virus
+  scanner reading them).
+- Other files are hardened the same way: work folders from long video names are shortened, and
+  names taken from settings are made safe.
+
+**NOT VERIFIED:** a real Windows run of the app. The test machine is Linux. The Windows-specific
+parts are checked with Windows-style paths, fake pictures at 125% / 150% scaling, and FFmpeg fed
+an empty pipe (which gives exactly the user's error). Whether the real drawing window on your PC
+now paints correctly can only be seen there; if it still cannot, the graphics are drawn by
+Edge / Chrome (needs Node.js) or left out with a warning, and the edit no longer fails.
 
 ## What was and was not verified
 

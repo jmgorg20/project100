@@ -62,18 +62,49 @@ def save_vocabulary(vocab, path=None):
     return path
 
 
-def prompt_for(vocab):
-    """The hint for the transcriber: your words, comma separated (short)."""
+# Whisper copies the spelling and the mix of languages of its prompt. A short Taglish line with
+# words it often mishears ("tatlo" heard as "tatyo", "hinanap" as "hinanat") steers it.
+TAGLISH_STYLE = ("Taglish, Tagalog at English: teka lang, tatlo, dalawa, isa, una, pangalawa, pangatlo, "
+                 "hinanap ko, hanapin, tingnan ninyo, dati, ngayon, kumita, sagutin, i-check, mag-post, "
+                 "i-follow, talaga, kasi, pero, diba, grabe, sobrang, ganito.")
+HINT_STOP = {"the", "and", "for", "with", "this", "that", "ang", "mga", "png", "jpg", "jpeg", "mp4", "mov",
+             "img", "image", "photo", "video", "final", "copy", "edit", "fast", "make", "gawin", "lang"}
+
+
+def hint_words(texts, limit=40):
+    """Distinctive words from your instruction and file names (e.g. "search_results.png" ->
+    search, results), for the transcriber's hint."""
+    out, seen = [], set()
+    for text in texts or ():
+        for tok in re.split(r"[\s_\-.,;:!?/\\()\[\]\"']+", str(text)):
+            low = tok.lower()
+            if len(tok) < 3 or low in HINT_STOP or low.isdigit() or low in seen:
+                continue
+            seen.add(low)
+            out.append(tok)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def prompt_for(vocab, hints=(), taglish=False):
+    """The hint for the transcriber (short): your words first, then words from your instruction
+    and file names, then (taglish) a Taglish line that steers spelling."""
     names = list(vocab.get("words", []))
     for c in vocab.get("corrections", []):
         if c["to"] not in names:
             names.append(c["to"])
+    known = {n.lower() for n in names}
+    names += [h for h in hints or () if h.lower() not in known]
     text = ""
+    budget = PROMPT_LIMIT - (len(TAGLISH_STYLE) + 1 if taglish else 0)
     for n in names:
         extra = (", " if text else "") + n
-        if len(text) + len(extra) > PROMPT_LIMIT:
+        if len(text) + len(extra) > budget:
             break
         text += extra
+    if taglish:
+        text = (text + ". " if text else "") + TAGLISH_STYLE
     return text or None
 
 

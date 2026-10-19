@@ -347,7 +347,7 @@ def talk(tmp_path, cfg, monkeypatch):
     photo = synthetic.make_image(tmp_path / "github_logo.png")
     calls = []
 
-    def fake_transcribe(video_path, cfg_, job_dir):
+    def fake_transcribe(video_path, cfg_, job_dir, *a, **k):
         calls.append(video_path)
         return load_transcript(transcript)
 
@@ -459,7 +459,7 @@ def cli(args, cwd):
 def seed_transcript(cfg_file_dir, video, transcript):
     """Put the transcript in the cache so the CLI does not call Whisper."""
     cache = Cache(cfg_file_dir / "cache")
-    key = f"{cache.fingerprint(video)}-groq-whisper-large-v3-tl"
+    key = f"{cache.fingerprint(video)}-groq-whisper-large-v3-tl-taglish1"
     path = cache.folder / "transcripts" / f"{key}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     save_transcript(load_transcript(transcript), path)

@@ -160,6 +160,19 @@
               "minLength": 1
             }
           }
+        },
+        "captions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "punctuation": {
+              "enum": [
+                "remove",
+                "keep"
+              ],
+              "description": "remove (default): captions show no , . ! ? ; : or quotes; the words themselves are not changed. keep: as transcribed."
+            }
+          }
         }
       }
     },
@@ -436,7 +449,37 @@
                           "$ref": "#/$defs/wipeClip"
                         },
                         "else": {
-                          "$ref": "#/$defs/zoomClip"
+                          "if": {
+                            "properties": {
+                              "type": {
+                                "const": "dim"
+                              }
+                            },
+                            "required": [
+                              "type"
+                            ]
+                          },
+                          "then": {
+                            "$ref": "#/$defs/dimClip"
+                          },
+                          "else": {
+                            "if": {
+                              "properties": {
+                                "type": {
+                                  "const": "vignette"
+                                }
+                              },
+                              "required": [
+                                "type"
+                              ]
+                            },
+                            "then": {
+                              "$ref": "#/$defs/vignetteClip"
+                            },
+                            "else": {
+                              "$ref": "#/$defs/zoomClip"
+                            }
+                          }
                         }
                       }
                     }
@@ -774,6 +817,67 @@
             }
           }
         },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 200,
+          "description": "Rounded corners: radius in pixels of the shown picture (0 = square)."
+        },
+        "shadow": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "A soft drop shadow under the picture: 0 = none, 1 = strong."
+        },
+        "border": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "color",
+            "width"
+          ],
+          "description": "A thin frame around the picture (follows the rounded corners).",
+          "properties": {
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "width": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 24
+            }
+          }
+        },
+        "enter": {
+          "enum": [
+            "none",
+            "fade",
+            "slide_up",
+            "slide_down",
+            "slide_left",
+            "slide_right",
+            "scale"
+          ],
+          "description": "How it comes in: fade, slide from below/above/left/right, or scale up (eased)."
+        },
+        "exit": {
+          "enum": [
+            "none",
+            "fade",
+            "slide_up",
+            "slide_down",
+            "slide_left",
+            "slide_right",
+            "scale"
+          ],
+          "description": "How it leaves (the reverse moves)."
+        },
+        "motion": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1.5,
+          "description": "Seconds the entrance and exit take (default 0.35)."
+        },
         "locked": {
           "type": "boolean",
           "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
@@ -836,7 +940,17 @@
           "type": "number",
           "minimum": 0,
           "maximum": 3,
-          "description": "Seconds to zoom in smoothly from 100% (0 = jump straight in, a punch-in)."
+          "description": "Seconds to move smoothly from `from` (default 100%) to `amount` (0 = jump straight in, a punch-in)."
+        },
+        "from": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "With `ease`: the zoom at the start (default 1). from 1.3 to amount 1 = a smooth zoom-out back to the wide shot."
+        },
+        "smooth": {
+          "type": "boolean",
+          "description": "With `ease`: ease in and out (slow-fast-slow) instead of a steady speed."
         },
         "locked": {
           "type": "boolean",
@@ -1173,7 +1287,7 @@
         "duration",
         "effect"
       ],
-      "description": "A picture effect for a moment (also used as a transition on a cut): shake, flash (to white), dip (to black), glitch (colour split and noise), whip (sideways motion blur).",
+      "description": "A picture effect for a moment (also used as a transition on a cut): shake, flash (to white), dip (to black), glitch (colour split and noise), whip (sideways motion blur), bw (the colour drains to black and white and comes back: a B&W transition).",
       "properties": {
         "id": {
           "$ref": "#/$defs/id"
@@ -1199,7 +1313,8 @@
             "flash",
             "dip",
             "glitch",
-            "whip"
+            "whip",
+            "bw"
           ]
         },
         "intensity": {
@@ -1751,6 +1866,106 @@
         "divider": {
           "type": "boolean",
           "description": "Draw a thin white line at the divider (default true)."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
+        }
+      }
+    },
+    "dimClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration"
+      ],
+      "description": "Dim the picture (darker, optionally blurred) so a card or screenshot on top stands out. Fades in and out.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "dim"
+        },
+        "amount": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 0.9,
+          "description": "How much darker (0.45 = 45% darker; default 0.45)."
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40,
+          "description": "Blur radius in pixels (default 0)."
+        },
+        "fade": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.5,
+          "description": "Seconds to fade in and out (default 0.3)."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
+        }
+      }
+    },
+    "vignetteClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration"
+      ],
+      "description": "A dark vignette: the edges of the picture darken, drawing the eye to the middle.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "vignette"
+        },
+        "strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "0 = barely, 1 = strong (default 0.5)."
+        },
+        "fade": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Seconds to fade in and out (default 0)."
         },
         "locked": {
           "type": "boolean",

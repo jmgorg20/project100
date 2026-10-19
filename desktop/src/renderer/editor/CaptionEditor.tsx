@@ -7,7 +7,7 @@ import type { Clip, Word } from "../../shared/types";
 
 export const STYLES = data.styles.map((s) => ({ name: s.name, description: s.description, size: s.size }));
 
-export function CaptionEditor({ clip, busy, onWords, onWordText, onHighlight, onEmoji, onLook, onRetranscribe }: {
+export function CaptionEditor({ clip, busy, onWords, onWordText, onHighlight, onEmoji, onLook, onRetranscribe, punctuation = "remove", onPunctuation }: {
   clip: Clip;
   busy: boolean;
   onWords: (words: Word[], key: string) => void;
@@ -16,6 +16,8 @@ export function CaptionEditor({ clip, busy, onWords, onWordText, onHighlight, on
   onEmoji: (index: number, emoji: string) => void;
   onLook: (look: CaptionLook, all: boolean) => void;
   onRetranscribe: () => void;
+  punctuation?: "remove" | "keep";
+  onPunctuation?: (mode: "remove" | "keep") => void;
 }) {
   const words = clip.words ?? [];
   const [picked, setPicked] = useState(0);
@@ -101,6 +103,11 @@ export function CaptionEditor({ clip, busy, onWords, onWordText, onHighlight, on
         <label className="toggle-inline small">
           <input type="checkbox" checked={clip.highlight_keywords !== false} onChange={(e) => look({ highlight_keywords: e.target.checked })} /> Show ★ highlights in colour
         </label>
+        {onPunctuation && (
+          <label className="toggle-inline small">
+            <input type="checkbox" checked={punctuation === "keep"} data-testid="keep-punctuation" onChange={(e) => onPunctuation(e.target.checked ? "keep" : "remove")} /> Show punctuation (, . ! ?) in every caption
+          </label>
+        )}
       </section>
     </div>
   );

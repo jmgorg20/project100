@@ -1,0 +1,350 @@
+{
+ "language": "tl",
+ "words": [
+  {
+   "word": "Alam",
+   "start": 0.35,
+   "end": 0.595
+  },
+  {
+   "word": "niyo",
+   "start": 0.645,
+   "end": 0.89
+  },
+  {
+   "word": "ba?",
+   "start": 0.94,
+   "end": 1.12
+  },
+  {
+   "word": "Limang",
+   "start": 1.516,
+   "end": 1.826
+  },
+  {
+   "word": "minuto",
+   "start": 1.876,
+   "end": 2.185
+  },
+  {
+   "word": "lang",
+   "start": 2.236,
+   "end": 2.481
+  },
+  {
+   "word": "ito.",
+   "start": 2.531,
+   "end": 2.743
+  },
+  {
+   "word": "Lima...",
+   "start": 3.139,
+   "end": 3.384
+  },
+  {
+   "word": "apat...",
+   "start": 3.78,
+   "end": 4.024
+  },
+  {
+   "word": "tatlo...",
+   "start": 4.42,
+   "end": 4.697
+  },
+  {
+   "word": "dalawa...",
+   "start": 5.093,
+   "end": 5.403
+  },
+  {
+   "word": "isa!",
+   "start": 5.799,
+   "end": 6.011
+  },
+  {
+   "word": "Pangalawa:",
+   "start": 6.407,
+   "end": 6.803
+  },
+  {
+   "word": "PASENSYA.",
+   "start": 7.019,
+   "end": 7.393
+  },
+  {
+   "word": "Noon,",
+   "start": 7.789,
+   "end": 8.034
+  },
+  {
+   "word": "takot",
+   "start": 8.25,
+   "end": 8.527
+  },
+  {
+   "word": "akong",
+   "start": 8.577,
+   "end": 8.854
+  },
+  {
+   "word": "mag-live.",
+   "start": 8.905,
+   "end": 9.279
+  },
+  {
+   "word": "Ngayon,",
+   "start": 9.675,
+   "end": 9.984
+  },
+  {
+   "word": "araw-araw",
+   "start": 10.2,
+   "end": 10.596
+  },
+  {
+   "word": "na.",
+   "start": 10.646,
+   "end": 10.826
+  },
+  {
+   "word": "Sa",
+   "start": 11.222,
+   "end": 11.402
+  },
+  {
+   "word": "search",
+   "start": 11.453,
+   "end": 11.762
+  },
+  {
+   "word": "bar,",
+   "start": 11.813,
+   "end": 12.025
+  },
+  {
+   "word": "i-type",
+   "start": 12.241,
+   "end": 12.55
+  },
+  {
+   "word": "ninyo:",
+   "start": 12.601,
+   "end": 12.878
+  },
+  {
+   "word": "murang",
+   "start": 13.094,
+   "end": 13.403
+  },
+  {
+   "word": "ulam",
+   "start": 13.454,
+   "end": 13.698
+  },
+  {
+   "word": "recipe.",
+   "start": 13.749,
+   "end": 14.058
+  },
+  {
+   "word": "Tingnan",
+   "start": 14.454,
+   "end": 14.796
+  },
+  {
+   "word": "ninyo",
+   "start": 14.846,
+   "end": 15.124
+  },
+  {
+   "word": "ang",
+   "start": 15.174,
+   "end": 15.386
+  },
+  {
+   "word": "graph",
+   "start": 15.437,
+   "end": 15.714
+  },
+  {
+   "word": "ng",
+   "start": 15.764,
+   "end": 15.944
+  },
+  {
+   "word": "sales",
+   "start": 15.994,
+   "end": 16.272
+  },
+  {
+   "word": "ko.",
+   "start": 16.322,
+   "end": 16.502
+  },
+  {
+   "word": "Mga",
+   "start": 16.898,
+   "end": 17.11
+  },
+  {
+   "word": "gamit",
+   "start": 17.161,
+   "end": 17.438
+  },
+  {
+   "word": "ko",
+   "start": 17.488,
+   "end": 17.668
+  },
+  {
+   "word": "sa",
+   "start": 17.718,
+   "end": 17.898
+  },
+  {
+   "word": "kusina:",
+   "start": 17.949,
+   "end": 18.258
+  },
+  {
+   "word": "kawali,",
+   "start": 18.474,
+   "end": 18.784
+  },
+  {
+   "word": "sandok,",
+   "start": 19.0,
+   "end": 19.309
+  },
+  {
+   "word": "rice",
+   "start": 19.525,
+   "end": 19.77
+  },
+  {
+   "word": "cooker.",
+   "start": 19.82,
+   "end": 20.13
+  },
+  {
+   "word": "Nasa",
+   "start": 20.525,
+   "end": 20.77
+  },
+  {
+   "word": "Instagram",
+   "start": 20.821,
+   "end": 21.216
+  },
+  {
+   "word": "at",
+   "start": 21.267,
+   "end": 21.447
+  },
+  {
+   "word": "YouTube",
+   "start": 21.497,
+   "end": 21.839
+  },
+  {
+   "word": "ako:",
+   "start": 21.889,
+   "end": 22.102
+  },
+  {
+   "word": "@lutongbahay.ph.",
+   "start": 22.318,
+   "end": 22.714
+  },
+  {
+   "word": "Plano",
+   "start": 23.11,
+   "end": 23.387
+  },
+  {
+   "word": "ko:",
+   "start": 23.437,
+   "end": 23.617
+  },
+  {
+   "word": "intro,",
+   "start": 23.833,
+   "end": 24.11
+  },
+  {
+   "word": "luto,",
+   "start": 24.326,
+   "end": 24.571
+  },
+  {
+   "word": "tikim.",
+   "start": 24.787,
+   "end": 25.064
+  },
+  {
+   "word": "Mula",
+   "start": 25.46,
+   "end": 25.704
+  },
+  {
+   "word": "isang",
+   "start": 25.755,
+   "end": 26.032
+  },
+  {
+   "word": "daan",
+   "start": 26.082,
+   "end": 26.327
+  },
+  {
+   "word": "hanggang",
+   "start": 26.377,
+   "end": 26.752
+  },
+  {
+   "word": "limang",
+   "start": 26.802,
+   "end": 27.112
+  },
+  {
+   "word": "libong",
+   "start": 27.162,
+   "end": 27.471
+  },
+  {
+   "word": "views",
+   "start": 27.522,
+   "end": 27.799
+  },
+  {
+   "word": "sa",
+   "start": 27.849,
+   "end": 28.029
+  },
+  {
+   "word": "dalawang",
+   "start": 28.08,
+   "end": 28.454
+  },
+  {
+   "word": "linggo.",
+   "start": 28.504,
+   "end": 28.814
+  },
+  {
+   "word": "Mag-subscribe",
+   "start": 29.21,
+   "end": 29.606
+  },
+  {
+   "word": "ka",
+   "start": 29.656,
+   "end": 29.836
+  },
+  {
+   "word": "na!",
+   "start": 29.886,
+   "end": 30.066
+  }
+ ]
+}
