@@ -1,8 +1,9 @@
 """Signed download links for results: /files/out/<output id>?t=<expiry>.<signature>.
 
 No header needed (so a phone can open the link), but the link expires after
-SERVICE_FILE_LINK_MINUTES and only works for that one file. The first download starts the
-"delete after download" clock; every download is counted for the egress cost.
+SERVICE_FILE_LINK_MINUTES and only works for that one file. `&download=1` saves the file and
+starts the "delete after download" clock; without it the file plays in the page (the web app's
+preview, with Range requests for seeking). Only the bytes actually sent count for the egress cost.
 """
 
 from fastapi import APIRouter, Request
@@ -16,8 +17,27 @@ from .deps import ip_limit, require_admin
 router = APIRouter()
 
 
+def _bytes_sent(range_header, size):
+    """How many bytes a response to this Range header sends (the whole file without one)."""
+    if not range_header or not range_header.startswith("bytes="):
+        return size
+    total = 0
+    for part in range_header[6:].split(","):
+        a, _, b = part.strip().partition("-")
+        try:
+            if a == "":
+                total += min(size, int(b))
+            else:
+                start = int(a)
+                end = min(size - 1, int(b)) if b else size - 1
+                total += max(0, end - start + 1)
+        except ValueError:
+            return size
+    return min(total, size)
+
+
 @router.get("/files/out/{output_id}")
-def download(request: Request, output_id: str, t: str = ""):
+def download(request: Request, output_id: str, t: str = "", download: int = 0):
     s = request.app.state
     ip_limit(request)
     if not security.check_link(s.settings.secret_key, "out", output_id, t):
@@ -27,15 +47,17 @@ def download(request: Request, output_id: str, t: str = ""):
                    "WHERE o.id = ? AND o.deleted_at IS NULL", (output_id,))
         if not o or not o["path"]:
             raise ApiError(410, "gone", "This file was deleted (files are kept only for a few days).")
-        if o["first_download_at"] is None:
+        if download and o["first_download_at"] is None:
             later = now() + float(o["delete_after_download_hours"]) * 3600
             tx.run("UPDATE outputs SET first_download_at = ?, expires_at = CASE WHEN expires_at > ? THEN ? ELSE "
                    "expires_at END WHERE id = ?", (now(), later, later, output_id))
-        clients.record_usage(tx, o["client_id"], o["job_id"], "egress", egress_bytes=o["size"],
-                             cost_usd=clients.estimate_cost(s.settings, egress_bytes=o["size"]))
+        sent = _bytes_sent(request.headers.get("range"), int(o["size"]))
+        clients.record_usage(tx, o["client_id"], o["job_id"], "egress", egress_bytes=sent,
+                             cost_usd=clients.estimate_cost(s.settings, egress_bytes=sent))
     ext = {"video/mp4": ".mp4", "application/json": ".json"}.get(o["content_type"], "")
     name = f"{o['job_id']}-{o['name']}{ext if not o['name'].endswith(ext) else ''}"
     return FileResponse(o["path"], media_type=o["content_type"], filename=name,
+                        content_disposition_type="attachment" if download else "inline",
                         headers={"Cache-Control": "private, max-age=0, no-store"})
 
 

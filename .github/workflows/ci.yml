@@ -69,6 +69,24 @@ jobs:
       - run: npx vitest run
       - run: npm run test:ui
 
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults: {run: {working-directory: web}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: pip install -r ../requirements-service.txt
+      - run: npm ci && npx playwright install --with-deps chromium
+      - name: Typecheck and build
+        run: npm run build
+      - name: Browser tests (phone sizes, the real API and a worker)
+        run: npx playwright test
+
   security:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -81,6 +99,9 @@ jobs:
         run: pip install pip-audit && pip-audit -r requirements-service.txt -r requirements-worker.txt
       - name: Node dependency vulnerabilities (shipped code)
         working-directory: desktop
+        run: npm audit --omit=dev --audit-level=high
+      - name: Web app dependency vulnerabilities (shipped code)
+        working-directory: web
         run: npm audit --omit=dev --audit-level=high
       - name: Secrets in the history
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7   # v2.3.9
