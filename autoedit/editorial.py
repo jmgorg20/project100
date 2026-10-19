@@ -73,6 +73,8 @@ BEATS = {
     "stats": ("stat-cards", "card", "", "the numbers said, each with what it counts"),
 }
 CUE_ONLY = {"before_after", "screenshot", "platforms", "stats"}
+BIG_CARDS = {"countdown-timer", "editorial-checklist", "storyboard-doc", "search-bar", "stat-cards", "kinetic-words",
+             "editorial-headline"}
 CUE_BEAT = {"countdown": "countdown", "keyword": "kinetic", "before_after": "before_after", "search": "search",
             "screenshot": "screenshot", "checklist": "checklist", "platforms": "platforms", "handle": "profile",
             "storyboard": "storyboard", "stats": "stats", "follow": "profile"}
@@ -517,7 +519,7 @@ as said). Never invent words.
 - Output the JSON object only."""
 
 
-def build_prompt(ctx, scenes, assets, captions_on, problems=None):
+def build_prompt(ctx, scenes, assets, captions_on, problems=None, fixed=None):
     lines = ["BEATS:"]
     for b, (template, kind, need, about) in BEATS.items():
         if (b == "subtitle" and captions_on) or b in CUE_ONLY:
@@ -536,7 +538,8 @@ def build_prompt(ctx, scenes, assets, captions_on, problems=None):
     lines.append("")
     lines.append("SCENES:")
     for s in scenes:
-        lines.append(f"{s.index} [{s.start:.2f}-{s.end:.2f}s]: {scene_text(ctx, s)}")
+        note = f"  (already set by what is said: {fixed[s.index]})" if s.index in (fixed or {}) else ""
+        lines.append(f"{s.index} [{s.start:.2f}-{s.end:.2f}s]: {scene_text(ctx, s)}{note}")
     if ctx.instruction.strip():
         lines.append("")
         lines.append("CREATOR'S INSTRUCTIONS: " + ctx.instruction.strip()[:1500])
@@ -570,7 +573,7 @@ def check_choice(ctx, scene, choice, assets):
     return problems
 
 
-def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=None, cancel=None):
+def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=None, cancel=None, fixed=None):
     """{scene index: choice} from the AI (checked; one retry), plus usage / notes."""
     ai = ctx.cfg.get("ai") or {}
     key = None
@@ -591,7 +594,7 @@ def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=Non
             raise Cancelled("Cancelled while planning the editorial scenes.")
         try:
             text, used, used_model = ask_json(provider, model, SYSTEM_PROMPT,
-                                              build_prompt(ctx, scenes, assets, captions_on, problems_text),
+                                              build_prompt(ctx, scenes, assets, captions_on, problems_text, fixed),
                                               plan_schema(), max_tokens=int(ai.get("max_tokens", 8000)),
                                               effort=ai.get("anthropic_effort", "medium"))
         except LLMError as exc:
@@ -613,6 +616,8 @@ def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=Non
                     if ch["scene"] not in by_index:
                         problems.append(f"scene {ch['scene']} does not exist")
                         continue
+                    if ch["scene"] in (fixed or {}):
+                        continue                    # what is said already decides this scene
                     problems += check_choice(ctx, by_index[ch["scene"]], ch, assets)
         if not problems:
             choices = {ch["scene"]: ch for ch in plan["scenes"]}
@@ -814,7 +819,10 @@ def cue_item(ctx, cue, template, beat, start_i, end_t, scene, **kw):
             "start": start, "end": end, "i0": cue.i0, "i1": cue.i1, "word_end": sw[cue.i1]["end"],
             "spoken": " ".join(strip_marks(sw[i]["text"]) for i in range(cue.i0, cue.i1 + 1)),
             "mood": None, "importance": 0.95, "zone": "upper", "reason": f"said: {cue.kind}", "beat": beat,
-            "scene": scene.index, "cue": cue.kind, "timed": True, **kw}
+            "scene": scene.index, "cue": cue.kind, "timed": True,
+            # a card you asked for by what you said may cover the face for a moment, over a dimmed,
+            # softly blurred background (never the captions)
+            "covers_face": template in BIG_CARDS, **kw}
 
 
 def rel(ctx, idx, start):
@@ -829,7 +837,7 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
     hold = 0.9
     profile_photo = assets.avatar
     for cue in found:
-        made = len(items) + len(effects)
+        made, made_items = len(items) + len(effects), len(items)
         s = scene_of(scenes, sw[cue.i0]["start"])
         last_end = sw[cue.i1]["end"]
         beat = CUE_BEAT[cue.kind]
@@ -900,6 +908,7 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
                 it["cues"] = rel(ctx, range(cue.i0, cue.i1 + 1), it["start"])
                 items.append(it)
                 used.append(cue)
+                cue.used_beat = "kinetic"
                 continue
             press = cue.number if cue.kind == "follow" else cue.i1
             it = cue_item(ctx, cue, "profile-card", beat, cue.i0, last_end + hold + 0.8, s, text=title,
@@ -914,8 +923,15 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
                           list=[t for _k, t in cue.items])
             it["cues"] = rel(ctx, [k for k, _t in cue.items], it["start"])
             items.append(it)
-        if len(items) + len(effects) > made:
+        if len(items) + len(effects) > made and cue not in used:
             used.append(cue)
+            cue.used_beat = items[-1]["beat"] if len(items) > made_items else beat
+    # one spoken cue's card gives way to the next one's (a few tiles of one sentence stay together)
+    order = sorted(items, key=lambda x: x["start"])
+    for k, it in enumerate(order):
+        nxt = next((o for o in order[k + 1:] if o["i0"] != it["i0"] and o["cue"] != it["cue"]), None)
+        if nxt is not None and it["end"] > nxt["start"] - 0.08:
+            it["end"] = snap(max(it["start"] + 1.2, nxt["start"] - 0.08), ctx.fps)
     return items, effects, notes, used
 
 
@@ -924,7 +940,7 @@ def cue_scenes(ctx, found, scenes):
     out = {}
     for cue in sorted(found, key=lambda c: -c.priority):
         s = scene_of(scenes, ctx.words[cue.i0]["start"])
-        out.setdefault(s.index, CUE_BEAT[cue.kind])
+        out.setdefault(s.index, getattr(cue, "used_beat", None) or CUE_BEAT[cue.kind])
     return out
 
 
@@ -984,11 +1000,13 @@ def add_effect_clips(project, ctx, ids, items, effects, pips, scenes):
         return True
 
     for it in items:
-        if BEATS[it["beat"]][1] != "cover":
+        card = it.get("covers_face") and it["template"] not in ("kinetic-words", "editorial-headline")
+        if BEATS[it["beat"]][1] != "cover" and not card:
             continue
         d = round(it["end"] - it["start"], 4)
-        put(look, {"id": next(ids), "type": "dim", "start": round(it["start"], 4), "duration": d, "amount": 0.5, "blur": 14,
-                   "fade": 0.3, "label": "Dim behind the pictures"})
+        amount, blur = (0.35, 8) if card else (0.5, 14)
+        put(look, {"id": next(ids), "type": "dim", "start": round(it["start"], 4), "duration": d, "amount": amount,
+                   "blur": blur, "fade": 0.3, "label": "Dim behind the card" if card else "Dim behind the pictures"})
         put(vig, {"id": next(ids), "type": "vignette", "start": round(it["start"], 4), "duration": d, "strength": 0.65,
                   "fade": 0.3, "label": "Vignette"})
     for e in effects:
@@ -1070,8 +1088,8 @@ def build_params(it, meta, dctx):
     p = {}
     if "text" in fields and it.get("text"):
         p["text"] = director.shorten(it["text"], meta["maxChars"])
-    if "text2" in fields and it.get("text2"):
-        p["text2"] = it["text2"][:60]
+    if "text2" in fields:
+        p["text2"] = (it.get("text2") or "")[:60]     # empty, never the template's sample ("@yourhandle")
     if "items" in fields and it.get("list"):
         p["items"] = [x[:40] for x in it["list"]][:5]
     if "number" in fields and it.get("number") is not None:
@@ -1158,7 +1176,9 @@ def build(ctx, project, scenes, chosen, assets, captions_on, extra=(), used_imag
                       "director": {"style": STYLE, "beat": it["beat"], "scene": it["scene"], "mood": it.get("mood"),
                                    "words": scene_text(ctx, by_index[it["scene"]])[:200],
                                    "importance": it["importance"], "reason": it["reason"],
-                                   "kind": meta["category"]}})
+                                   "kind": meta["category"],
+                                   **({"covers_face": True, "cue": it["cue"]} if it.get("covers_face") else
+                                      ({"cue": it["cue"]} if it.get("cue") else {}))}})
     return clips, placed, effects, pips
 
 
@@ -1208,22 +1228,23 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     scenes = make_scenes(ctx.words, ctx.duration)
     assets = Assets(project, cfg, base_dir)
     captions_on = captions_present(project)
-    choices, usage, used_model, attempts, cached = {}, {"input_tokens": 0, "output_tokens": 0}, model, [], False
-    fallback, reason = False, ""
-    if use_ai and provider:
-        choices, usage, used_model, attempts, cached = request_choices(ctx, scenes, assets, captions_on, provider,
-                                                                       model, cache, cancel)
-        if not choices:
-            fallback = True
-            first = attempts[0]["problems"][0] if attempts and attempts[0]["problems"] else "no answer"
-            reason = (f"The AI scene plan could not be used ({first}) - the scenes were planned by the "
-                      "editorial rules instead.")
     # what is said decides its scenes (a countdown, a search, a list...); the others get beats
     found = cues_mod.extract(ctx.words)
     handle = next((c.text for c in found if c.kind == "handle"), None)
     used_images = Counter()
     cue_items, cue_effects, cue_notes, made = cue_elements(ctx, found, scenes, assets, used_images, handle)
-    chosen = choose_beats(ctx, scenes, assets, captions_on, choices, kept=cue_scenes(ctx, made, scenes))
+    fixed_scenes = cue_scenes(ctx, made, scenes)
+    choices, usage, used_model, attempts, cached = {}, {"input_tokens": 0, "output_tokens": 0}, model, [], False
+    fallback, reason = False, ""
+    if use_ai and provider:
+        choices, usage, used_model, attempts, cached = request_choices(ctx, scenes, assets, captions_on, provider,
+                                                                       model, cache, cancel, fixed_scenes)
+        if not choices:
+            fallback = True
+            first = attempts[0]["problems"][0] if attempts and attempts[0]["problems"] else "no answer"
+            reason = (f"The AI scene plan could not be used ({first}) - the scenes were planned by the "
+                      "editorial rules instead; what you say still sets its graphics.")
+    chosen = choose_beats(ctx, scenes, assets, captions_on, choices, kept=fixed_scenes)
     clips, placed, effects, pips = build(ctx, project, scenes, chosen, assets, captions_on, extra=cue_items,
                                          used_images=used_images)
     for c in chosen:

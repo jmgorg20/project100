@@ -234,7 +234,8 @@ def test_ai_choices_are_used_when_they_check_out(shots, monkeypatch):
 
 def test_bad_ai_choices_are_retried_with_the_problems_then_the_rules_take_over(shots, monkeypatch):
     rows = run(editorial_project(shots))["scenes"]
-    bad = ai_answer(rows, {0: {"words": "this was never said"}, 5: {"beat": "collage", "images": ["stock99"]}})
+    free = next(r["index"] for r in rows if r["index"] and r["beat"] not in editorial.CUE_BEAT.values())
+    bad = ai_answer(rows, {0: {"words": "this was never said"}, free: {"beat": "collage", "images": ["stock99"]}})
     ask, calls = fake_llm([bad, bad])
     monkeypatch.setattr(editorial, "ask_json", ask)
     r = run(editorial_project(shots), use_ai=True, provider="groq", model="m")

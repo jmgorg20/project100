@@ -572,7 +572,7 @@ def place_items(ctx, items):
                       if c["start"] < t1 and c["start"] + c["duration"] > t0]
         # a template made to cover the picture for a moment (a screenshot, like B-roll) may go
         # over the face; nothing goes over the captions
-        obs = obstacles_for(ctx, t0, t1, None if meta.get("covers") else face)
+        obs = obstacles_for(ctx, t0, t1, None if (meta.get("covers") or it.get("covers_face")) else face)
         extra = [("graphic", zones.inflate(b, 16)) for b, _p in busy] + [("graphic", b) for b in fixed_busy]
         angle = 0
         found = None

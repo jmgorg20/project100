@@ -142,9 +142,10 @@ def test_no_words_no_graphics():
 # ---------------------------------------------------------------- the rules
 
 def all_results(project, monkeypatch):
-    """The same video planned by the AI (fake) and by the fallback, in every style."""
+    """The same video planned by the AI (fake) and by the fallback, in every pop-up style (the
+    editorial style plans scene by scene with its own rules: tests/test_editorial_director.py)."""
     out = []
-    for style in director.STYLES:
+    for style in [s for s in director.STYLES if not director.STYLES[s].get("planner")]:
         out.append(director.generate(project, cfg(), "", style, use_ai=False))
         ask, _ = fake_llm([good_plan(project)])
         monkeypatch.setattr(director, "ask_json", ask)
@@ -193,7 +194,8 @@ def test_never_the_same_template_twice_in_a_row(project, monkeypatch):
                       for w in words if director.important(w["text"])]}
     ask, _ = fake_llm([same])
     monkeypatch.setattr(director, "ask_json", ask)
-    for r in [director.generate(project, cfg(), "", s, provider="groq", model="m") for s in director.STYLES] + \
+    popup = [s for s in director.STYLES if not director.STYLES[s].get("planner")]   # one tile per platform is fine
+    for r in [director.generate(project, cfg(), "", s, provider="groq", model="m") for s in popup] + \
             all_results(project, monkeypatch):
         seq = [c["template"] for c in clips_of(r["project"])]
         assert all(a != b for a, b in zip(seq, seq[1:])), seq

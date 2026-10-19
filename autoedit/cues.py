@@ -347,6 +347,12 @@ def extract(words):
         find_platforms(words, spans) + find_handles(words) + \
         [c for c in find_stats(words, spans) if not counted & set(range(c.i0, c.i1 + 1))] + \
         find_follow(words, spans)
+    # a platform named inside a search query ("i-search mo ... sa YouTube") is part of the query
+    queried = [(c.items[0][0], c.i1) for c in cues if c.kind == "search"]
+    for c in cues:
+        if c.kind == "platforms":
+            c.items = [(k, n) for k, n in c.items if not any(a <= k <= b for a, b in queried)]
+    cues = [c for c in cues if c.kind != "platforms" or c.items]
     # a list sentence is not also a search / stats cue
     listed = {(c.i0, c.i1) for c in cues if c.kind in ("checklist", "storyboard")}
     cues = [c for c in cues if not (c.kind in ("stats",) and any(a <= c.i0 <= b for a, b in listed))]

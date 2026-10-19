@@ -142,6 +142,41 @@ invented. It skips:
 
 Without any pictures, the summary says so and the scenes use text, cards and camera moves.
 
+## What you say becomes the graphics · Ang sinasabi mo ang nagiging graphics
+
+Before any AI is asked, plain rules read the words you said (Taglish and English) and turn these
+into graphics, each starting on the exact word. The rules are in `autoedit/cues.py`.
+
+| You say | You get |
+|---|---|
+| "Tatlo… dalawa… isa!", "5, 4, 3, 2, 1" | a countdown showing each number on its word |
+| "Una: DISIPLINA", a word in CAPS | a big title with that exact word, with a punch-in |
+| "Dati … Ngayon …" (before / now) | black and white, dimmed, vignetted, then colour again on "ngayon" |
+| "sa search bar, hinanap ko: X", "i-type ninyo: X" | a search bar typing X while you say it |
+| "tingnan ninyo ang screenshot / resulta / graph" | your screenshots floating in, the one whose file name matches first |
+| "checklist / gamit / steps: a, b at c" | a checklist that ticks each item as you say it |
+| "Nasa TikTok, Facebook at YouTube ako" | a tile per platform: your own logo file (e.g. `tiktok_logo.png`), else the name as text; never a bundled logo |
+| "@yourhandle" | your profile card with that handle and your photo (`profile_photo.png`) |
+| "Storyboard / Plano ko: hook, kwento, call to action" | a storyboard page with those scene names |
+| "mula zero hanggang isang libong followers sa tatlumpung araw" | number cards: 0, 1,000 followers, 30 araw, counting up on their words |
+| "i-follow mo ako", "mag-subscribe" | your profile card; Follow turns to Following on the word |
+
+**How the cues fit the rest:**
+- Numbers can be said in Tagalog (isa, dalawa, tatlumpu, isang libo, dalawang daan…), in English,
+  or as digits.
+- These cards may cover your face for a moment, over a dimmed, softly blurred background, as in
+  the reference. They never cover the captions.
+- The other scenes get the beats described above, chosen by the AI or by the rules.
+- If the AI does not answer, the spoken cues still make their graphics.
+
+**Nothing is made up:**
+- a screenshot you mention but did not upload is left out, and the summary says so
+- a platform without your logo shows its name
+- there is no profile card without a handle or a name
+
+The acceptance test (`scripts/acceptance.py`, results in `docs/acceptance/`) renders a talking
+video and checks every cue: the right graphic, the right text, the right second.
+
 ## Changing one scene · Pagbago ng isang eksena
 
 - **Storyboard (app or `python editor.py storyboard-edit my.project.json --scene N`):**
