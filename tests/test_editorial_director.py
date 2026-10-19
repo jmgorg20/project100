@@ -232,16 +232,29 @@ def test_ai_choices_are_used_when_they_check_out(shots, monkeypatch):
     assert "SCENES:" in calls[0]["prompt"] and "shot0" in calls[0]["prompt"]
 
 
-def test_bad_ai_choices_are_retried_with_the_problems_then_the_rules_take_over(shots, monkeypatch):
+def test_bad_ai_choices_are_retried_then_the_good_scenes_are_kept(shots, monkeypatch):
+    """One bad scene no longer throws the whole AI plan away (the real Windows run used none of
+    it): the retry lists the problems; then every scene that checks out is used, a scene whose
+    choice is broken is planned by the rules, and words that were never said are dropped."""
     rows = run(editorial_project(shots))["scenes"]
     free = next(r["index"] for r in rows if r["index"] and r["beat"] not in editorial.CUE_BEAT.values())
     bad = ai_answer(rows, {0: {"words": "this was never said"}, free: {"beat": "collage", "images": ["stock99"]}})
     ask, calls = fake_llm([bad, bad])
     monkeypatch.setattr(editorial, "ask_json", ask)
     r = run(editorial_project(shots), use_ai=True, provider="groq", model="m")
-    assert len(calls) == 2 and r["fallback"] and "rules" in r["reason"]
+    assert len(calls) == 2 and not r["fallback"]
     assert "never said" in calls[1]["prompt"] and "stock99" in calls[1]["prompt"]
-    assert [x["beat"] for x in r["scenes"]] == [x["beat"] for x in rows]          # the rules' plan
+    note = next(n for n in r["notes"] if "AI scene plan was used for" in n)
+    assert "stock99" in note or "never said" in note                          # why some were not
+    assert r["scenes"][free]["beat"] != "collage" or "stock99" not in json.dumps(r["project"])
+    assert "this was never said" not in json.dumps(r["project"])
+
+
+def test_an_ai_answer_with_nothing_usable_falls_back_with_its_reason(shots, monkeypatch):
+    ask, calls = fake_llm(['{"scenes": "none"}', "not json"])
+    monkeypatch.setattr(editorial, "ask_json", ask)
+    r = run(editorial_project(shots), use_ai=True, provider="groq", model="m")
+    assert len(calls) == 2 and r["fallback"] and "not JSON" in r["reason"]
 
 
 def test_an_ai_error_falls_back_to_the_rules(shots, monkeypatch):

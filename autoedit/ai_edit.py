@@ -11,6 +11,7 @@
 
 import copy
 import json
+import re
 import shutil
 import time
 from pathlib import Path
@@ -86,6 +87,25 @@ instruction, describing the edit.
 
 Output the JSON object only."""
 
+
+
+GRAPHICS_TEXT = (
+    "\nMOTION GRAPHICS: ON. A separate step makes the cards and pop-ups from the spoken words and "
+    "the creator's files: countdown, big word titles, search bar typing, checklist, storyboard card, "
+    "logo cards, profile card, number cards, comment cards, black-and-white moments, magazine cover. "
+    "They need NO photos (they are drawn from the words). Do not plan photos for them and do not "
+    "write notes saying they cannot be done; leave them to that step.")
+# notes the plan writes about things the motion-graphics step does (not shown when it runs)
+GRAPHICS_NOTE = re.compile(r"pop-?ups?|cards?|countdown|checklist|search ?bar|storyboard|logo|profile|"
+                           r"title|text|graphic|stat|number|b&w|black.and.white|screenshot", re.I)
+
+
+def graphics_text(cfg, instruction, graphics):
+    try:
+        on = bool(director.resolve_style(cfg, instruction, graphics))
+    except Exception:
+        on = False
+    return GRAPHICS_TEXT if on else ""
 
 
 def work_name(path):
@@ -317,6 +337,8 @@ def describe(project, plan, result, raw_duration, photo_names, generation=None, 
                                f"tier is used when you apply the edit.")
         details += generation["notes"]
     for note in plan.get("notes") or []:
+        if graphics and GRAPHICS_NOTE.search(note):
+            continue                 # the motion-graphics step made (or reports on) these
         details.append(f"Not done: {note}")
     if result.fallback:
         headline = "Heads up: " + result.reason
@@ -333,6 +355,8 @@ def graphics_lines(graphics):
              if "director" in c]
     lines = [f"Motion graphics ({style}): {len(clips)} placed"
              + (", from simple rules (the AI plan was not used)." if graphics["fallback"] else ".")]
+    if graphics["fallback"] and graphics.get("reason"):
+        lines.append(f"Why the AI plan was not used: {graphics['reason']}")
     for c in sorted(clips, key=lambda c: c["start"])[:10]:
         lines.append(f"  {mmss(c['start'])}  {c['template']}"
                      + (f" - {c['label'].split(': ', 1)[1]}" if ": " in c.get("label", "") else "")
@@ -438,9 +462,14 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
             if not Path(f).exists():
                 raise EditorError(f"File not found ({role}): {f}")
     all_inputs = {"main": [str(video)], **format_inputs}
-    format_id, format_reason = fmt.choose(
-        instruction, all_inputs, forced=format, cfg=cfg,
-        provider=provider if format == "auto" and plan is None else None, model=model)
+    if look and not look.get("format") and format in (None, "auto") and len(all_inputs) == 1:
+        # a talking-head look (PREMIUM EDITORIAL VIRAL...): "countdown" / "checklist" in the
+        # instruction ask for graphics, not for the Ranking or Listicle format
+        format_id, format_reason = fmt.DEFAULT_FORMAT, f"the {look['name']} preset is a talking-head look"
+    else:
+        format_id, format_reason = fmt.choose(
+            instruction, all_inputs, forced=format, cfg=cfg,
+            provider=provider if format == "auto" and plan is None else None, model=model)
     spec = fmt.get(format_id)
     cfg = fmt.cfg_for(spec, cfg)
     plan_instruction = fmt.instruction_for(spec, instruction)
@@ -509,7 +538,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                 gen_ok, generation_text = {}, None
             generation_text = (generation_text or "AI GENERATION: NOT available. Leave "
                                "voiceovers empty.") + "\n" + sources_text(cfg, gen_ok) \
-                + "\n" + tracking_text(cfg)
+                + "\n" + tracking_text(cfg) + graphics_text(cfg, instruction, graphics)
             result = request_plan(cfg, provider, model, plan_instruction, words, duration,
                                   list(photos), cache, upgrade_plan(previous_plan), check,
                                   cancel, generation_text)

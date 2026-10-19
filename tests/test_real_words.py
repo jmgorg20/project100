@@ -106,6 +106,9 @@ def test_the_app_entry_point_makes_every_spoken_card(tmp_path):
     events = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
     details = next(e for e in events if e.get("type") == "summary")["details"]
     assert any("'Tatyo' -> 'Tatlo'" in d for d in details)
+    # a talking-head preset: never the Ranking format because "countdown" was asked for
+    assert project["meta"]["format"] == "talking_head" and not any(d.startswith("Format:") for d in details)
+    assert any(d.startswith("Graphics: You asked for checklist: made at") for d in details)
     captions = [w["text"] for t in project["tracks"] if t["kind"] == "caption" for c in t["clips"]
                 for w in c.get("words", [])]
     assert "Tatlo" in captions and "Tatyo" not in captions                   # the captions say it right
