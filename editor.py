@@ -1121,7 +1121,15 @@ def watch_stdin(cancel):
     threading.Thread(target=run, daemon=True).start()
 
 
+SERVICE_COMMANDS = ("serve", "worker", "service-admin")
+
+
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv and argv[0] in SERVICE_COMMANDS:
+        # the headless service (docs/service.md): its own options, imported only when used
+        from service.cli import main as service_main
+        return service_main(argv)
     args = build_parser().parse_args(argv)
     from autoedit.errors import Cancelled
     from autoedit.progress import JsonReporter, TextReporter

@@ -95,7 +95,7 @@ def make_marker_video(path, width=720, height=1280, duration=4.0, marker=(0.3, 0
         ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
          f"color=c=0x101018:s={width}x{height}:r=30:d={duration},"
          f"drawbox=x={mx - side // 2}:y={my - side // 2}:w={side}:h={side}:color=white:t=fill",
-         "-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo", "-t", str(duration),
+         "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", str(duration),
          "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", str(path)],
         check=True)
     return Path(path)

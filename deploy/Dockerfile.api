@@ -1,0 +1,45 @@
+# The service API. Build from the repository root:
+#   docker build -f deploy/Dockerfile.api -t autoedit-api .
+# Ubuntu 24.04 LTS (Python 3.12, FFmpeg 6). Runs as an unprivileged user; settings come from the
+# environment (deploy/.env.example).
+ARG BASE=ubuntu:24.04
+FROM ${BASE}
+
+ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 PATH=/opt/venv/bin:$PATH
+
+# ffprobe checks every upload before it is accepted.
+# Behind a TLS-inspecting proxy, pass its CA: docker build --secret id=extra_ca,src=proxy-ca.crt ...
+# (apt then uses https:// and pip the system trust store). Without it nothing changes.
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -f /run/secrets/extra_ca ]; then \
+      mkdir -p /usr/local/share/ca-certificates /etc/ssl/certs \
+      && cp /run/secrets/extra_ca /usr/local/share/ca-certificates/extra-ca.crt \
+      && cat /run/secrets/extra_ca >> /etc/ssl/certs/ca-certificates.crt \
+      && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources; fi \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates python3 python3-venv ffmpeg \
+ && if [ -f /usr/local/share/ca-certificates/extra-ca.crt ]; then update-ca-certificates; fi \
+ && rm -rf /var/lib/apt/lists/* \
+ && python3 -m venv /opt/venv \
+ && groupadd --system app && useradd --system --gid app --home /app --shell /usr/sbin/nologin app
+
+WORKDIR /app
+COPY requirements-service.txt ./
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -f /run/secrets/extra_ca ]; then export PIP_CERT=/etc/ssl/certs/ca-certificates.crt; fi \
+ && pip install -r requirements-service.txt
+COPY editor.py config.yaml ./
+COPY autoedit ./autoedit
+COPY service ./service
+# a build-time proxy CA is not kept in the image
+RUN if [ -f /usr/local/share/ca-certificates/extra-ca.crt ]; then \
+      rm -f /usr/local/share/ca-certificates/extra-ca.crt && update-ca-certificates --fresh >/dev/null; fi \
+ && mkdir -p /data && chown app:app /data
+
+USER app
+ENV SERVICE_DATA_DIR=/data SERVICE_HOST=0.0.0.0 SERVICE_PORT=8787
+EXPOSE 8787
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8787/healthz', timeout=4).status == 200 else 1)"
+CMD ["python", "editor.py", "serve"]

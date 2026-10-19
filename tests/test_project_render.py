@@ -334,8 +334,8 @@ def test_cli_cancel_from_the_app(media, how):
     if how == "cancel":
         proc.stdin.write("cancel\n")
         proc.stdin.flush()
-    else:
-        proc.stdin.close()
+    # "close": communicate() closes stdin (the app went away); closing it here first makes
+    # communicate() fail on Python 3.12 when it flushes the closed pipe
     out, _err = proc.communicate(timeout=60)
     assert proc.returncode == 130
     assert json.loads(out.splitlines()[-1]) == {"type": "cancelled"}
@@ -475,8 +475,6 @@ def test_shake_and_glitch_move_the_picture(media):
 def test_grade_intensity_and_smooth_zoom(media):
     tmp, p = media
     p["media"].append(media_from_file(two_halves_video(tmp / "halves.mp4"), "halves"))
-    halves = [{"id": "h", "type": "video", "media": "halves", "start": 0.0, "duration": 2.0,
-               "in": 0.0, "out": 2.0}]
     full = fx_render(tmp, p, "bw", [{"id": "g", "type": "grade", "grade": "black_and_white",
                                      "start": 0, "duration": 2}])
     half = fx_render(tmp, p, "bw_half", [{"id": "g", "type": "grade", "grade": "black_and_white",
