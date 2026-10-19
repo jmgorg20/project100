@@ -904,6 +904,16 @@
    "builtin": true
   },
   {
+   "id": "premium_editorial_viral",
+   "name": "PREMIUM EDITORIAL VIRAL",
+   "tl": "PREMIUM EDITORIAL VIRAL (pang-magasin)",
+   "about": "Premium magazine look, planned scene by scene: fast but smooth jump cuts, punch-in zooms, cream caption cards, serif headlines, keyword highlights, your own screenshots floating over a dimmed background, UI panels, checklists, PiP, B&W transitions. A new idea every 2-4 s, timed to your words. Uses only your own files.",
+   "about_tl": "Premium na itsura ng magasin, eksena por eksena: mabilis pero smooth na jump cut, punch-in zoom, cream na caption card, serif na headline, naka-highlight na keyword, sarili mong screenshots sa ibabaw ng dimmed na background, UI panel, checklist, PiP, B&W transition. Bagong idea kada 2-4 segundo, sabay sa sinasabi mo. Sarili mong files lang ang gamit.",
+   "format": null,
+   "graphics": "premium_editorial",
+   "builtin": true
+  },
+  {
    "id": "premium_ugc_ad",
    "name": "Premium UGC Ad",
    "tl": "Premium UGC Ad",

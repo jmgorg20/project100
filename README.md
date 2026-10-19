@@ -416,10 +416,16 @@ Guide: [docs/formats.md](docs/formats.md).
 
 **Presets and the storyboard · Mga preset at storyboard.** Pick a **Preset** in the AI panel
 (Viral TikTok, Cinematic Storytelling, Premium UGC Ad, Podcast Clips, Faceless Automation, Calm
-Documentary, Meme). After the edit, press **Storyboard · Mga eksena** to see it as scenes: approve
+Documentary, Meme, PREMIUM EDITORIAL VIRAL). After the edit, press **Storyboard · Mga eksena** to see it as scenes: approve
 all and render, give one scene another look, replace its footage, change its words or lock it.
 *Tingnan ang mga eksena bago i-render.* Command line: `--preset viral_tiktok`,
 `python editor.py storyboard my.project.json`. Guide: [docs/storyboard-presets.md](docs/storyboard-presets.md).
+
+**PREMIUM EDITORIAL VIRAL · Pang-magasin.** A premium magazine edit planned scene by scene: cream
+caption cards, serif headlines, keyword highlights, your own screenshots floating over a dimmed
+background, checklists, UI panels, search-bar typing, countdowns, PiP, B&W transitions; a new
+idea every 2-4 s, timed to your words, using only your own files. *Bagong idea kada 2-4 segundo,
+sabay sa sinasabi mo.* `--preset premium_editorial_viral`. Guide: [docs/premium-editorial.md](docs/premium-editorial.md).
 
 **The service (integration API) · Ang service.** One engine, one API for every client (the partner
 project, the SaaS website, future projects): each with its own API key, presets, quotas, webhooks and

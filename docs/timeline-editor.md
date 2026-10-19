@@ -80,7 +80,7 @@ Click a caption **on the picture** (or its clip on the timeline). On the right y
   with your vocabulary, and replaces just those captions. Undo brings the old ones back.
   It needs your Groq key, or the local transcriber.
 - **Look:**
-  - all 13 caption styles;
+  - all 14 caption styles;
   - place: the style's own, lower, middle or top;
   - size;
   - whether ★ highlights are coloured;

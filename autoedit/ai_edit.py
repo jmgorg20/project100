@@ -372,7 +372,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
     a Draft pass for the preview, then the final tier when rendering; `max_gen_minutes`
     and `max_ai_clips` limit generation for this video.
     `graphics`: motion graphics: a style (promoter, calm_documentary, meme, news, luxury,
-    minimal), "off", or "auto"/None (config graphics.style; auto = only when the instruction
+    minimal, premium_editorial), "off", or "auto"/None (config graphics.style; auto = only when the instruction
     asks for them). See director.py.
     `format`: a video format id (formats/*.json), "auto" (rules, then the AI picks), or None
     (rules only: what the instruction names or the extra files say, else Talking head).
@@ -524,7 +524,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
             graphics_result = director.generate(
                 project, cfg, instruction, style, provider=provider,
                 model=model, cache=cache, reporter=reporter, cancel=cancel, video=video,
-                use_ai=not result.fallback)
+                use_ai=not result.fallback, files=list(photos.values()))
             project = graphics_result["project"]
             reporter.event("graphics", style=style, count=graphics_result["count"],
                            fallback=graphics_result["fallback"], reason=graphics_result["reason"],

@@ -37,6 +37,7 @@ python editor.py graphics-catalog                                          (list
 | **News / explainer** | headline banners, lower-thirds, numbers, checklists | 2 |
 | **Luxury / premium** | serif and gold titles, fine lines | 1 |
 | **Minimal** | now and then one clean word or underline | 1 |
+| **Premium editorial** | scene by scene, one idea every 2–4 s: serif headlines, checklists, UI panels, your screenshots over a dimmed background, PiP, B&W transitions ([premium-editorial.md](premium-editorial.md)) | 4 |
 
 You can change the numbers in `autoedit/director_styles.py`, or the limit only with
 `graphics: max_per_10s:` in `config.yaml`.

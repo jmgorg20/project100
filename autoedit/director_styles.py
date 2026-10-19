@@ -92,6 +92,24 @@ STYLES = {
         "attach": [], "attach_importance": 2.0, "attach_gap": 99.0,
         "wipe": False, "emoji": False, "hold": 0.5,
     },
+    "premium_editorial": {
+        "label": "Premium editorial", "tl": "Premium editorial (magazine)",
+        "about": "Edited like a premium magazine, scene by scene: serif headlines, cream cards, keyword "
+                 "highlights, your own screenshots floating over a dimmed background, checklists, UI "
+                 "panels, smooth zooms. A new idea on screen every 2-4 seconds, timed to your words.",
+        "max_per_10s": 4, "min_gap": 0.8, "duration": 1.0, "size": 1.0, "intensity": 0.6,
+        "categories": {"text": 1.0, "card": 1.0, "pill": 0.0, "data": 1.0, "pointer": 0.0,
+                       "emoji": 0.0, "banner": 0.0},
+        "prefer": ["editorial-headline", "kinetic-words", "marker-highlight", "editorial-checklist",
+                   "ui-panel", "search-bar", "screenshot-collage", "screenshot-montage"],
+        "deny": ["pop-heavy", "bounce-words", "glitch-text", "meme-caption", "stamp", "sticker-label",
+                 "warning-banner", "emoji-pop", "emoji-burst", "news-banner", "arrow-point"],
+        "palette": ["#c8553d", "#17140f", "#f4efe6", "#1f2a44"],
+        "attach": [], "attach_importance": 2.0, "attach_gap": 99.0,
+        "wipe": False, "emoji": False, "hold": 0.4,
+        # planned scene by scene by autoedit/editorial.py (not the pop-up rules)
+        "planner": "editorial",
+    },
 }
 DEFAULT_STYLE = "promoter"
 
@@ -105,6 +123,7 @@ STYLE_KEYWORDS = {
     "news": ["news", "balita", "explainer", "headline"],
     "luxury": ["luxury", "premium", "elegant", "classy", "mamahalin"],
     "minimal": ["minimal", "simple lang", "simple graphics", "konting graphics"],
+    "premium_editorial": ["editorial", "magazine", "magasin"],
 }
 GRAPHICS_WORDS = ["graphic", "pop-up", "popup", "pop up", "kinetic", "promoter", "motion",
                   "animated", "lower third", "lower-third", "counter", "arrow", "emoji",

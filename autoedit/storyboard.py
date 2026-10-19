@@ -278,6 +278,8 @@ def regenerate(project, scene_id, cfg, provider=None, model=None, cache=None, ca
         raise StoryboardError("This scene is locked. Unlock it first.")
     instruction = str((project.get("meta") or {}).get("instruction") or "")
     notes, changed = [], []
+    if ((project.get("meta") or {}).get("editorial") or {}).get("scenes"):
+        return _regenerate_editorial(project, scene, cfg, instruction, cancel)
     todo = [g["id"] for g in scene["graphics"]]
     locked = {c["id"] for t in project["tracks"] for c in t["clips"] if c.get("locked")}
     todo = [i for i in todo if i not in locked]
@@ -324,3 +326,20 @@ def regenerate(project, scene_id, cfg, provider=None, model=None, cache=None, ca
         notes.append("The Director found nothing in this scene worth a graphic (no key words); "
                      "add one from the Graphics tab.")
     return {"project": out, "changed": changed, "notes": notes + list(made.get("notes") or [])}
+
+
+def _regenerate_editorial(project, scene, cfg, instruction, cancel):
+    """A video planned scene by scene (PREMIUM EDITORIAL VIRAL): every editorial scene that starts
+    in this storyboard scene gets another beat; the rest of the edit stays as it is."""
+    from . import editorial
+    rows = project["meta"]["editorial"]["scenes"]
+    todo = [r["index"] for r in rows if scene["start"] - EPS <= r["start"] < scene["end"] - EPS]
+    if not todo:
+        return {"project": project, "changed": [], "notes": ["No editorial scene starts here."]}
+    changed, notes = [], []
+    for index in todo:
+        r = editorial.regenerate_scene(project, index, cfg, instruction, cancel=cancel)
+        project = r["project"]
+        changed += r["clips"]
+        notes += [f"Scene {index + 1}: {r['before'] or 'nothing'} -> {r['beat']}."] + r["notes"]
+    return {"project": project, "changed": changed, "notes": notes}

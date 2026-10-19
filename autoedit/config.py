@@ -91,6 +91,7 @@ DEFAULTS = {
         "use_stock": True,
     },
     "music": {"folder": "assets/music"},
+    "editorial": {"name": "", "handle": "", "brand": ""},
     "presets_folder": "presets",
     "polish": {
         "inbox": "robot/inbox",

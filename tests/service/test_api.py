@@ -447,6 +447,19 @@ def test_each_client_has_its_own_presets(http, video, app):
     assert http.delete("/v1/presets/jgg_city_promo", headers=ha).status_code == 204
 
 
+def test_the_premium_editorial_preset_is_offered_and_accepted(http, video):
+    _, h = new_client(http, "Editorial")
+    presets = {p["id"]: p for p in http.get("/v1/catalog", headers=h).json()["presets"]}
+    assert presets["premium_editorial_viral"]["name"] == "PREMIUM EDITORIAL VIRAL"
+    assert presets["premium_editorial_viral"]["graphics"] == "premium_editorial"
+    up = ready_upload(http, h, video)
+    r = polish_job(http, h, up["id"], preset="premium_editorial_viral")
+    assert r.status_code in (200, 201, 202), r.json()
+    wh, _ = new_worker(http)
+    payload = http.post("/v1/worker/claim", json={"wait": 0}, headers=wh).json()["payload"]
+    assert payload["params"]["preset"] == "premium_editorial_viral"
+
+
 def test_the_web_app_route(settings, tmp_path):
     import dataclasses
     site = tmp_path / "site"

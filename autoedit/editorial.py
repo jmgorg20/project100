@@ -1,0 +1,1144 @@
+"""The editorial planner: the Director of the PREMIUM EDITORIAL VIRAL style.
+
+Where the other looks add a pop-up here and there, this one edits scene by scene:
+
+    scenes   the spoken words are cut into scenes of about 2-4 seconds (sentences; long ones split
+             at their longest pause, short ones joined), so the picture changes every 2-4 s
+    beats    each scene gets ONE main idea (a "beat") that suits what is said in it:
+               type       editorial headline, kinetic words, marker highlight, subtitle card
+               card       checklist, UI panel, search bar, countdown, palette, profile, logo
+               cover      your screenshots / photos: collage, montage, mosaic, phone, storyboard,
+                          with the talking head dimmed, blurred and vignetted underneath
+               pip        one of your clips (or photos) floating as a rounded picture-in-picture
+               camera     a slow push-in or a smooth zoom-out (reframing) on the talking head
+             plus, between scenes, a black-and-white transition on a turn in the story (pero,
+             but, dati...), and a punch-in on the key word of a type beat
+    words    every element is timed to the exact spoken words: a graphic starts on its word, and
+             its parts (words, items, ticks, typed letters, pictures) appear on theirs (`cues`)
+    yours    only the creator's own pictures, clips, logo and handle are used: nothing is
+             downloaded, generated or invented; a beat that needs a picture is skipped without one
+
+The AI (when there is one) chooses the beat and the words for each scene from a menu; plain code
+then checks every choice against the transcript and the creator's files, keeps variety (never the
+same beat twice in a row, big picture beats spaced out) and timing, and falls back to the rules
+for anything that does not hold. Without an AI the rules choose the beats.
+
+Everything it adds is ordinary, editable clips: graphics on the Graphics tracks (with a
+`director` note), effect clips on "Editorial ..." effect tracks and PiP clips on an overlay track
+(ids starting "pe"), so running it again replaces its own work and keeps locked clips.
+"""
+
+import copy
+import json
+import re
+from collections import Counter
+
+from . import director, graphics
+from .director import Ctx, important, locate, norm, shown, snap, strip_marks
+from .errors import Cancelled
+from .llm import LLMError, ask_json
+
+STYLE = "premium_editorial"
+PROMPT_VERSION = 1
+MAX_ATTEMPTS = 2
+SCENE_MIN, SCENE_MAX = 1.6, 4.2
+LIST_MAX = 8.0
+EPS = 1e-6
+
+# id -> template (None = no graphic), kind, what it needs, what it is for (the AI's menu)
+BEATS = {
+    "headline": ("editorial-headline", "type", "", "a serif magazine headline of the key phrase (the hook, a big claim)"),
+    "kinetic": ("kinetic-words", "type", "", "2-5 big words popping in one by one as they are said"),
+    "marker": ("marker-highlight", "type", "", "the sentence on paper, a marker sweeping over its keyword"),
+    "subtitle": ("subtitle-card", "type", "", "a cream card with the line being said (only without captions)"),
+    "checklist": ("editorial-checklist", "card", "items", "a list that ticks each item as it is said (2-5 items)"),
+    "ui_panel": ("ui-panel", "card", "items", "an app window whose switches turn on as each item is said"),
+    "search": ("search-bar", "card", "query", "a search bar typing what the creator says to search"),
+    "countdown": ("countdown-timer", "card", "number", "a countdown from a number of seconds / minutes said"),
+    "palette": ("palette-card", "card", "palette", "colour swatches taken from the creator's picture"),
+    "profile": ("profile-card", "card", "profile", "the creator's profile card with a Follow button (a follow / subscribe call)"),
+    "logo": ("logo-badge", "card", "logo", "the creator's own logo with the brand name"),
+    "collage": ("screenshot-collage", "cover", "images2", "2-4 of the creator's screenshots floating in"),
+    "montage": ("screenshot-montage", "cover", "images3", "one card sliding through 3-6 screenshots"),
+    "mosaic": ("mosaic-grid", "cover", "images4", "a grid of 4-9 of the creator's pictures"),
+    "phone": ("phone-mockup", "cover", "image", "one screenshot inside a floating phone"),
+    "storyboard": ("storyboard-doc", "cover", "items", "a storyboard page: the steps of a plan with pictures"),
+    "pip": (None, "pip", "clip", "one of the creator's clips or photos floating as a rounded picture-in-picture"),
+    "camera": (None, "camera", "", "no graphic: a slow push-in on the speaker (a quiet beat)"),
+}
+COVER_SHARE = 0.4                  # at most this share of the scenes are big picture beats
+ONCE = {"profile", "logo", "countdown", "palette", "storyboard"}
+BW_GAP = 12.0
+PIP_BOX = {"x": 790, "y": 560, "width": 400, "height": 620}
+NOT_YOURS = {"pexels", "pixabay", "stock", "ai"}
+
+LIST_MARKERS = {"una", "first", "pangalawa", "ikalawa", "second", "pangatlo", "ikatlo", "third", "next",
+                "sunod", "susunod", "finally", "lastly", "huli", "step", "tip", "number", "isa", "dalawa",
+                "tatlo", "one", "two", "three", "four", "five"}
+SEARCH_WORDS = {"search", "i-search", "isearch", "google", "hanapin", "hinanap", "i-type", "type", "youtube"}
+COUNT_UNITS = {"second", "seconds", "segundo", "segundos", "sec", "minute", "minutes", "minuto", "minutos",
+               "hour", "hours", "oras", "day", "days", "araw"}
+COUNT_WORDS = {"countdown", "bilang", "timer"}
+COLOUR_WORDS = {"color", "colors", "colour", "colours", "kulay", "palette", "shade", "shades", "aesthetic"}
+FOLLOW_WORDS = {"follow", "i-follow", "ifollow", "subscribe", "mag-subscribe", "sundan", "followers"}
+SCREEN_WORDS = {"app", "apps", "website", "site", "screen", "screenshot", "screenshots", "dashboard", "phone",
+                "cellphone", "page", "results", "resulta", "sales", "proof", "review", "reviews", "comments",
+                "messages", "orders", "stats", "analytics", "photos", "pictures", "litrato", "picture", "tingnan"}
+PLAN_WORDS = {"plan", "planning", "storyboard", "script", "scene", "scenes", "eksena", "outline", "structure",
+              "process", "proseso"}
+SETUP_WORDS = {"setup", "settings", "tools", "features", "equipment", "gamit", "steps", "hakbang", "checklist",
+               "kailangan", "requirements"}
+BRAND_WORDS = {"brand", "logo", "partner", "sponsor", "company", "negosyo", "business", "shop", "store"}
+TURN_WORDS = {"pero", "but", "however", "dati", "before", "noon", "kaso", "instead", "imbes", "ngayon", "now"}
+
+
+class Scene:
+    def __init__(self, index, i0, i1, start, end):
+        self.index, self.i0, self.i1, self.start, self.end = index, i0, i1, start, end
+
+    @property
+    def duration(self):
+        return self.end - self.start
+
+    def as_dict(self):
+        return {"index": self.index, "start": round(self.start, 3), "end": round(self.end, 3)}
+
+
+# ---------------------------------------------------------------- the creator's own files
+
+class Assets:
+    """The creator's pictures and clips in the project (the main video and sound files excluded)."""
+
+    def __init__(self, project, cfg, base_dir=None):
+        main = {c.get("media") for t in project["tracks"] if t["kind"] == "video" for c in t["clips"]}
+        main |= {(c.get("layout") or {}).get("screen") for t in project["tracks"] if t["kind"] == "video"
+                 for c in t["clips"]}
+        # free stock and AI-made B-roll are not the creator's own files
+        sourced = {c.get("media") for t in project["tracks"] for c in t["clips"]
+                   if str((c.get("broll") or {}).get("source") or "") in NOT_YOURS}
+        self.base_dir = base_dir
+        self.images, self.videos, self.logo, self.avatar = [], [], None, None
+        for m in project["media"]:
+            if m["id"] in main or m["id"] in sourced:
+                continue
+            name = norm(m.get("name") or m["path"].replace("\\", "/").split("/")[-1])
+            if m["kind"] == "image":
+                if "logo" in name and self.logo is None:
+                    self.logo = m["id"]
+                elif any(k in name for k in ("avatar", "profile", "headshot")) and self.avatar is None:
+                    self.avatar = m["id"]
+                else:
+                    self.images.append(m["id"])
+            elif m["kind"] == "video":
+                self.videos.append(m["id"])
+        ed = (cfg.get("editorial") or {}) if isinstance(cfg, dict) else {}
+        self.name = str(ed.get("name") or "").strip()[:28]
+        self.handle = str(ed.get("handle") or "").strip()[:28]
+        self.brand = str(ed.get("brand") or "").strip()[:28]
+        self.media = {m["id"]: m for m in project["media"]}
+
+    def path(self, media_id):
+        from .project import resolve_media_path
+        return resolve_media_path(self.media[media_id], self.base_dir or ".")
+
+    def summary(self):
+        return {"images": list(self.images), "videos": list(self.videos), "logo": self.logo, "avatar": self.avatar}
+
+    def satisfies(self, need, scene_info=None):
+        if need == "images2":
+            return len(self.images) >= 2
+        if need == "images3":
+            return len(self.images) >= 3
+        if need == "images4":
+            return len(self.images) >= 4
+        if need == "image":
+            return bool(self.images)
+        if need == "logo":
+            return self.logo is not None
+        if need == "clip":
+            return bool(self.videos or self.images)
+        if need == "palette":
+            return bool(self.images or self.logo)
+        if need == "profile":
+            return bool(self.name or self.handle)       # never a made-up name
+        return True
+
+
+# ---------------------------------------------------------------- scenes
+
+def make_scenes(words, duration):
+    """Scenes of about 2-4 s on sentence boundaries: long sentences split at their longest pause,
+    short ones joined to the next."""
+    if not words:
+        return []
+    groups = []
+    for sent in director.sentences(words):
+        pending = [sent]
+        while pending:
+            g = pending.pop(0)
+            span = words[g[-1]]["end"] - words[g[0]]["start"]
+            # a spoken list stays one scene (its checklist ticks every item), up to LIST_MAX
+            listed = sum(1 for i in g if norm(words[i]["text"]) in LIST_MARKERS) >= 2 and span <= LIST_MAX
+            if span > SCENE_MAX and len(g) >= 4 and not listed:
+                # split near the middle, at the biggest gap between words
+                mid_t = words[g[0]]["start"] + span / 2
+                cuts = range(1, len(g))
+                k = max(cuts, key=lambda c: (words[g[c]]["start"] - words[g[c - 1]]["end"])
+                        - 0.25 * abs(words[g[c]]["start"] - mid_t))
+                pending[:0] = [g[:k], g[k:]]
+            else:
+                groups.append(g)
+    merged = []
+    for g in groups:
+        if merged:
+            prev = merged[-1]
+            prev_span = words[prev[-1]]["end"] - words[prev[0]]["start"]
+            both = words[g[-1]]["end"] - words[prev[0]]["start"]
+            if prev_span < SCENE_MIN and both <= SCENE_MAX + 0.6:
+                merged[-1] = prev + g
+                continue
+        merged.append(g)
+    if len(merged) > 1:
+        last = merged[-1]
+        if words[last[-1]]["end"] - words[last[0]]["start"] < SCENE_MIN * 0.75:
+            merged[-2] = merged[-2] + last
+            merged.pop()
+    scenes = []
+    for k, g in enumerate(merged):
+        start = words[g[0]]["start"] if k else 0.0
+        end = words[merged[k + 1][0]]["start"] if k + 1 < len(merged) else max(duration, words[g[-1]]["end"])
+        scenes.append(Scene(k, g[0], g[-1], start, end))
+    return scenes
+
+
+def scene_tokens(ctx, scene):
+    return [norm(w["text"]) for w in ctx.words[scene.i0:scene.i1 + 1]]
+
+
+def scene_text(ctx, scene):
+    return " ".join(strip_marks(w["text"]) for w in ctx.words[scene.i0:scene.i1 + 1])
+
+
+# ---------------------------------------------------------------- what is said (rules)
+
+def keyword_index(ctx, scene):
+    """The strongest word of a scene: a highlighted / mood / number word, else the longest."""
+    idx = [i for i in range(scene.i0, scene.i1 + 1) if important(ctx.words[i]["text"])]
+    if not idx:
+        return None
+
+    def strength(i):
+        tok = norm(ctx.words[i]["text"])
+        moody = any(tok in vocab for vocab in director.MOOD_WORDS.values())
+        return (ctx.words[i]["hl"], tok.isdigit(), moody, len(tok))
+    return max(idx, key=strength)
+
+
+def phrase_around(ctx, scene, k, max_words=6, max_chars=48):
+    """Word indices of a short phrase of the scene around word k (in spoken order)."""
+    lo, hi = k, k
+    while hi - lo + 1 < max_words:
+        grew = False
+        if hi < scene.i1:
+            hi += 1
+            grew = True
+        if hi - lo + 1 < max_words and lo > scene.i0:
+            lo -= 1
+            grew = True
+        if not grew:
+            break
+        if len(" ".join(shown(ctx.words[i]) for i in range(lo, hi + 1))) > max_chars:
+            break
+    # drop filler at the edges
+    while lo < k and not important(ctx.words[lo]["text"]):
+        lo += 1
+    while hi > k and not important(ctx.words[hi]["text"]):
+        hi -= 1
+    return list(range(lo, hi + 1))
+
+
+def numbers_in(ctx, scene):
+    out = []
+    for i in range(scene.i0, scene.i1 + 1):
+        tok = strip_marks(ctx.words[i]["text"]).strip(".,!?").replace(",", "")
+        if re.fullmatch(r"\d+(\.\d+)?", tok):
+            out.append((i, float(tok)))
+    return out
+
+
+def list_items(ctx, scene, limit=5):
+    """Items of a spoken list: the words after each list marker ("una ..., pangalawa ...")."""
+    toks = scene_tokens(ctx, scene)
+    marks = [scene.i0 + j for j, t in enumerate(toks) if t in LIST_MARKERS]
+    if len(marks) < 2:
+        # "X, Y at Z" - three or more comma-separated chunks
+        chunks, cur = [], []
+        for i in range(scene.i0, scene.i1 + 1):
+            cur.append(i)
+            if ctx.words[i]["text"].rstrip().endswith(",") or norm(ctx.words[i]["text"]) in ("at", "and", "tsaka"):
+                if any(important(ctx.words[j]["text"]) for j in cur):
+                    chunks.append(cur)
+                cur = []
+        if cur and any(important(ctx.words[j]["text"]) for j in cur):
+            chunks.append(cur)
+        if len(chunks) < 3:
+            return []
+        groups = chunks
+    else:
+        groups = [list(range(m + 1, (marks[n + 1] if n + 1 < len(marks) else scene.i1 + 1)))
+                  for n, m in enumerate(marks)]
+    items = []
+    for g in groups:
+        keep = [i for i in g if important(ctx.words[i]["text"]) and norm(ctx.words[i]["text"]) not in LIST_MARKERS]
+        if keep:
+            # the words as said, from the first to the last important one (at most 5 words)
+            span = list(range(keep[0], min(keep[-1], keep[0] + 4) + 1))
+            items.append((keep[0], " ".join(shown(ctx.words[i]) for i in span)[:40]))
+    return items[:limit] if len(items) >= 2 else []
+
+
+def search_query(ctx, scene):
+    toks = scene_tokens(ctx, scene)
+    for j, t in enumerate(toks):
+        if t in SEARCH_WORDS:
+            rest = list(range(scene.i0 + j + 1, scene.i1 + 1))
+            # skip "mo", "lang", "the", "for"... then take up to 6 words
+            while rest and not important(ctx.words[rest[0]]["text"]):
+                rest.pop(0)
+            rest = rest[:6]
+            if rest:
+                return rest
+    return []
+
+
+def countdown_number(ctx, scene):
+    toks = scene_tokens(ctx, scene)
+    nums = numbers_in(ctx, scene)
+    for i, n in nums:
+        nxt = norm(ctx.words[i + 1]["text"]) if i + 1 <= scene.i1 else ""
+        if nxt in COUNT_UNITS and 1 <= n <= 5999:
+            unit = 60 if nxt.startswith(("min", "minuto")) else 1
+            return i, int(min(5999, n * unit)) if n * unit <= 5999 else None
+    if COUNT_WORDS & set(toks) and nums:
+        i, n = nums[0]
+        return (i, int(n)) if 1 <= n <= 5999 else None
+    return None
+
+
+def signals(ctx, scene, assets):
+    toks = set(scene_tokens(ctx, scene))
+    out = {}
+    items = list_items(ctx, scene)
+    if items:
+        out["checklist"] = 5.0
+        if SETUP_WORDS & toks:
+            out["ui_panel"] = 5.2
+        if PLAN_WORDS & toks and assets.images:
+            out["storyboard"] = 5.1
+    if search_query(ctx, scene):
+        out["search"] = 5.0
+    if countdown_number(ctx, scene):
+        out["countdown"] = 5.0
+    if COLOUR_WORDS & toks and assets.satisfies("palette"):
+        out["palette"] = 4.6
+    if FOLLOW_WORDS & toks:
+        out["profile"] = 4.6
+    if BRAND_WORDS & toks and assets.logo:
+        out["logo"] = 4.4
+    if SCREEN_WORDS & toks:
+        for beat, s in (("collage", 3.9), ("montage", 3.7), ("mosaic", 3.5), ("phone", 3.8)):
+            out[beat] = s
+        if assets.videos:
+            out["pip"] = 3.6
+    return out
+
+
+# ---------------------------------------------------------------- choosing the beats
+
+def allowed(beat, ctx, scene, assets, chosen, captions_on, after=None):
+    """Can `beat` go on `scene`, given what earlier scenes got (and `after`, the next scene's beat
+    when that one is already decided)?"""
+    template, kind, need, _about = BEATS[beat]
+    if not assets.satisfies(need):
+        return False
+    if need == "items" and not list_items(ctx, scene):
+        return False
+    if need == "query" and not search_query(ctx, scene):
+        return False
+    if need == "number" and not countdown_number(ctx, scene):
+        return False
+    if beat == "subtitle" and captions_on:
+        return False                                  # the captions already are the cream cards
+    if template and not graphics.has_template(template):
+        return False
+    prev = chosen[-1] if chosen else None
+    if prev and prev["beat"] == beat:
+        return False
+    if prev and kind == "cover" and BEATS[prev["beat"]][1] == "cover":
+        return False
+    if after and (after == beat or (kind == "cover" and BEATS[after][1] == "cover")):
+        return False
+    if beat in ONCE and any(c["beat"] == beat for c in chosen):
+        return False
+    covers = sum(1 for c in chosen if BEATS[c["beat"]][1] == "cover")
+    if kind == "cover" and covers + 1 > max(1, COVER_SHARE * (scene.index + 1) + 0.6):
+        return False
+    if beat == "pip" and sum(1 for c in chosen if c["beat"] == "pip") >= max(1, len(chosen) // 4 + 1):
+        return False
+    if kind == "type":
+        kw = keyword_index(ctx, scene)
+        if kw is None:
+            return False
+    if kind in ("cover", "pip") and overlay_busy(ctx.project, scene.start, scene.end):
+        return False                                  # a photo / B-roll of the edit is already on screen
+    return True
+
+
+def overlay_busy(project, start, end):
+    """True when a picture of the edit itself (an overlay or B-roll clip, not this planner's)
+    is on screen between start and end."""
+    return any(c["start"] < end - EPS and c["start"] + c["duration"] > start + EPS
+               for t in project["tracks"] if t["kind"] == "overlay" and not str(t["id"]).startswith("pe-")
+               for c in t["clips"])
+
+
+def rule_beat(ctx, scene, assets, chosen, captions_on, n_scenes, exclude=(), after=None):
+    """The rules' choice for one scene: the strongest signal that is allowed, else a type beat,
+    else a quiet camera beat. Pictures come back every few scenes when the creator gave some.
+    `exclude`: beats not wanted here (another look for the scene)."""
+    scores = dict(signals(ctx, scene, assets))
+    kw = keyword_index(ctx, scene)
+    if scene.index == 0:
+        scores["headline"] = 6.0
+    base = {"headline": 2.0, "kinetic": 2.15, "marker": 2.1 + (0.4 if kw is not None and ctx.words[kw]["hl"] else 0),
+            "subtitle": 1.2, "camera": 1.0}
+    for b, s in base.items():
+        scores.setdefault(b, s)
+    since_pictures = next((len(chosen) - k for k in range(len(chosen) - 1, -1, -1)
+                           if BEATS[chosen[k]["beat"]][1] in ("cover", "pip")), len(chosen) + 1)
+    if assets.images and since_pictures >= 3:
+        for b in ("collage", "montage", "mosaic", "phone"):
+            scores[b] = max(scores.get(b, 0), 3.0 + 0.1 * len(assets.images))
+    if (assets.videos or assets.images) and since_pictures >= 3:
+        scores["pip"] = max(scores.get("pip", 0), 2.8)
+    if scene.index == n_scenes - 1 and "profile" in scores:
+        scores["profile"] += 1.0
+    used = Counter(c["beat"] for c in chosen)
+    for b in scores:
+        scores[b] -= 0.45 * used[b]                 # variety: a beat used before is a little less likely
+    # a stable tie-break: the scene number, so the same video gets the same edit
+    order = sorted(scores, key=lambda b: (-scores[b], (hash_of(b) + scene.index) % 7))
+    for beat in order:
+        if beat not in exclude and allowed(beat, ctx, scene, assets, chosen, captions_on, after):
+            return beat
+    for beat in BEATS:                      # anything else that fits, before giving up
+        if beat not in exclude and allowed(beat, ctx, scene, assets, chosen, captions_on, after):
+            return beat
+    return "camera"
+
+
+def hash_of(text):
+    return sum(ord(c) * (k + 1) for k, c in enumerate(text))
+
+
+# ---------------------------------------------------------------- the AI's choice
+
+def plan_schema():
+    return {
+        "type": "object", "additionalProperties": False, "required": ["scenes"],
+        "properties": {
+            "summary": {"type": "string"},
+            "scenes": {"type": "array", "items": {
+                "type": "object", "additionalProperties": False, "required": ["scene", "beat"],
+                "properties": {
+                    "scene": {"type": "integer", "minimum": 0},
+                    "beat": {"enum": list(BEATS)},
+                    "words": {"type": "string", "description": "exact spoken words the main element shows / starts on"},
+                    "keyword": {"type": "string", "description": "the one spoken word to emphasise"},
+                    "items": {"type": "array", "maxItems": 5, "items": {"type": "string"},
+                              "description": "list / checklist / storyboard items, each copied from the spoken words"},
+                    "images": {"type": "array", "maxItems": 9, "items": {"type": "string"},
+                               "description": "ids of the creator's pictures, from ASSETS"},
+                    "clip": {"type": "string", "description": "pip: id of the creator's clip or photo, from ASSETS"},
+                    "bw": {"type": "boolean", "description": "a black-and-white transition into this scene"},
+                    "reason": {"type": "string"},
+                }}},
+        },
+    }
+
+
+SYSTEM_PROMPT = """You are the editor of a PREMIUM EDITORIAL VIRAL short video (vertical 9:16): a \
+creator talking to the camera in Filipino, English or Taglish, edited like a premium magazine: \
+serif headlines, cream cards, keyword highlights, floating screenshots, UI panels, checklists, \
+soft shadows, dimmed backgrounds, smooth zooms. Calm and expensive-looking, never cluttered.
+
+The video is already cut into SCENES of 2-4 seconds. For EVERY scene choose ONE beat from BEATS \
+(the main idea on screen for that scene) and the spoken words it uses. Rules:
+- Match the beat to what is said: a list -> checklist / ui_panel / storyboard; "search ..." -> \
+search; a number of seconds/minutes -> countdown; colours -> palette; follow / subscribe -> \
+profile; the brand -> logo; an app, results, proof, photos -> collage / montage / mosaic / phone \
+or pip (only with the creator's ASSETS); a strong claim -> headline / kinetic / marker; a quiet \
+moment -> camera.
+- Use ONLY ids from ASSETS for images and clip. Never ask for pictures that are not there. A \
+beat that needs pictures cannot be used without them.
+- Never the same beat in two scenes in a row. Picture beats (collage, montage, mosaic, phone, \
+storyboard) never in two scenes in a row. Scene 0 is the hook: headline or kinetic.
+- words, keyword and items are copied exactly from that scene's spoken words (keep Taglish \
+as said). Never invent words.
+- bw: true only on a turn in the story ("pero", "but", "dati"...), at most once every 12 seconds.
+- Output the JSON object only."""
+
+
+def build_prompt(ctx, scenes, assets, captions_on, problems=None):
+    lines = ["BEATS:"]
+    for b, (template, kind, need, about) in BEATS.items():
+        if b == "subtitle" and captions_on:
+            continue
+        lines.append(f"- {b} ({kind}{', needs ' + need if need else ''}): {about}")
+    lines.append("")
+    lines.append("ASSETS (the creator's own files):")
+    for mid in assets.images:
+        lines.append(f"- {mid}: picture '{assets.media[mid].get('name') or mid}'")
+    for mid in assets.videos:
+        lines.append(f"- {mid}: clip '{assets.media[mid].get('name') or mid}'")
+    if assets.logo:
+        lines.append(f"- {assets.logo}: logo")
+    if not (assets.images or assets.videos or assets.logo):
+        lines.append("- none (no picture beats, no pip, no logo)")
+    lines.append("")
+    lines.append("SCENES:")
+    for s in scenes:
+        lines.append(f"{s.index} [{s.start:.2f}-{s.end:.2f}s]: {scene_text(ctx, s)}")
+    if ctx.instruction.strip():
+        lines.append("")
+        lines.append("CREATOR'S INSTRUCTIONS: " + ctx.instruction.strip()[:1500])
+    if problems:
+        lines.append("")
+        lines.append("YOUR PREVIOUS ANSWER HAD THESE PROBLEMS:\n" + problems)
+    return "\n".join(lines)
+
+
+def check_choice(ctx, scene, choice, assets):
+    """Problems with the AI's choice for one scene (empty = usable)."""
+    problems = []
+    beat = choice["beat"]
+    _t, kind, need, _a = BEATS[beat]
+    where = f"scene {scene.index} ({beat})"
+    if not assets.satisfies(need):
+        problems.append(f"{where}: needs {need}, which the creator did not give")
+    for mid in choice.get("images") or []:
+        if mid not in assets.images:
+            problems.append(f"{where}: '{mid}' is not one of the creator's pictures")
+    clip = choice.get("clip")
+    if clip and clip not in assets.videos + assets.images:
+        problems.append(f"{where}: '{clip}' is not one of the creator's clips or pictures")
+    for key in ("words", "keyword"):
+        text = choice.get(key)
+        if text and locate(ctx.words[scene.i0:scene.i1 + 1], text, scene.start, window=SCENE_MAX + 1) is None:
+            problems.append(f"{where}: '{text}' is not said in this scene")
+    for item in choice.get("items") or []:
+        if locate(ctx.words[scene.i0:scene.i1 + 1], item, scene.start, window=SCENE_MAX + 1) is None:
+            problems.append(f"{where}: the item '{item}' is not said in this scene")
+    return problems
+
+
+def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=None, cancel=None):
+    """{scene index: choice} from the AI (checked; one retry), plus usage / notes."""
+    ai = ctx.cfg.get("ai") or {}
+    key = None
+    if cache is not None:
+        from .cache import key_for
+        key = key_for({"v": PROMPT_VERSION, "provider": provider, "model": model, "style": STYLE,
+                       "instruction": ctx.instruction.strip(), "words": [(w["text"], w["start"]) for w in ctx.words],
+                       "assets": assets.summary(), "captions": captions_on})
+        hit = cache.get("editorial", key)
+        if hit and isinstance(hit.get("choices"), list):
+            return ({ch["scene"]: ch for ch in hit["choices"]}, {"input_tokens": 0, "output_tokens": 0},
+                    hit.get("model"), [], True)
+    usage = {"input_tokens": 0, "output_tokens": 0}
+    attempts, problems_text, used_model = [], None, model
+    by_index = {s.index: s for s in scenes}
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        if cancel is not None and cancel.is_set():
+            raise Cancelled("Cancelled while planning the editorial scenes.")
+        try:
+            text, used, used_model = ask_json(provider, model, SYSTEM_PROMPT,
+                                              build_prompt(ctx, scenes, assets, captions_on, problems_text),
+                                              plan_schema(), max_tokens=int(ai.get("max_tokens", 8000)),
+                                              effort=ai.get("anthropic_effort", "medium"))
+        except LLMError as exc:
+            return {}, usage, used_model, attempts + [{"attempt": attempt, "problems": [str(exc)]}], False
+        usage = {k: usage[k] + used[k] for k in usage}
+        try:
+            plan = json.loads(text) if text.strip() else None
+        except ValueError:
+            plan = None
+        problems = []
+        if not isinstance(plan, dict) or not isinstance(plan.get("scenes"), list):
+            problems.append("the answer is not a JSON object with a scenes list")
+        else:
+            import jsonschema
+            v = jsonschema.Draft202012Validator(plan_schema())
+            problems += [f"{e.json_path}: {e.message}" for e in v.iter_errors(plan)][:10]
+            if not problems:
+                for ch in plan["scenes"]:
+                    if ch["scene"] not in by_index:
+                        problems.append(f"scene {ch['scene']} does not exist")
+                        continue
+                    problems += check_choice(ctx, by_index[ch["scene"]], ch, assets)
+        if not problems:
+            choices = {ch["scene"]: ch for ch in plan["scenes"]}
+            if cache is not None:
+                cache.put("editorial", key, {"choices": plan["scenes"], "model": used_model})
+            return choices, usage, used_model, attempts, False
+        attempts.append({"attempt": attempt, "problems": problems[:20]})
+        problems_text = "\n".join(f"- {p}" for p in problems[:20])
+    return {}, usage, used_model, attempts, False
+
+
+# ---------------------------------------------------------------- one scene's elements
+
+class Plan:
+    """What gets added: graphics items (for the Director's placement), effect clips, PiP clips."""
+
+    def __init__(self):
+        self.items, self.effects, self.pips, self.notes = [], [], [], []
+
+
+def word_cues(ctx, indices, start):
+    return [round(max(0.0, ctx.words[i]["start"] - start), 3) for i in indices]
+
+
+def marked_text(ctx, indices, keyword):
+    return " ".join(f"*{shown(ctx.words[i])}*" if i == keyword else shown(ctx.words[i]) for i in indices
+                    if shown(ctx.words[i]))
+
+
+def pick_images(assets, n, used):
+    """n of the creator's pictures, the least used first (the same picture is not shown twice in a
+    row when there are others)."""
+    order = sorted(assets.images, key=lambda m: (used[m], assets.images.index(m)))
+    picked = order[:n]
+    for m in picked:
+        used[m] += 1
+    return picked
+
+
+def spread_indices(ctx, scene, n):
+    """n word indices spread over the important words of a scene (times for pictures to arrive)."""
+    imp = [i for i in range(scene.i0, scene.i1 + 1) if important(ctx.words[i]["text"])] or \
+        list(range(scene.i0, scene.i1 + 1))
+    if n <= 0:
+        return []
+    if len(imp) >= n:
+        step = len(imp) / n
+        return [imp[int(k * step)] for k in range(n)]
+    return [imp[min(k, len(imp) - 1)] for k in range(n)]
+
+
+def element(ctx, scene, beat, assets, choice, used_images, captions_on):
+    """The graphic item (or None) and the extra clips for one scene's beat. Returns
+    (item or None, [effect clip specs], [pip clip specs])."""
+    template, kind, need, _about = BEATS[beat]
+    choice = choice or {}
+    sw = ctx.words
+    kw = keyword_index(ctx, scene)
+    if choice.get("keyword"):
+        hit = locate(sw[scene.i0:scene.i1 + 1], choice["keyword"], scene.start, window=SCENE_MAX + 1)
+        if hit:
+            kw = scene.i0 + hit[0]
+    effects, pips = [], []
+    it = None
+
+    def base(trigger, **kw_args):
+        start = snap(max(scene.start, sw[trigger]["start"]), ctx.fps)
+        return {"template": template, "words": " ".join(strip_marks(sw[i]["text"]) for i in [trigger]),
+                "start": start, "i0": trigger, "i1": trigger, "word_end": sw[trigger]["end"],
+                "spoken": strip_marks(sw[trigger]["text"]), "mood": director.word_mood([sw[i]["text"] for i in range(scene.i0, scene.i1 + 1)]),
+                "importance": 0.8, "zone": None, "reason": f"scene {scene.index + 1}: {beat}", "beat": beat,
+                "scene": scene.index, **kw_args}
+
+    if beat in ("headline", "kinetic", "marker", "subtitle"):
+        if kw is None:
+            return None, [], []
+        if choice.get("words"):
+            hit = locate(sw[scene.i0:scene.i1 + 1], choice["words"], scene.start, window=SCENE_MAX + 1)
+            idx = list(range(scene.i0 + hit[0], scene.i0 + hit[1] + 1)) if hit else phrase_around(ctx, scene, kw)
+        elif beat == "kinetic":
+            idx = [i for i in phrase_around(ctx, scene, kw, max_words=5, max_chars=40) if important(sw[i]["text"])][:4] or [kw]
+        elif beat == "subtitle":
+            idx = list(range(scene.i0, scene.i1 + 1))[:12]
+        else:
+            idx = phrase_around(ctx, scene, kw, max_words=7 if beat == "headline" else 8)
+        if kw not in idx:
+            kw = idx[len(idx) // 2]
+        it = base(idx[0], text=marked_text(ctx, idx, kw))
+        it["i1"] = idx[-1]
+        it["word_end"] = sw[idx[-1]]["end"]
+        shown_idx = [i for i in idx if shown(sw[i])]
+        it["cues"] = word_cues(ctx, [kw] if beat == "marker" else shown_idx, it["start"])
+        it["zone"] = "upper" if beat in ("headline", "marker") else "center"
+        if beat in ("headline", "kinetic", "marker") and sw[kw]["start"] < scene.end - 0.3:
+            # a punch-in on the key word (smooth, short)
+            effects.append({"type": "zoom", "start": snap(sw[kw]["start"], ctx.fps),
+                            "end": min(scene.end, sw[kw]["start"] + 1.4), "amount": 1.1, "ease": 0.18,
+                            "smooth": True, "anchor_y": 0.4})
+    elif beat in ("checklist", "ui_panel", "storyboard"):
+        items = list_items(ctx, scene)
+        if choice.get("items"):
+            given = []
+            for text in choice["items"]:
+                hit = locate(sw[scene.i0:scene.i1 + 1], text, scene.start, window=SCENE_MAX + 1)
+                if hit:
+                    given.append((scene.i0 + hit[0], strip_marks(text)[:40]))
+            items = given if len(given) >= 2 else items
+        if len(items) < 2:
+            return None, [], []
+        title_idx = [i for i in range(scene.i0, items[0][0])
+                     if important(sw[i]["text"]) and norm(sw[i]["text"]) not in LIST_MARKERS][:4]
+        title = " ".join(shown(sw[i]) for i in title_idx)[:30]
+        it = base(scene.i0 if title_idx else items[0][0], text=title, list=[t for _i, t in items])
+        it["cues"] = word_cues(ctx, [i for i, _t in items], it["start"])
+        it["zone"] = "center"
+        if beat == "storyboard":
+            it["images"] = pick_images(assets, min(3, len(items), len(assets.images)), used_images)
+            it["text"] = title or "Storyboard"
+        if beat == "ui_panel":
+            it["text"] = title or "Setup"
+    elif beat == "search":
+        q = search_query(ctx, scene)
+        if not q:
+            return None, [], []
+        it = base(q[0], text=" ".join(shown(sw[i]) for i in q)[:48])
+        it["cues"] = [0.15, round(max(0.6, sw[q[-1]]["end"] - it["start"]), 3)]
+        it["zone"] = "upper"
+    elif beat == "countdown":
+        found = countdown_number(ctx, scene)
+        if not found:
+            return None, [], []
+        i, number = found
+        it = base(i, number=number, text="")
+        it["zone"] = "center"
+    elif beat == "palette":
+        source = assets.logo or ([m for m in (choice.get("images") or []) if m in assets.images]
+                                 + assets.images)[0]
+        try:
+            colours = graphics.palette_from_image(assets.path(source), 5)
+        except OSError:
+            return None, [], []
+        if len(colours) < 2:
+            return None, [], []
+        trigger = next((i for i in range(scene.i0, scene.i1 + 1) if norm(sw[i]["text"]) in COLOUR_WORDS),
+                       kw if kw is not None else scene.i0)
+        it = base(trigger, text="", list=colours)
+        it["cues"] = [0.2 + 0.18 * k for k in range(len(colours))]
+        it["zone"] = "center"
+    elif beat == "profile":
+        follow = next((i for i in range(scene.i0, scene.i1 + 1) if norm(sw[i]["text"]) in FOLLOW_WORDS), scene.i0)
+        it = base(scene.i0, text=assets.name or assets.handle, text2=assets.handle if assets.name else "")
+        if assets.avatar:
+            it["image"] = assets.avatar
+        it["cues"] = word_cues(ctx, [follow], it["start"])
+        it["zone"] = "upper"
+    elif beat == "logo":
+        brand = next((i for i in range(scene.i0, scene.i1 + 1) if norm(sw[i]["text"]) in BRAND_WORDS), scene.i0)
+        it = base(brand, image=assets.logo, text=assets.brand or "")
+        it["zone"] = "upper"
+    elif beat in ("collage", "montage", "mosaic", "phone"):
+        want = {"collage": min(4, len(assets.images)), "montage": min(6, len(assets.images)),
+                "mosaic": min(9, len(assets.images)), "phone": 1}[beat]
+        chosen = [m for m in (choice.get("images") or []) if m in assets.images][:want]
+        images = chosen if (len(chosen) >= 1 if beat == "phone" else len(chosen) >= 2) else pick_images(assets, want, used_images)
+        it = base(scene.i0, text="")
+        if beat == "phone":
+            it["image"] = images[0]
+        else:
+            it["images"] = images
+            it["cues"] = word_cues(ctx, spread_indices(ctx, scene, len(images)), it["start"])
+        it["zone"] = "center"
+    elif beat == "pip":
+        clip_id = choice.get("clip") if choice.get("clip") in assets.videos + assets.images else \
+            (assets.videos[scene.index % len(assets.videos)] if assets.videos else pick_images(assets, 1, used_images)[0])
+        start = snap(sw[scene.i0]["start"] if scene.index else scene.start, ctx.fps)
+        pips.append({"media": clip_id, "start": start, "end": scene.end})
+    elif beat == "camera":
+        start = snap(scene.start, ctx.fps)
+        effects.append({"type": "zoom", "start": start, "end": scene.end, "amount": 1.12, "from": 1.0,
+                        "ease": max(0.5, min(scene.duration, 3.0)), "smooth": True, "anchor_y": 0.42})
+    if it is not None and kind == "cover":
+        it["importance"] = 0.9
+    return it, effects, pips
+
+
+# ---------------------------------------------------------------- the whole thing
+
+def captions_present(project):
+    return any(t["kind"] == "caption" and not t.get("hidden") and t["clips"] for t in project["tracks"])
+
+
+def clear_own(project):
+    """Remove the clips this planner made earlier (ids "pe..." on "pe-..." tracks), except locked."""
+    removed = 0
+    for t in project["tracks"]:
+        if str(t["id"]).startswith("pe-"):
+            keep = [c for c in t["clips"] if c.get("locked")]
+            removed += len(t["clips"]) - len(keep)
+            t["clips"] = keep
+    project["tracks"] = [t for t in project["tracks"] if not str(t["id"]).startswith("pe-") or t["clips"]]
+    return removed
+
+
+def own_track(project, tid, kind, name):
+    track = next((t for t in project["tracks"] if t["id"] == tid), None)
+    if track is None:
+        track = {"id": tid, "kind": kind, "name": name, "clips": []}
+        anchor = max((k for k, t in enumerate(project["tracks"]) if t["kind"] in ("video", "effect", "overlay")),
+                     default=0)
+        project["tracks"].insert(anchor + 1, track)
+    return track
+
+
+def free_on(track, start, end):
+    return all(end <= c["start"] + EPS or start >= c["start"] + c["duration"] - EPS for c in track["clips"])
+
+
+def zoom_busy(project, start, end):
+    """True when a zoom the edit already has (jump-cut zooms, the creator's own) covers this time."""
+    return any(c.get("type") == "zoom" and c["start"] < end - EPS and c["start"] + c["duration"] > start + EPS
+               for t in project["tracks"] if t["kind"] == "effect" and not str(t["id"]).startswith("pe-")
+               for c in t["clips"])
+
+
+def add_effect_clips(project, ctx, ids, items, effects, pips, scenes):
+    """Dimming + vignette under the big picture beats, the camera moves, the B&W transitions and
+    the floating PiP clips, on the planner's own tracks."""
+    look = own_track(project, "pe-look", "effect", "Editorial look")
+    vig = own_track(project, "pe-vignette", "effect", "Editorial vignette")
+    cam = own_track(project, "pe-camera", "effect", "Editorial camera")
+    trans = own_track(project, "pe-transitions", "effect", "Editorial transitions")
+    pipt = own_track(project, "pe-pip", "overlay", "Editorial picture-in-picture")
+    fps = ctx.fps
+
+    def put(track, clip):
+        if clip["duration"] < 2 / fps or not free_on(track, clip["start"], clip["start"] + clip["duration"]):
+            return False
+        track["clips"].append(clip)
+        return True
+
+    for it in items:
+        if BEATS[it["beat"]][1] != "cover":
+            continue
+        d = round(it["end"] - it["start"], 4)
+        put(look, {"id": next(ids), "type": "dim", "start": round(it["start"], 4), "duration": d, "amount": 0.5, "blur": 14,
+                   "fade": 0.3, "label": "Dim behind the pictures"})
+        put(vig, {"id": next(ids), "type": "vignette", "start": round(it["start"], 4), "duration": d, "strength": 0.65,
+                  "fade": 0.3, "label": "Vignette"})
+    for e in effects:
+        if e["type"] == "zoom":
+            start, end = snap(e["start"], fps), snap(e["end"], fps)
+            if end - start < 0.3 or zoom_busy(project, start, end):
+                continue
+            clip = {"id": next(ids), "type": "zoom", "start": start, "duration": round(end - start, 4),
+                    "amount": e["amount"], "anchor_y": e.get("anchor_y", 0.4), "ease": e["ease"],
+                    "smooth": bool(e.get("smooth")), "label": "Punch-in" if e["amount"] > 1.0 and e.get("from", 1.0) <= 1 and e["ease"] < 0.5 else "Camera move"}
+            if e.get("from", 1.0) != 1.0:
+                clip["from"] = e["from"]
+            put(cam, clip)
+        elif e["type"] == "bw":
+            put(trans, {"id": next(ids), "type": "fx", "effect": "bw", "start": snap(e["start"], fps),
+                        "duration": round(e["duration"], 4), "intensity": 1.0, "label": "B&W transition"})
+    for p in pips:
+        m = next(x for x in project["media"] if x["id"] == p["media"])
+        start, end = snap(p["start"], fps), snap(p["end"], fps)
+        clip = {"id": next(ids), "type": m["kind"], "media": m["id"], "start": start, "duration": round(end - start, 4),
+                **PIP_BOX, "radius": 34, "shadow": 0.7, "border": {"color": "#f4efe6", "width": 6},
+                "enter": "slide_left", "exit": "fade", "motion": 0.4, "label": "Floating picture-in-picture"}
+        if m["kind"] == "video":
+            length = min(end - start, max(0.0, float(m.get("duration") or 0)))
+            if length < 0.5:
+                continue
+            clip["duration"] = round(length, 4)
+            clip["in"], clip["out"] = 0.0, round(length, 4)          # overlays are silent
+        put(pipt, clip)
+    for t in (look, vig, cam, trans, pipt):
+        t["clips"].sort(key=lambda c: c["start"])
+    project["tracks"] = [t for t in project["tracks"] if not str(t["id"]).startswith("pe-") or t["clips"]]
+
+
+def bw_transitions(ctx, scenes, chosen):
+    """A B&W transition into the scenes that turn the story (and those the AI asked for), at most
+    one every BW_GAP seconds, never on the first scene."""
+    out, last = [], -99.0
+    for s, c in zip(scenes, chosen):
+        if s.index == 0:
+            continue
+        first = [norm(w["text"]) for w in ctx.words[s.i0:min(s.i1, s.i0 + 2) + 1]]
+        wanted = c.get("bw") if c.get("bw") is not None else bool(TURN_WORDS & set(first))
+        if wanted and s.start - last >= BW_GAP:
+            d = 0.7
+            out.append({"type": "bw", "start": max(0.0, s.start - d / 2), "duration": d})
+            last = s.start
+    return out
+
+
+def time_item(ctx, it, scene, next_start):
+    """End time of a graphic: through its scene (at least long enough to take in), never into the
+    next graphic, never past the video."""
+    meta = graphics.template_meta(it["template"])
+    lo, hi = meta["minDuration"], meta["maxDuration"]
+    want_end = max(scene.end, it["start"] + max(lo, 1.6))
+    end = min(it["start"] + hi, want_end, ctx.duration)
+    if next_start is not None:
+        end = min(end, next_start - 0.08)
+    end = snap(end, ctx.fps)
+    if end - it["start"] < max(lo * 0.6, 0.5):
+        return False
+    it["end"] = end
+    return True
+
+
+def build_params(it, meta, dctx):
+    fields = set(meta["fields"]) | {i["key"] for i in meta["inputs"]}
+    p = {}
+    if "text" in fields and it.get("text"):
+        p["text"] = director.shorten(it["text"], meta["maxChars"])
+    if "text2" in fields and it.get("text2"):
+        p["text2"] = it["text2"][:60]
+    if "items" in fields and it.get("list"):
+        p["items"] = [x[:40] for x in it["list"]][:5]
+    if "number" in fields and it.get("number") is not None:
+        p["number"] = it["number"]
+    if "image" in fields and it.get("image"):
+        p["image"] = it["image"]
+    if "images" in fields and it.get("images"):
+        p["images"] = list(it["images"])[:9]
+    if "cues" in fields and it.get("cues"):
+        p["cues"] = sorted(round(float(x), 3) for x in it["cues"] if x >= 0)[:24]
+    if "size" in fields and it.get("size_final"):
+        p["size"] = it["size_final"]
+    return p
+
+
+def choose_beats(ctx, scenes, assets, captions_on, choices, kept=None, exclude=None):
+    """One entry per scene: {"beat", "choice", "bw"} (or {"beat", "kept": True} for a scene that
+    keeps what it has). The AI's choice when it is allowed here, else the rules'."""
+    kept, exclude = kept or {}, exclude or {}
+    chosen = []
+    for k, s in enumerate(scenes):
+        if s.index in kept:
+            chosen.append({"beat": kept[s.index], "kept": True})
+            continue
+        after = kept.get(scenes[k + 1].index) if k + 1 < len(scenes) else None
+        ex = exclude.get(s.index, set())
+        ch = choices.get(s.index)
+        if ch and ch["beat"] not in ex and allowed(ch["beat"], ctx, s, assets, chosen, captions_on, after):
+            beat = ch["beat"]
+        else:
+            ch = None
+            beat = rule_beat(ctx, s, assets, chosen, captions_on, len(scenes), ex, after)
+        chosen.append({"beat": beat, "choice": ch or {}, "bw": (ch or {}).get("bw")})
+    return chosen
+
+
+def build(ctx, project, scenes, chosen, assets, captions_on):
+    """The clips for the scenes that are not kept: graphics (timed and placed by the Director's
+    rules: off the face unless made to cover it, never on the captions, inside the safe area),
+    effect specs and PiP specs. Changes `chosen` when a beat cannot be built (camera instead)."""
+    by_index = {s.index: s for s in scenes}
+    used_images = Counter()
+    items, effects, pips = [], [], []
+    for s, c in zip(scenes, chosen):
+        if c.get("kept"):
+            continue
+        it, eff, pip = element(ctx, s, c["beat"], assets, c.get("choice"), used_images, captions_on)
+        if it is None and BEATS[c["beat"]][0] is not None:
+            # the beat could not be built here: a quiet camera move keeps the rhythm
+            c["beat"] = "camera"
+            it, eff, pip = element(ctx, s, "camera", assets, {}, used_images, captions_on)
+        if it is not None:
+            items.append(it)
+        effects += eff
+        pips += pip
+    starts = sorted([x["start"] for x in items] + [c["start"] for c in ctx.fixed])
+    timed = []
+    for it in sorted(items, key=lambda x: x["start"]):
+        nxt = next((t for t in starts if t > it["start"] + EPS), None)
+        if time_item(ctx, it, by_index[it["scene"]], nxt):
+            timed.append(it)
+        else:
+            chosen_for(scenes, chosen, it["scene"])["beat"] = "camera"
+            effects += element(ctx, by_index[it["scene"]], "camera", assets, {}, used_images, captions_on)[1]
+    placed = director.place_items(ctx, timed)
+    kept_ids = {id(x) for x in placed}
+    for it in timed:
+        if id(it) not in kept_ids:
+            chosen_for(scenes, chosen, it["scene"])["beat"] = "camera"
+            effects += element(ctx, by_index[it["scene"]], "camera", assets, {}, used_images, captions_on)[1]
+    ids = director.next_ids(project, "g")
+    clips = []
+    for it in placed:
+        meta = graphics.template_meta(it["template"])
+        clips.append({"id": next(ids), "type": "graphic", "start": round(it["start"], 4),
+                      "duration": round(it["end"] - it["start"], 4), "template": it["template"],
+                      "x": it["x"], "y": it["y"], "params": build_params(it, meta, ctx),
+                      "label": f"{meta['name']}: {strip_marks(it.get('text') or it.get('spoken', ''))}"[:120],
+                      "director": {"style": STYLE, "beat": it["beat"], "scene": it["scene"], "mood": it.get("mood"),
+                                   "words": scene_text(ctx, by_index[it["scene"]])[:200],
+                                   "importance": it["importance"], "reason": it["reason"],
+                                   "kind": meta["category"]}})
+    return clips, placed, effects, pips
+
+
+def chosen_for(scenes, chosen, index):
+    return next(c for s, c in zip(scenes, chosen) if s.index == index)
+
+
+def plan_rows(ctx, scenes, chosen):
+    return [{**s.as_dict(), "beat": c["beat"], "text": scene_text(ctx, s)[:120]} for s, c in zip(scenes, chosen)]
+
+
+def add_files(project, files):
+    """The creator's uploaded pictures and clips as project media (those the edit has not used
+    yet), so the scenes can show them."""
+    from pathlib import Path
+
+    from .project import media_from_file
+    have = {str(Path(m["path"]).resolve()) for m in project["media"] if Path(m["path"]).is_absolute()}
+    ids = director.next_ids(project, "pem")
+    for f in files or ():
+        path = Path(f).resolve()
+        if str(path) in have or not path.is_file():
+            continue
+        m = media_from_file(path, next(ids))
+        if m["kind"] in ("image", "video"):
+            project["media"].append(m)
+            have.add(str(path))
+
+
+def generate(project, cfg, instruction="", provider=None, model=None, cache=None, reporter=None, cancel=None,
+             video=None, use_ai=True, base_dir=None, files=()):
+    """Plan and add the whole editorial edit to a copy of the project. Returns the same dict as
+    director.generate (project, count, style, notes, fallback, reason, cost, usage, plan...), plus
+    `scenes` (the plan, scene by scene, also saved in meta.editorial). `files`: the creator's
+    uploaded pictures / clips (added to the project's media when the edit has not used them)."""
+    project = copy.deepcopy(project)
+    add_files(project, files)
+    removed = director.clear_director_clips(project) + clear_own(project)
+    if reporter:
+        reporter.stage("graphics", "Planning the editorial scenes")
+    director.face_for(project, video, cfg, cache, reporter, cancel)
+    ctx = Ctx(project, cfg, STYLE, instruction, fixed=director.fixed_graphics(project))
+    empty = {"project": project, "count": 0, "style": STYLE, "fallback": False, "reason": "", "cost": None,
+             "usage": {}, "plan": [], "wipe": None, "removed": removed, "scenes": []}
+    if not ctx.words:
+        return {**empty, "notes": ["No spoken words, so no editorial scenes."]}
+    scenes = make_scenes(ctx.words, ctx.duration)
+    assets = Assets(project, cfg, base_dir)
+    captions_on = captions_present(project)
+    choices, usage, used_model, attempts, cached = {}, {"input_tokens": 0, "output_tokens": 0}, model, [], False
+    fallback, reason = False, ""
+    if use_ai and provider:
+        choices, usage, used_model, attempts, cached = request_choices(ctx, scenes, assets, captions_on, provider,
+                                                                       model, cache, cancel)
+        if not choices:
+            fallback = True
+            first = attempts[0]["problems"][0] if attempts and attempts[0]["problems"] else "no answer"
+            reason = (f"The AI scene plan could not be used ({first}) - the scenes were planned by the "
+                      "editorial rules instead.")
+    chosen = choose_beats(ctx, scenes, assets, captions_on, choices)
+    clips, placed, effects, pips = build(ctx, project, scenes, chosen, assets, captions_on)
+    effects += bw_transitions(ctx, scenes, chosen)
+    director.lay_out(project, clips)
+    add_effect_clips(project, ctx, director.next_ids(project, "pe"), placed, effects, pips, scenes)
+    rows = plan_rows(ctx, scenes, chosen)
+    meta = project.setdefault("meta", {})
+    meta["editorial"] = {"scenes": rows}
+    meta["graphics"] = {"style": STYLE, "count": len(clips), "fallback": fallback}
+    from .costs import plan_cost
+    ai = cfg.get("ai") or {}
+    cost = plan_cost(ai.get("prices") or {}, used_model, usage["input_tokens"], usage["output_tokens"]) \
+        if (used_model and usage["input_tokens"]) else (0.0 if cached else None)
+    notes = list(ctx.notes)
+    if not (assets.images or assets.videos or assets.logo):
+        notes.append("No screenshots, photos or clips of yours were given, so the picture beats "
+                     "(collage, montage, phone, PiP...) were left out. Add your own files to use them.")
+    if not ctx.face.known:
+        notes.append("The face was not tracked, so cards keep off the upper-middle of the frame, where a "
+                     "speaker usually is. (Set up tracking, docs/tracking.md, to place them around the real face.)")
+    return {"project": project, "count": len(clips), "style": STYLE, "notes": notes, "fallback": fallback,
+            "reason": reason, "cost": cost, "usage": usage, "model": used_model, "plan": placed, "wipe": None,
+            "removed": removed, "summary": f"{len(scenes)} scenes", "attempts": attempts, "cached": cached,
+            "scenes": rows}
+
+
+def remove_scene_elements(project, scene):
+    """Remove this planner's unlocked clips that start inside a scene (its graphics, dimming,
+    vignette, camera move and PiP; the B&W transitions belong to the cuts between scenes and stay)."""
+    for t in project["tracks"]:
+        inside = [c for c in t["clips"] if scene.start - EPS <= c["start"] < scene.end - EPS and not c.get("locked")]
+        if t["kind"] == "graphics":
+            inside = [c for c in inside if (c.get("director") or {}).get("style") == STYLE]
+        elif not str(t["id"]).startswith("pe-") or t["id"] == "pe-transitions":
+            continue
+        drop = {c["id"] for c in inside}
+        t["clips"] = [c for c in t["clips"] if c["id"] not in drop]
+    project["tracks"] = [t for t in project["tracks"] if not (str(t["id"]).startswith("pe-") and not t["clips"])]
+
+
+def saved_scenes(project, words):
+    """The scenes of the saved plan (meta.editorial), with their words; None without a plan."""
+    rows = ((project.get("meta") or {}).get("editorial") or {}).get("scenes") or []
+    if not rows:
+        return None, {}
+    scenes, beats = [], {}
+    for r in sorted(rows, key=lambda r: r["start"]):
+        idx = [i for i, w in enumerate(words) if r["start"] - EPS <= w["start"] < r["end"] - EPS]
+        if idx:
+            scenes.append(Scene(r["index"], idx[0], idx[-1], r["start"], r["end"]))
+            beats[r["index"]] = r["beat"]
+    return scenes, beats
+
+
+def regenerate_scene(project, scene_index, cfg, instruction="", cache=None, cancel=None, base_dir=None,
+                     graphic_only=False):
+    """Another beat for one scene (not the one it has now); the other scenes stay as they are.
+    graphic_only: the new beat must be a graphic (not PiP or a camera move).
+    Returns {"project", "beat", "before", "clips" (ids of the new clips), "notes"}."""
+    project = copy.deepcopy(project)
+    words = director.timeline_words(project)
+    scenes, beats = saved_scenes(project, words)
+    if scenes is None:
+        raise director.DirectorError("This video has no editorial scene plan yet. Make the edit with the "
+                                     "PREMIUM EDITORIAL VIRAL preset (or the premium_editorial style) first.")
+    scene = next((s for s in scenes if s.index == scene_index), None)
+    if scene is None:
+        raise director.DirectorError(f"There is no editorial scene {scene_index + 1} with words in this video.")
+    locked = [c for t in project["tracks"] if t["kind"] == "graphics" or str(t["id"]).startswith("pe-")
+              for c in t["clips"] if c.get("locked") and scene.start - EPS <= c["start"] < scene.end - EPS]
+    if locked:
+        raise director.DirectorError("This scene has a locked graphic or effect. Unlock it first.")
+    before = beats.get(scene_index)
+    remove_scene_elements(project, scene)
+    ctx = Ctx(project, cfg, STYLE, instruction, words=words, fixed=director.graphic_clips_of(project))
+    assets = Assets(project, cfg, base_dir)
+    captions_on = captions_present(project)
+    kept = {i: b for i, b in beats.items() if i != scene_index}
+    exclude = {before} | {b for b in kept.values() if b in ONCE}
+    if graphic_only:
+        exclude |= {b for b, spec in BEATS.items() if spec[0] is None}
+    chosen = choose_beats(ctx, scenes, assets, captions_on, {}, kept, {scene_index: exclude - {None}})
+    clips, placed, effects, pips = build(ctx, project, scenes, chosen, assets, captions_on)
+    beat = chosen_for(scenes, chosen, scene_index)["beat"]
+    if graphic_only and not clips:
+        raise director.DirectorError("No other graphic fits this scene without covering the face or the captions.")
+    before_ids = {c["id"] for t in project["tracks"] for c in t["clips"]}
+    director.lay_out(project, clips)
+    add_effect_clips(project, ctx, director.next_ids(project, "pe"), placed, effects, pips, scenes)
+    rows = plan_rows(ctx, scenes, chosen)
+    old_rows = {r["index"]: r for r in project["meta"]["editorial"]["scenes"]}
+    for r in rows:
+        if r["index"] != scene_index and r["index"] in old_rows:
+            r["beat"] = old_rows[r["index"]]["beat"]
+    project["meta"]["editorial"]["scenes"] = rows
+    new_ids = [c["id"] for t in project["tracks"] for c in t["clips"] if c["id"] not in before_ids]
+    return {"project": project, "beat": beat, "before": before, "clips": new_ids, "notes": list(ctx.notes)}

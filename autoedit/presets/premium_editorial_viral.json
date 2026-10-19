@@ -1,0 +1,26 @@
+{
+  "id": "premium_editorial_viral",
+  "name": "PREMIUM EDITORIAL VIRAL",
+  "tl": "PREMIUM EDITORIAL VIRAL (pang-magasin)",
+  "about": "Premium magazine look, planned scene by scene: fast but smooth jump cuts, punch-in zooms, cream caption cards, serif headlines, keyword highlights, your own screenshots floating over a dimmed background, UI panels, checklists, PiP, B&W transitions. A new idea every 2-4 s, timed to your words. Uses only your own files.",
+  "about_tl": "Premium na itsura ng magasin, eksena por eksena: mabilis pero smooth na jump cut, punch-in zoom, cream na caption card, serif na headline, naka-highlight na keyword, sarili mong screenshots sa ibabaw ng dimmed na background, UI panel, checklist, PiP, B&W transition. Bagong idea kada 2-4 segundo, sabay sa sinasabi mo. Sarili mong files lang ang gamit.",
+  "format": null,
+  "graphics": "premium_editorial",
+  "density": 4,
+  "captions": {
+    "style": "editorial_card"
+  },
+  "grade": "natural_clean",
+  "pacing": "fast",
+  "zoom": true,
+  "sfx": false,
+  "music": {
+    "mood": "upbeat",
+    "volume": 0.1
+  },
+  "broll": {
+    "use_stock": false,
+    "ai_clips": false
+  },
+  "instruction": "Premium editorial look: fast but smooth cuts, calm and expensive-looking, never cluttered. Use only my own uploaded videos, photos, screenshots and brand files; no stock and no AI-made clips."
+}

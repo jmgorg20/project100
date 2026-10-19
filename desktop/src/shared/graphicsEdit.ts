@@ -67,6 +67,7 @@ export const GRAPHIC_STYLES: { id: string; label: string; tl: string }[] = [
   { id: "news", label: "News / explainer", tl: "Balita / paliwanag" },
   { id: "luxury", label: "Luxury / premium", tl: "Luxury / premium" },
   { id: "minimal", label: "Minimal", tl: "Minimal" },
+  { id: "premium_editorial", label: "Premium editorial", tl: "Premium editorial (magazine)" },
 ];
 
 export const ATTACH_LABELS: Record<AttachKind, string> = { flash: "Flash", whip: "Whip", punch: "Punch-in" };
