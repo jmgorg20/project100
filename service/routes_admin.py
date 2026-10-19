@@ -1,13 +1,14 @@
 """The admin API (Authorization: Bearer <SERVICE_ADMIN_TOKEN>). Every change is written to the audit log.
 
 Clients: create, change limits/presets/channel, suspend; keys: create, revoke, rotate.
+Users: list, disable, make staff; invite codes; the sign-up switch (invite / open / closed).
 Workers: create (token shown once), revoke. Queue: stats, jobs. Flags per channel. Releases:
 register (with the test result), promote (only if the tests passed), rollback (one call).
 """
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from . import clients, jobqueue
+from . import accounts, clients, jobqueue
 from .api import ApiError, client_ip
 from .db import loads, now
 from .deps import require_admin
@@ -21,7 +22,7 @@ def _err(exc):
 
 
 def _audit(request, t, action, target=None, details=None):
-    clients.audit(t, "admin", action, target, details, client_ip(request, request.app.state.settings))
+    clients.audit(t, request.state.actor, action, target, details, client_ip(request, request.app.state.settings))
 
 
 @router.get("/clients")
@@ -227,3 +228,96 @@ def audit_log(request: Request, limit: int = 100):
     for r in rows:
         r["details"] = loads(r["details"])
     return {"entries": rows}
+
+
+# ---------------------------------------------------------------- users, invite codes, sign-ups
+
+@router.get("/users")
+def list_users(request: Request, q: str = None, limit: int = 50):
+    limit = max(1, min(200, limit))
+    sql = ("SELECT id, email, name, status, is_admin, email_verified_at, mfa_enabled_at, created_at, last_login_at "
+           "FROM users")
+    params = []
+    if q:
+        sql += " WHERE email LIKE ?"
+        params.append("%" + q.lower().replace("%", "").replace("_", "") + "%")
+    sql += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    with request.app.state.db.tx() as t:
+        rows = t.all(sql, params)
+        for r in rows:
+            r["organisations"] = accounts.orgs_of(t, r["id"])
+        return {"users": rows}
+
+
+@router.patch("/users/{user_id}")
+def update_user(request: Request, user_id: str, body: dict):
+    s = request.app.state
+    changes = {}
+    if "status" in body:
+        if body["status"] not in ("active", "disabled"):
+            raise ApiError(422, "invalid", "status must be active or disabled")
+        changes["status"] = body["status"]
+    if "is_admin" in body:
+        changes["is_admin"] = 1 if body["is_admin"] else 0
+    if set(body) - {"status", "is_admin"} or not changes:
+        raise ApiError(422, "invalid", "Change status (active | disabled) and/or is_admin.")
+    with s.db.tx() as t:
+        if not accounts.get_user(t, user_id):
+            raise ApiError(404, "not_found", "No such user.")
+        changes["updated_at"] = now()
+        t.update("users", user_id, changes)
+        if changes.get("status") == "disabled":
+            accounts.revoke_all_sessions(t, user_id)
+        _audit(request, t, "user.updated", user_id, {k: v for k, v in changes.items() if k != "updated_at"})
+        return {"user": accounts.public_user(accounts.get_user(t, user_id))}
+
+
+@router.get("/invite-codes")
+def list_invite_codes(request: Request):
+    with request.app.state.db.tx() as t:
+        return {"invite_codes": accounts.list_invite_codes(t)}
+
+
+@router.post("/invite-codes", status_code=201)
+def create_invite_code(request: Request, body: dict = None):
+    s = request.app.state
+    body = body or {}
+    with s.db.tx() as t:
+        try:
+            code = accounts.create_invite_code(t, s.settings, body.get("max_uses", 1), body.get("days", 30),
+                                               body.get("note"), request.state.actor)
+        except (accounts.AccountError, ValueError, TypeError) as exc:
+            raise ApiError(422, "invalid", str(exc))
+        _audit(request, t, "invite_code.created", code["id"], {"max_uses": code["max_uses"]})
+    return {**code, "note": "Give this code to the person; it is shown only now."}
+
+
+@router.delete("/invite-codes/{code_id}", status_code=204)
+def revoke_invite_code(request: Request, code_id: str):
+    with request.app.state.db.tx() as t:
+        try:
+            accounts.revoke_invite_code(t, code_id)
+        except accounts.AccountError as exc:
+            raise _err(exc)
+        _audit(request, t, "invite_code.revoked", code_id)
+    return Response(status_code=204)
+
+
+@router.get("/signups")
+def get_signups(request: Request):
+    s = request.app.state
+    with s.db.tx() as t:
+        return {"mode": accounts.signup_mode(t, s.settings)}
+
+
+@router.put("/signups")
+def set_signups(request: Request, body: dict):
+    """The switch for new sign-ups: invite (invite codes only), open, or closed (paused)."""
+    with request.app.state.db.tx() as t:
+        try:
+            mode = accounts.set_signup_mode(t, body.get("mode"))
+        except accounts.AccountError as exc:
+            raise _err(exc)
+        _audit(request, t, "signups.mode", None, {"mode": mode})
+    return {"mode": mode}

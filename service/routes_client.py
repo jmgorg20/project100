@@ -1,5 +1,9 @@
-"""The client API (Authorization: Bearer ak_...). A client only ever sees its own things: every query
-below filters by the caller's client id."""
+"""The client API: an API key (Authorization: Bearer ak_...) or a signed-in user acting in their
+organisation (the web app). A client only ever sees its own things: every query below filters by
+the caller's client id, and on Postgres row-level security enforces it again (see db.py).
+
+Signed-in members can upload and run jobs; changing presets and webhooks and deleting all data
+needs an owner or admin (require_manager)."""
 
 import asyncio
 import json
@@ -8,10 +12,10 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from . import SERVICE_VERSION, clients, jobqueue, jobs, media, ratelimit, security, webhooks
+from . import SERVICE_VERSION, accounts, clients, jobqueue, jobs, media, ratelimit, security, webhooks
 from .api import ApiError
 from .db import dumps, loads, now
-from .deps import require_client
+from .deps import require_client, require_manager
 from .jobs import JobError
 
 router = APIRouter(prefix="/v1")
@@ -41,8 +45,9 @@ def me(request: Request, client=Depends(require_client)):
         stored = clients.stored_bytes(t, client["id"])
         flags = jobqueue.flags_for(t, client["channel"])
     c = clients.public(client)
-    c.pop("key_id", None)
-    return {"client": c, "usage": usage, "stored_bytes": stored, "flags": flags}
+    for k in ("key_id", "auth", "user_id", "role", "session_id"):
+        c.pop(k, None)
+    return {"client": c, "usage": usage, "stored_bytes": stored, "flags": flags, "role": client.get("role")}
 
 
 @router.get("/catalog")
@@ -59,7 +64,7 @@ def my_presets(request: Request, client=Depends(require_client)):
 
 
 @router.put("/presets/{preset_id}")
-def put_preset(request: Request, preset_id: str, body: dict, client=Depends(require_client)):
+def put_preset(request: Request, preset_id: str, body: dict, client=Depends(require_manager)):
     with request.app.state.db.tx() as t:
         try:
             saved = jobs.save_own_preset(t, client["id"], preset_id, body)
@@ -70,7 +75,7 @@ def put_preset(request: Request, preset_id: str, body: dict, client=Depends(requ
 
 
 @router.delete("/presets/{preset_id}", status_code=204)
-def delete_preset(request: Request, preset_id: str, client=Depends(require_client)):
+def delete_preset(request: Request, preset_id: str, client=Depends(require_manager)):
     with request.app.state.db.tx() as t:
         if not t.run("DELETE FROM client_presets WHERE client_id = ? AND id = ?", (client["id"], preset_id)):
             raise ApiError(404, "not_found", "No such preset of yours.")
@@ -83,7 +88,7 @@ def delete_preset(request: Request, preset_id: str, client=Depends(require_clien
 def _upload_view(u, settings):
     return {"id": u["id"], "filename": u["filename"], "kind": u["kind"], "size": u["size_expected"],
             "received": u["size_received"], "status": u["status"], "error": u["error"], "duration": u["duration"],
-            "media": loads(u["media"]), "expires_at": u["expires_at"],
+            "media": loads(u["media"]), "expires_at": u["expires_at"], "project_id": u.get("project_id"),
             "expires_in_seconds": max(0, int(u["expires_at"] - now())), "chunk_size": settings.chunk_mb * 1024 * 1024}
 
 
@@ -111,7 +116,15 @@ def create_upload(request: Request, body: dict, client=Depends(require_client)):
     sha = body.get("sha256")
     if sha is not None and (not isinstance(sha, str) or len(sha) != 64 or not all(c in "0123456789abcdef" for c in sha)):
         raise ApiError(422, "invalid", "sha256 must be 64 lowercase hex characters.")
+    project_id = body.get("project_id")
     with s.db.tx() as t:
+        if project_id is not None:
+            if not isinstance(project_id, str):
+                raise ApiError(422, "invalid", "project_id must be a project id.")
+            try:
+                accounts.get_project(t, client["id"], project_id)
+            except accounts.AccountError as exc:
+                raise _err(exc)
         ok, retry = ratelimit.hit(t, f"upload:{client['id']}", 60)
         if not ok:
             raise ApiError(429, "rate_limited", "Too many uploads started; wait a minute.", {"Retry-After": str(retry)})
@@ -124,7 +137,8 @@ def create_upload(request: Request, body: dict, client=Depends(require_client)):
                              "size_expected": size, "size_received": 0, "sha256": sha, "status": "uploading",
                              "path": str(s.storage.upload_path(uid)), "media": None, "duration": None, "error": None,
                              "created_at": now(), "updated_at": now(),
-                             "expires_at": now() + float(client["retention_days"]) * 86400, "deleted_at": None})
+                             "expires_at": now() + float(client["retention_days"]) * 86400, "deleted_at": None,
+                             "project_id": project_id, "user_id": client.get("user_id")})
         u = t.one("SELECT * FROM uploads WHERE id = ?", (uid,))
     out = _upload_view(u, s.settings)
     out["upload_url"] = f"{base_url(request)}/v1/uploads/{uid}/chunk"
@@ -244,7 +258,7 @@ def create_job(request: Request, body: dict, response: Response, client=Depends(
 
 @router.get("/jobs")
 def list_jobs(request: Request, client=Depends(require_client), status: str = None, limit: int = 20,
-              before: float = None):
+              before: float = None, project_id: str = None):
     s = request.app.state
     limit = max(1, min(100, limit))
     sql = "SELECT * FROM jobs WHERE client_id = ? AND deleted_at IS NULL"
@@ -255,6 +269,9 @@ def list_jobs(request: Request, client=Depends(require_client), status: str = No
     if before:
         sql += " AND created_at < ?"
         params.append(before)
+    if project_id:
+        sql += " AND project_id = ?"
+        params.append(project_id)
     sql += " ORDER BY created_at DESC LIMIT ?"
     params.append(limit)
     with s.db.tx() as t:
@@ -321,13 +338,6 @@ def cancel_job(request: Request, job_id: str, client=Depends(require_client)):
         return jobs.view(t, s.settings, job, base_url(request))
 
 
-def _delete_job_files(t, storage, job):
-    for o in t.all("SELECT * FROM outputs WHERE job_id = ? AND deleted_at IS NULL", (job["id"],)):
-        storage.delete(o["path"])
-    t.run("UPDATE outputs SET deleted_at = ?, path = NULL WHERE job_id = ? AND deleted_at IS NULL", (now(), job["id"]))
-    storage.delete_job_folder(job["id"])
-
-
 @router.delete("/jobs/{job_id}", status_code=204)
 def delete_job(request: Request, job_id: str, client=Depends(require_client)):
     """Delete a job's results now (a running job is cancelled first)."""
@@ -336,31 +346,18 @@ def delete_job(request: Request, job_id: str, client=Depends(require_client)):
         job = _get_job(t, client, job_id)
         if job["status"] not in jobqueue.FINAL:
             jobqueue.cancel(t, job)
-        _delete_job_files(t, s.storage, job)
+        clients.delete_job_files(t, s.storage, job)
         t.run("UPDATE jobs SET deleted_at = ?, params = '{}', result = NULL WHERE id = ?", (now(), job_id))
         clients.audit(t, f"client:{client['id']}", "job.deleted", job_id)
     return Response(status_code=204)
 
 
 @router.delete("/data", status_code=200)
-def delete_my_data(request: Request, client=Depends(require_client)):
+def delete_my_data(request: Request, client=Depends(require_manager)):
     """Delete every upload and result of this client now (jobs keep only their ids and times)."""
     s = request.app.state
     with s.db.tx() as t:
-        n_up = 0
-        for u in t.all("SELECT id FROM uploads WHERE client_id = ? AND status <> 'deleted'", (client["id"],)):
-            s.storage.delete(s.storage.upload_path(u["id"]))
-            n_up += 1
-        t.run("UPDATE uploads SET status = 'deleted', deleted_at = ?, path = NULL, filename = 'deleted', media = NULL "
-              "WHERE client_id = ? AND status <> 'deleted'", (now(), client["id"]))
-        n_jobs = 0
-        for j in t.all("SELECT * FROM jobs WHERE client_id = ? AND deleted_at IS NULL", (client["id"],)):
-            if j["status"] not in jobqueue.FINAL:
-                jobqueue.cancel(t, j)
-            _delete_job_files(t, s.storage, j)
-            n_jobs += 1
-        t.run("UPDATE jobs SET deleted_at = ?, params = '{}', result = NULL WHERE client_id = ? AND deleted_at IS NULL",
-              (now(), client["id"]))
+        n_up, n_jobs = clients.delete_client_files(t, s.storage, client["id"])
         clients.audit(t, f"client:{client['id']}", "data.deleted", client["id"], {"uploads": n_up, "jobs": n_jobs})
     return {"deleted_uploads": n_up, "deleted_jobs": n_jobs}
 
@@ -382,13 +379,13 @@ def usage(request: Request, client=Depends(require_client), month: str = None):
 # ---------------------------------------------------------------- webhooks and keys
 
 @router.get("/webhooks")
-def list_webhooks(request: Request, client=Depends(require_client)):
+def list_webhooks(request: Request, client=Depends(require_manager)):
     with request.app.state.db.tx() as t:
         return {"webhooks": webhooks.list_for(t, client["id"])}
 
 
 @router.post("/webhooks", status_code=201)
-def add_webhook(request: Request, body: dict, client=Depends(require_client)):
+def add_webhook(request: Request, body: dict, client=Depends(require_manager)):
     s = request.app.state
     with s.db.tx() as t:
         try:
@@ -400,7 +397,7 @@ def add_webhook(request: Request, body: dict, client=Depends(require_client)):
 
 
 @router.delete("/webhooks/{webhook_id}", status_code=204)
-def delete_webhook(request: Request, webhook_id: str, client=Depends(require_client)):
+def delete_webhook(request: Request, webhook_id: str, client=Depends(require_manager)):
     with request.app.state.db.tx() as t:
         try:
             webhooks.delete(t, client["id"], webhook_id)
@@ -414,7 +411,53 @@ def delete_webhook(request: Request, webhook_id: str, client=Depends(require_cli
 def rotate_my_key(request: Request, client=Depends(require_client), grace_hours: float = 24.0):
     """A new key for you; the one you used keeps working for `grace_hours` (0-168)."""
     s = request.app.state
+    if client["auth"] != "key":
+        raise ApiError(400, "invalid", "Only an API key can rotate itself.")
     with s.db.tx() as t:
         new = clients.rotate_key(t, s.settings, client["key_id"], max(0.0, min(168.0, grace_hours)))
         clients.audit(t, f"client:{client['id']}", "key.rotated", client["key_id"])
     return {**new, "note": "Keep the new key: it is shown only now."}
+
+
+# ---------------------------------------------------------------- projects
+
+def _project_view(p):
+    return {"id": p["id"], "name": p["name"], "created_at": p["created_at"], "updated_at": p["updated_at"],
+            "jobs": p.get("jobs")}
+
+
+@router.get("/projects")
+def list_projects(request: Request, client=Depends(require_client)):
+    with request.app.state.db.tx() as t:
+        return {"projects": [_project_view(p) for p in accounts.list_projects(t, client["id"])]}
+
+
+@router.post("/projects", status_code=201)
+def create_project(request: Request, body: dict, client=Depends(require_client)):
+    with request.app.state.db.tx() as t:
+        try:
+            p = accounts.create_project(t, client["id"], body.get("name"), client.get("user_id"))
+        except accounts.AccountError as exc:
+            raise _err(exc)
+        clients.audit(t, f"client:{client['id']}", "project.created", p["id"])
+        return _project_view(p)
+
+
+@router.patch("/projects/{project_id}")
+def rename_project(request: Request, project_id: str, body: dict, client=Depends(require_client)):
+    with request.app.state.db.tx() as t:
+        try:
+            return _project_view(accounts.rename_project(t, client["id"], project_id, body.get("name")))
+        except accounts.AccountError as exc:
+            raise _err(exc)
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+def delete_project(request: Request, project_id: str, client=Depends(require_client)):
+    with request.app.state.db.tx() as t:
+        try:
+            accounts.delete_project(t, client["id"], project_id)
+        except accounts.AccountError as exc:
+            raise _err(exc)
+        clients.audit(t, f"client:{client['id']}", "project.deleted", project_id)
+    return Response(status_code=204)

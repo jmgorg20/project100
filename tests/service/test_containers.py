@@ -52,16 +52,22 @@ def stack(tmp_path):
     docker("network", "create", net)
     started = []
     try:
+        init = os.path.join(os.path.dirname(__file__), "..", "..", "deploy", "postgres-init.sh")
         docker("run", "-d", "--name", db, "--network", net, "-e", "POSTGRES_PASSWORD=pw", "-e", "POSTGRES_USER=ae",
-               "-e", "POSTGRES_DB=ae", os.environ.get("AUTOEDIT_TEST_POSTGRES_IMAGE", "postgres:16"))
+               "-e", "POSTGRES_DB=ae", "-e", "APP_DB_PASSWORD=apppw",
+               "-v", f"{os.path.abspath(init)}:/docker-entrypoint-initdb.d/10-app-role.sh:ro",
+               os.environ.get("AUTOEDIT_TEST_POSTGRES_IMAGE", "postgres:16"))
         started.append(db)
         for _ in range(60):
-            if docker("exec", db, "pg_isready", "-U", "ae", check=False).returncode == 0:
+            ready = docker("exec", db, "psql", "-h", "127.0.0.1", "-U", "ae", "-d", "ae", "-tAc",   # TCP: after init
+                           "SELECT 1 FROM pg_roles WHERE rolname = 'autoedit_app'", check=False)
+            if ready.returncode == 0 and ready.stdout.strip() == "1":
                 break
             time.sleep(1)
         docker("run", "-d", "--name", api, "--network", net, "-p", f"127.0.0.1:{port}:8787", "--read-only",
                "--tmpfs", "/tmp", "--tmpfs", "/data:uid=999,gid=999", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
-               "-e", "SERVICE_ENV=development", "-e", "SERVICE_DATABASE_URL=postgresql://ae:pw@" + db + ":5432/ae",
+               "-e", "SERVICE_ENV=development", "-e", "SERVICE_DATABASE_URL=postgresql://autoedit_app:apppw@" + db + ":5432/ae",
+               "-e", "SERVICE_REQUIRE_RLS=true",
                "-e", f"SERVICE_SECRET_KEY={SECRET}", "-e", f"SERVICE_ADMIN_TOKEN={ADMIN}",
                "-e", "SERVICE_SIGNING_KEY_FILE=/keys/signing-key.pem", "-e", f"SERVICE_PUBLIC_URL=http://127.0.0.1:{port}",
                "-e", "SERVICE_LEASE_SECONDS=60", "-v", f"{keys}:/keys:ro", "autoedit-api:test")
@@ -86,6 +92,10 @@ def stack(tmp_path):
 
 def call(stack, method, path, key=ADMIN, **kw):
     return requests.request(method, stack["url"] + path, headers={"Authorization": f"Bearer {key}"}, timeout=120, **kw)
+
+
+def test_the_service_user_is_held_by_row_level_security(stack):
+    assert requests.get(stack["url"] + "/readyz", timeout=10).json()["rls"] == "enforced"
 
 
 def test_polish_in_containers(stack):

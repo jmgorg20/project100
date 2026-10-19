@@ -58,7 +58,8 @@ def readyz(request: Request):
         probe.unlink()
     except OSError as exc:
         problems.append(f"storage: {exc.__class__.__name__}")
-    return JSONResponse({"ok": not problems, "problems": problems}, status_code=200 if not problems else 503)
+    return JSONResponse({"ok": not problems, "problems": problems, "rls": s.rls},
+                        status_code=200 if not problems else 503)
 
 
 @router.get("/metrics")

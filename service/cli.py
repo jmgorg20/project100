@@ -14,6 +14,9 @@ service-admin commands:
     worker-create NAME [--queues cpu,gpu] [--channel beta]   worker-revoke WORKER_ID   workers
     release-register VERSION --junit report.xml | --passed     promote VERSION     rollback
     flag NAME [--stable on|off] [--beta on|off]                flags
+    users [--q TEXT]                 web-app users        user-staff EMAIL [--off]   user-disable EMAIL [--enable]
+    invite-create [--uses 1 --days 30 --note TEXT]   invite-codes   invite-revoke ID
+    signups invite|open|closed|status    the switch for new sign-ups (closed = paused)
     janitor                          delete expired files, return stuck jobs (for a scheduler)
     status                           queue depth, workers, stable version
 """
@@ -146,6 +149,23 @@ def admin(argv):
     fl.add_argument("--beta", choices=["on", "off"])
     fl.add_argument("--description")
     sub.add_parser("flags")
+    us = sub.add_parser("users")
+    us.add_argument("--q")
+    ust = sub.add_parser("user-staff")
+    ust.add_argument("email")
+    ust.add_argument("--off", action="store_true")
+    ud = sub.add_parser("user-disable")
+    ud.add_argument("email")
+    ud.add_argument("--enable", action="store_true")
+    ic = sub.add_parser("invite-create")
+    ic.add_argument("--uses", type=int, default=1)
+    ic.add_argument("--days", type=float, default=30)
+    ic.add_argument("--note")
+    sub.add_parser("invite-codes")
+    ir = sub.add_parser("invite-revoke")
+    ir.add_argument("code_id")
+    su = sub.add_parser("signups")
+    su.add_argument("mode", choices=["invite", "open", "closed", "status"])
     sub.add_parser("janitor")
     sub.add_parser("status")
     a = p.parse_args(argv)
@@ -166,7 +186,7 @@ def admin(argv):
         print(f"Saved {path} (keep it secret: SERVICE_SIGNING_KEY_FILE) and {path}.pub (give it to workers).")
         return 0
 
-    from . import clients, janitor, jobqueue
+    from . import accounts, clients, janitor, jobqueue
     settings = _settings()
     db = _db(settings)
     actor = "admin-cli"
@@ -257,6 +277,50 @@ def admin(argv):
         elif a.cmd == "flags":
             with db.tx() as t:
                 _print(t.all("SELECT * FROM flags ORDER BY name"))
+        elif a.cmd == "users":
+            with db.tx() as t:
+                sql = "SELECT id, email, name, status, is_admin, email_verified_at, mfa_enabled_at, created_at FROM users"
+                rows = t.all(sql + " WHERE email LIKE ? ORDER BY created_at", (f"%{a.q.lower()}%",)) if a.q else \
+                    t.all(sql + " ORDER BY created_at")
+            _print(rows)
+        elif a.cmd in ("user-staff", "user-disable"):
+            _, canon = accounts.normalize_email(a.email, settings)
+            with db.tx() as t:
+                user = t.one("SELECT * FROM users WHERE email_canonical = ?", (canon,))
+                if not user:
+                    raise clients.ClientError(f"No user with the email {a.email}.")
+                if a.cmd == "user-staff":
+                    t.update("users", user["id"], {"is_admin": 0 if a.off else 1})
+                    clients.audit(t, actor, "user.updated", user["id"], {"is_admin": not a.off})
+                    note = "" if a.off or user["mfa_enabled_at"] else (
+                        " They must turn on two-step sign-in (Account page) before the admin pages open.")
+                    print(f"{user['email']} is {'no longer' if a.off else 'now'} staff.{note}")
+                else:
+                    t.update("users", user["id"], {"status": "active" if a.enable else "disabled"})
+                    if not a.enable:
+                        accounts.revoke_all_sessions(t, user["id"])
+                    clients.audit(t, actor, "user.updated", user["id"], {"status": "active" if a.enable else "disabled"})
+                    print(f"{user['email']} is {'enabled' if a.enable else 'disabled (signed out everywhere)'}.")
+        elif a.cmd == "invite-create":
+            with db.tx() as t:
+                code = accounts.create_invite_code(t, settings, a.uses, a.days, a.note, actor)
+                clients.audit(t, actor, "invite_code.created", code["id"], {"max_uses": a.uses})
+            _print(code)
+            print("The invite code is shown only now.", file=sys.stderr)
+        elif a.cmd == "invite-codes":
+            with db.tx() as t:
+                _print(accounts.list_invite_codes(t))
+        elif a.cmd == "invite-revoke":
+            with db.tx() as t:
+                accounts.revoke_invite_code(t, a.code_id)
+                clients.audit(t, actor, "invite_code.revoked", a.code_id)
+            print("Revoked.")
+        elif a.cmd == "signups":
+            with db.tx() as t:
+                if a.mode != "status":
+                    accounts.set_signup_mode(t, a.mode)
+                    clients.audit(t, actor, "signups.mode", None, {"mode": a.mode})
+                print(f"New sign-ups: {accounts.signup_mode(t, settings)}")
         elif a.cmd == "janitor":
             from .storage import LocalStorage
             _print(janitor.run_once(db, LocalStorage(settings.data_path / "files"), settings))
@@ -264,7 +328,7 @@ def admin(argv):
             with db.tx() as t:
                 _print({"queues": jobqueue.queue_stats(t), "stable_version": jobqueue.get_setting(t, "stable_version"),
                         "workers": t.all("SELECT name, status, channel, engine_version, last_seen_at FROM workers")})
-    except (clients.ClientError, jobqueue.QueueError) as exc:
+    except (clients.ClientError, jobqueue.QueueError, accounts.AccountError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     finally:

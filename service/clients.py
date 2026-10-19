@@ -35,12 +35,17 @@ def public(client):
     return out
 
 
-def create_client(t, settings, name, **limits):
+KINDS = ("integration", "organization")      # an API client, or an organisation of the web app's users
+
+
+def create_client(t, settings, name, kind="integration", **limits):
     name = str(name or "").strip()
     if not name or len(name) > 100:
         raise ClientError("A client needs a name (up to 100 characters).")
+    if kind not in KINDS:
+        raise ClientError("kind must be integration or organization")
     cid = security.new_id("cl_")
-    row = {"id": cid, "name": name, "status": "active", "channel": "stable",
+    row = {"id": cid, "name": name, "kind": kind, "status": "active", "channel": "stable",
            "rate_per_minute": settings.rate_per_minute, "concurrent_jobs": settings.concurrent_jobs,
            "monthly_minutes": settings.monthly_minutes, "storage_mb": settings.storage_mb, "gpu_allowed": 0,
            "retention_days": settings.retention_days,
@@ -210,3 +215,31 @@ def estimate_cost(settings, cpu_seconds=0, gpu_seconds=0, storage_bytes=0, reten
     return round(cpu_seconds * settings.cost_cpu_second + gpu_seconds * settings.cost_gpu_second
                  + storage_bytes / gb * settings.cost_gb_month * (retention_days / 30.0)
                  + egress_bytes / gb * settings.cost_gb_egress + transcription_usd + ai_usd, 6)
+
+
+def delete_client_files(t, storage, client_id):
+    """Delete every upload and result of a client now (jobs keep only their ids and times). Returns
+    (uploads, jobs) counts."""
+    from .jobqueue import FINAL, cancel
+    n_up = 0
+    for u in t.all("SELECT id FROM uploads WHERE client_id = ? AND status <> 'deleted'", (client_id,)):
+        storage.delete(storage.upload_path(u["id"]))
+        n_up += 1
+    t.run("UPDATE uploads SET status = 'deleted', deleted_at = ?, path = NULL, filename = 'deleted', media = NULL "
+          "WHERE client_id = ? AND status <> 'deleted'", (now(), client_id))
+    n_jobs = 0
+    for j in t.all("SELECT * FROM jobs WHERE client_id = ? AND deleted_at IS NULL", (client_id,)):
+        if j["status"] not in FINAL:
+            cancel(t, j)
+        delete_job_files(t, storage, j)
+        n_jobs += 1
+    t.run("UPDATE jobs SET deleted_at = ?, params = '{}', result = NULL WHERE client_id = ? AND deleted_at IS NULL",
+          (now(), client_id))
+    return n_up, n_jobs
+
+
+def delete_job_files(t, storage, job):
+    for o in t.all("SELECT * FROM outputs WHERE job_id = ? AND deleted_at IS NULL", (job["id"],)):
+        storage.delete(o["path"])
+    t.run("UPDATE outputs SET deleted_at = ?, path = NULL WHERE job_id = ? AND deleted_at IS NULL", (now(), job["id"]))
+    storage.delete_job_folder(job["id"])
