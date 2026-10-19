@@ -238,8 +238,14 @@ def delete_client_files(t, storage, client_id):
     return n_up, n_jobs
 
 
-def delete_job_files(t, storage, job):
-    for o in t.all("SELECT * FROM outputs WHERE job_id = ? AND deleted_at IS NULL", (job["id"],)):
+def delete_job_files(t, storage, job, include_held=False):
+    """Delete a job's results. A result held because of an abuse report is kept (it may be evidence)
+    until the staff release or purge it (moderation.py), unless include_held."""
+    held = "" if include_held else " AND held_at IS NULL"
+    for o in t.all(f"SELECT * FROM outputs WHERE job_id = ? AND deleted_at IS NULL{held}", (job["id"],)):
         storage.delete(o["path"])
-    t.run("UPDATE outputs SET deleted_at = ?, path = NULL WHERE job_id = ? AND deleted_at IS NULL", (now(), job["id"]))
-    storage.delete_job_folder(job["id"])
+    t.run(f"UPDATE outputs SET deleted_at = ?, path = NULL WHERE job_id = ? AND deleted_at IS NULL{held}",
+          (now(), job["id"]))
+    if include_held or not t.value("SELECT COUNT(*) FROM outputs WHERE job_id = ? AND deleted_at IS NULL",
+                                   (job["id"],), 0):
+        storage.delete_job_folder(job["id"])

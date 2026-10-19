@@ -43,7 +43,9 @@ jobs:
         working-directory: desktop
         run: npm ci && npx playwright install --with-deps chromium
       - name: Lint
-        run: ruff check --select F,E9 autoedit service tests editor.py
+        run: ruff check --select F,E9 autoedit service tests scripts editor.py
+      - name: No AI model weights in the repository or the images
+        run: python scripts/check_no_weights.py
       - name: Tests
         run: python -m pytest -q --junitxml=pytest-report.xml
       - uses: actions/upload-artifact@v4

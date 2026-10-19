@@ -29,6 +29,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
     depends_on: [api]
+    networks: [edge]
 
   db:
     image: ${POSTGRES_IMAGE:-postgres:16}
@@ -46,6 +47,7 @@ services:
       retries: 10
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
+    networks: [data]
 
   api:
     <<: *hardening
@@ -60,6 +62,7 @@ services:
     depends_on:
       db: {condition: service_healthy}
     expose: ["8787"]
+    networks: [edge, data]
 
   worker-cpu:
     <<: *hardening
@@ -72,8 +75,15 @@ services:
       - ./secrets/signing-key.pem.pub:/run/secrets/signing-key.pem.pub:ro
       - workerdata:/work
     tmpfs: ["/tmp", "/app/.cache"]
-    # the worker needs only outbound HTTPS (the API, Groq/Anthropic, stock sites): no ports
+    # the worker needs only outbound HTTPS (the API at its public address, Groq/Anthropic, stock
+    # sites): no ports, and its own network, so it cannot reach the database or the API's insides
     depends_on: [proxy]
+    networks: [worker]
+
+networks:
+  edge: {}                # proxy <-> api
+  data: {internal: true}  # api <-> database only; no internet
+  worker: {}              # the worker: outbound only
 
 volumes:
   pgdata: {}

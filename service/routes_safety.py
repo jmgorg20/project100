@@ -3,6 +3,7 @@
 POST /v1/public/report   {"link": "<the result link>", "reason": "...", "details"?, "email"?, "captcha"?}
 GET  /v1/admin/reports?status=open
 POST /v1/admin/reports/<id>/resolve   {"action": "dismiss" | "remove" | "suspend", "note"?}
+POST /v1/admin/reports/<id>/purge     delete the files kept as evidence
 """
 
 from fastapi import APIRouter, Depends, Request
@@ -56,5 +57,15 @@ def resolve_report(request: Request, report_id: str, body: dict):
         try:
             return {"report": moderation.resolve(t, s.storage, report_id, body.get("action"), request.state.actor,
                                                  body.get("note"), client_ip(request, s.settings))}
+        except moderation.ReportError as exc:
+            raise _err(exc)
+
+
+@router.post("/v1/admin/reports/{report_id}/purge", dependencies=[Depends(require_admin)])
+def purge_report(request: Request, report_id: str):
+    s = request.app.state
+    with s.db.tx() as t:
+        try:
+            return moderation.purge(t, s.storage, report_id, request.state.actor, client_ip(request, s.settings))
         except moderation.ReportError as exc:
             raise _err(exc)

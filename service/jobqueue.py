@@ -142,6 +142,9 @@ def enqueue(t, settings, client, kind, params, inputs, queue="cpu", priority=100
         old = t.one("SELECT * FROM jobs WHERE client_id = ? AND idempotency_key = ?", (client["id"], idempotency_key))
         if old:
             return old, False
+    waiting = t.value("SELECT COUNT(*) FROM jobs WHERE client_id = ? AND status = 'queued'", (client["id"],), 0)
+    if waiting >= settings.max_queued_jobs:          # one client's backlog must not hold up everyone else
+        raise QueueError(f"{waiting} jobs are already waiting; send more when some have started.", 429)
     jid = security.new_id("job_")
     row = {"id": jid, "client_id": client["id"], "kind": kind, "queue": queue, "channel": client["channel"],
            "status": "queued", "priority": int(priority), "params": dumps(params), "inputs": dumps(inputs),

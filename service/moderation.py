@@ -9,6 +9,11 @@ holds the file at once (downloads are refused) until a person looks at it. The s
     remove    the job's files are deleted now (the report and the audit log keep the record)
     suspend   the files are deleted and the workspace / client is suspended (no sign-in to it, no API)
 
+A held file is never deleted by expiry or by its owner deleting the job or the account. For a child
+safety report, remove / suspend keep the file on hold as evidence for the authorities (the law in the
+Philippines, RA 11930, asks platforms to preserve it); purge deletes it once they have what they need
+(docs/runbook.md).
+
 Uploads can also be checked when they arrive (SERVICE_MODERATION_COMMAND, media.moderate); a file
 the check refuses is never stored.
 """
@@ -21,6 +26,7 @@ from .db import now
 REASONS = ("copyright", "child_safety", "violence", "hate", "harassment", "privacy", "illegal", "spam", "other")
 ACTIONS = {"dismiss": "dismissed", "remove": "removed", "suspend": "suspended"}
 HOLD_NOW = ("child_safety",)
+PRESERVE = ("child_safety",)        # "remove" keeps these files on hold as evidence (purge() deletes them)
 HOLD_AFTER = 3                      # reports from different addresses about one file
 MAX_DETAILS = 2000
 
@@ -102,12 +108,20 @@ def resolve(t, storage, report_id, action, by, note=None, ip=None):
     if r["status"] != "open":
         raise ReportError("This report was already handled.", 409, "conflict")
     job = t.one("SELECT * FROM jobs WHERE id = ?", (r["job_id"],)) if r["job_id"] else None
+    preserve = action != "dismiss" and bool(job) and bool(t.value(
+        "SELECT COUNT(*) FROM reports WHERE job_id = ? AND status = 'open' AND reason IN (%s)" %
+        ", ".join("?" for _ in PRESERVE), (r["job_id"], *PRESERVE), 0))
     if action == "dismiss":
         if job:
             t.run("UPDATE outputs SET held_at = NULL WHERE job_id = ?", (job["id"],))
+            if job["deleted_at"]:                       # the owner deleted it meanwhile: finish that now
+                clients.delete_job_files(t, storage, job, include_held=True)
     else:
-        if job:
-            clients.delete_job_files(t, storage, job)
+        if preserve:                                    # kept on hold (evidence) until purge()
+            t.run("UPDATE outputs SET held_at = COALESCE(held_at, ?) WHERE job_id = ? AND deleted_at IS NULL",
+                  (now(), job["id"]))
+        elif job:
+            clients.delete_job_files(t, storage, job, include_held=True)
         if action == "suspend" and r["client_id"] and clients.get_client(t, r["client_id"]):
             clients.update_client(t, r["client_id"], {"status": "suspended"})      # its keys and sign-ins stop
     status = ACTIONS[action]
@@ -115,5 +129,21 @@ def resolve(t, storage, report_id, action, by, note=None, ip=None):
     t.run(f"UPDATE reports SET status = ?, resolution = ?, resolved_by = ?, resolved_at = ? WHERE status = 'open' AND "
           f"{same}", (status, (note or "").strip()[:MAX_DETAILS] or None, by, now(), r["job_id"] or r["id"]))
     clients.audit(t, by, f"report.{status}", report_id, {"job_id": r["job_id"], "client_id": r["client_id"],
-                                                         "note": note}, ip)
-    return t.one("SELECT * FROM reports WHERE id = ?", (report_id,))
+                                                         "note": note, "preserved": preserve}, ip)
+    return {**t.one("SELECT * FROM reports WHERE id = ?", (report_id,)), "preserved": preserve}
+
+
+def purge(t, storage, report_id, by, ip=None):
+    """Delete the files kept as evidence for a handled report (after the authorities have what they
+    need). The report and the audit log keep the record."""
+    r = t.one("SELECT * FROM reports WHERE id = ?", (report_id,))
+    if not r:
+        raise ReportError("No such report.", 404, "not_found")
+    if r["status"] in ("open", "dismissed"):
+        raise ReportError("Only removed or suspended reports have files to purge.", 409, "conflict")
+    job = t.one("SELECT * FROM jobs WHERE id = ?", (r["job_id"],)) if r["job_id"] else None
+    n = t.value("SELECT COUNT(*) FROM outputs WHERE job_id = ? AND deleted_at IS NULL", (r["job_id"],), 0) if job else 0
+    if job:
+        clients.delete_job_files(t, storage, job, include_held=True)
+    clients.audit(t, by, "report.purged", report_id, {"job_id": r["job_id"], "files": n}, ip)
+    return {"purged": n}

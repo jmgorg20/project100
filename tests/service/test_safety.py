@@ -3,6 +3,7 @@ suspend), the content check on uploads, the AI label on results, and how long re
 
 import dataclasses
 import sys
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -89,7 +90,7 @@ def test_an_expired_link_can_still_be_reported(http, app, video):
     assert report(http, f"https://x.example/files/out/{out['id']}?t={old}").status_code == 202
 
 
-def test_child_safety_reports_hold_the_file_at_once_and_removal_deletes_it(http, app, video):
+def test_child_safety_reports_hold_the_file_and_keep_it_as_evidence(http, app, video):
     _, h, jid, view = finished(http, app, video)
     out = view["outputs"][0]
     assert report(http, out["url"], reason="child_safety").status_code == 202
@@ -97,10 +98,45 @@ def test_child_safety_reports_hold_the_file_at_once_and_removal_deletes_it(http,
     assert http.get(f"/v1/jobs/{jid}", headers=h).json()["outputs"][0]["held"] is True
     [rep] = [x for x in http.get("/v1/admin/reports", headers=admin(http)).json()["reports"] if x["job_id"] == jid]
     assert rep["held_at"]
+    # the uploader cannot destroy it, and neither can expiry
+    assert http.delete(f"/v1/jobs/{jid}", headers=h).status_code == 204
+    with app.state.db.tx() as t:
+        t.run("UPDATE outputs SET expires_at = ? WHERE job_id = ?", (now() - 60, jid))
+    janitor.expire_files(app.state.db, app.state.storage)
+    with app.state.db.tx() as t:
+        [o] = t.all("SELECT path, deleted_at FROM outputs WHERE job_id = ?", (jid,))
+    assert o["deleted_at"] is None
+    assert Path(o["path"]).exists()
     r = http.post(f"/v1/admin/reports/{rep['id']}/resolve", json={"action": "remove"}, headers=admin(http))
-    assert r.json()["report"]["status"] == "removed"
+    assert r.json()["report"]["status"] == "removed" and r.json()["report"]["preserved"] is True
+    assert Path(o["path"]).exists() and http.get(local(app, out["url"])).status_code == 451
+    assert http.post(f"/v1/admin/reports/{rep['id']}/purge", headers=admin(http)).json() == {"purged": 1}
+    assert not Path(o["path"]).exists() and http.get(local(app, out["url"])).status_code == 410
+    actions = {e["action"] for e in http.get("/v1/admin/audit", params={"action": "report."},
+                                              headers=admin(http)).json()["entries"]}
+    assert {"report.removed", "report.purged"} <= actions
+
+
+def test_removing_a_reported_video_deletes_it(http, app, video):
+    _, h, jid, view = finished(http, app, video)
+    out = view["outputs"][0]
+    report(http, out["url"], reason="copyright")
+    [rep] = [x for x in http.get("/v1/admin/reports", headers=admin(http)).json()["reports"] if x["job_id"] == jid]
+    assert http.post(f"/v1/admin/reports/{rep['id']}/purge", headers=admin(http)).status_code == 409   # still open
+    r = http.post(f"/v1/admin/reports/{rep['id']}/resolve", json={"action": "remove"}, headers=admin(http))
+    assert r.json()["report"]["preserved"] is False
     assert http.get(local(app, out["url"])).status_code == 410
     assert http.get(f"/v1/jobs/{jid}", headers=h).json()["outputs"] == []
+
+
+def test_a_dismissed_report_finishes_a_deletion_the_owner_asked_for(http, app, video):
+    _, h, jid, view = finished(http, app, video)
+    out = view["outputs"][0]
+    report(http, out["url"], reason="child_safety")
+    http.delete(f"/v1/jobs/{jid}", headers=h)
+    [rep] = [x for x in http.get("/v1/admin/reports", headers=admin(http)).json()["reports"] if x["job_id"] == jid]
+    http.post(f"/v1/admin/reports/{rep['id']}/resolve", json={"action": "dismiss"}, headers=admin(http))
+    assert http.get(local(app, out["url"])).status_code == 410
 
 
 def test_several_reports_from_different_addresses_hold_the_file(http, app, video):

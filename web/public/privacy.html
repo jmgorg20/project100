@@ -5,9 +5,77 @@
 <body>
 <main>
 <h1>Privacy notice</h1>
-<p class="placeholder"><strong>Placeholder.</strong> The service owner must replace this page with their own
-Privacy notice (reviewed by a lawyer for the Philippines and the countries they serve) before opening sign-ups.
-The full draft and checklist are in docs/legal/ (added with the safety and compliance step).</p>
+<p class="placeholder"><strong>DRAFT, not legal advice.</strong> Written as a starting point for the owner of this
+service. Fill in every [BRACKETED] part and have it reviewed by a lawyer for the Philippines (and each country you sell
+to) before you open sign-ups. Version: <code>draft-2026-10</code> (SERVICE_TERMS_VERSION: change it when this page
+changes, and people accept the new version at their next sign-up).</p>
+<nav class="legal-nav"><a href="/app/terms.html">Terms</a> · <a href="/app/privacy.html">Privacy</a> ·
+<a href="/app/acceptable-use.html">Acceptable use</a> · <a href="/app/refund.html">Refunds</a> ·
+<a href="/app/ai.html">AI</a> · <a href="/app/#/report">Report a video</a></nav>
+
+<p>This notice says what personal data AutoEdit collects, why, who else handles it, how long it is kept and your
+rights under the Data Privacy Act of 2012 (RA 10173). The personal information controller is [OWNER NAME / COMPANY],
+[ADDRESS]. Data protection officer: [NAME], [DPO EMAIL].</p>
+<h2>What we collect, and why</h2>
+<table>
+<tr><th>Data</th><th>Why</th><th>Basis</th></tr>
+<tr><td>Email, name (optional), password (stored only as a one-way hash), Google account id if you sign in with
+Google, language</td><td>your account, sign-in, emails about it</td><td>contract</td></tr>
+<tr><td>Videos, pictures and sound you upload; the edited results; captions and transcripts made from them</td>
+<td>to edit your video (the service itself)</td><td>contract</td></tr>
+<tr><td>IP address, device id kept in your browser, sign-in times, browser name</td><td>security: limits against
+abuse, one free trial per person, the list of your signed-in devices</td><td>legitimate interest</td></tr>
+<tr><td>Plan, payments (amount, date, status; never your full card number), and a scrambled fingerprint of your
+email, device and card (type, last 4 digits, expiry) to allow one free trial per person</td><td>billing, preventing
+trial abuse</td><td>contract, legitimate interest</td></tr>
+<tr><td>Which version of the terms you accepted, and when</td><td>proof of consent</td><td>legal obligation</td></tr>
+<tr><td>Abuse reports (and the reporter's email if given)</td><td>keeping the service safe</td><td>legitimate interest,
+legal obligation</td></tr>
+<tr><td>A record of security-relevant actions (sign-ins, changes, staff actions)</td><td>security and accountability
+</td><td>legitimate interest</td></tr>
+</table>
+<p>We do not sell personal data, do not show ads, and do not use your videos to train AI models.</p>
+<h2>Who else handles it (processors)</h2>
+<ul>
+<li><strong>Groq</strong> (USA): turns the speech in your video into text (transcription) and can plan the edit.</li>
+<li><strong>Anthropic</strong> (USA): can plan the edit from the transcript and your instruction.</li>
+<li><strong>Paddle</strong> (UK / USA): payments, tax and receipts (it is the merchant of record).</li>
+<li><strong>[EMAIL PROVIDER]</strong>: sends account emails.</li>
+<li><strong>[HOSTING / DATABASE PROVIDER, e.g. the VPS company and Supabase]</strong>: stores the data.</li>
+<li><strong>Google</strong>: only if you choose "Continue with Google".</li>
+<li><strong>[Cloudflare Turnstile / hCaptcha]</strong>: the "are you a robot" check, if turned on.</li>
+</ul>
+<p>Some of them are outside the Philippines; we use them under contracts that require them to protect the data
+(cross-border transfer under the Data Privacy Act). [Check each provider's data processing terms and that AI providers
+do not keep or train on the data under your account settings.]</p>
+<h2>How long it is kept</h2>
+<ul>
+<li>Uploads and results: [3] days (and results [24] hours after the first download); deleted for good after that.</li>
+<li>Account data: until you delete the account. Unconfirmed sign-ups: 7 days.</li>
+<li>Sign-ins: at most 30 days (14 days unused).</li>
+<li>Payment records: as long as tax law requires ([10] years in the Philippines for books of accounts).</li>
+<li>Security log and handled abuse reports: [400] days.</li>
+<li>A video reported for child safety is kept on hold, out of reach, until the authorities have what they need, as the
+law requires (RA 11930).</li>
+<li>Backups: copies of the database (not the videos) for [14] days.</li>
+</ul>
+<h2>Your rights</h2>
+<p>You can: be informed; see and download your data (Account → Download my data); correct it; delete it (Account →
+Delete account); object to processing; and complain to the National Privacy Commission (privacy.gov.ph). Write to
+[DPO EMAIL]; we answer within [15] days.</p>
+<h2>Security</h2>
+<p>HTTPS only; passwords hashed; optional two-step sign-in; each workspace's data kept apart; files reachable only by
+short-lived signed links; staff actions logged. If a breach puts your data at risk we tell you and the National
+Privacy Commission within 72 hours, as the law requires.</p>
+<h2>Cookies</h2>
+<p>Only what the service needs: a sign-in cookie, a security cookie for Google sign-in, and your language and device
+id saved in your browser. No advertising or tracking cookies.</p>
+<h2 lang="tl">Sa madaling salita (Taglish)</h2>
+<div lang="tl"><p>Kinokolekta namin ang email, password (naka-hash), mga video mo, at ilang datos pang-seguridad (IP, device)
+para gumana ang serbisyo at maiwasan ang pang-aabuso. Hindi namin ibinebenta ang datos mo at hindi ginagamit ang video
+mo para mag-train ng AI. Ipinapasa lang sa Groq/Anthropic (para sa AI edit), Paddle (bayad), email at hosting
+provider. Nabubura ang mga video pagkalipas ng ilang araw. Puwede mong i-download o burahin ang lahat ng datos mo sa
+Account. May karapatan ka sa ilalim ng Data Privacy Act; puwedeng magreklamo sa National Privacy Commission.</p></div>
 <p><a href="/app/">Back to AutoEdit</a></p>
 </main>
 </body>

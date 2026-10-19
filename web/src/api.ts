@@ -129,6 +129,7 @@ export interface OutputView {
   preview_url: string;
   url_expires_at: number;
   expires_in_seconds: number;
+  held?: boolean;
 }
 export interface JobView {
   id: string;

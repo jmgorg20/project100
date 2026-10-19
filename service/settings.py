@@ -61,6 +61,7 @@ class Settings:
     max_attempts: int = 3
     claim_wait_seconds: int = 20             # long-poll for workers
     # limits (defaults for new clients)
+    max_queued_jobs: int = 20                # jobs one client may have waiting (more: 429, try later)
     rate_per_minute: int = 120
     concurrent_jobs: int = 2
     monthly_minutes: float = 300.0

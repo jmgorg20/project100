@@ -3,7 +3,8 @@
 - jobs whose worker went quiet or that ran too long go back to the queue (jobqueue.reap);
 - uploads and results past their expiry are deleted from disk and marked deleted (cloud storage is
   temporary: SERVICE_RETENTION_DAYS, and results also SERVICE_DELETE_AFTER_DOWNLOAD_HOURS after the
-  first download); a "files.expiring" webhook goes out about a day before;
+  first download); a "files.expiring" webhook goes out about a day before; results held because of
+  an abuse report wait for the staff's decision;
 - unfinished uploads older than a day are removed;
 - old rate counters are dropped;
 - unconfirmed sign-ups (after 7 days), old one-time tokens and ended sessions are removed;
@@ -21,7 +22,8 @@ def expire_files(db, storage, warn_hours=24):
     with db.tx() as t:
         uploads = t.all("SELECT id, client_id, path FROM uploads WHERE status IN ('uploading', 'ready', 'rejected') "
                         "AND (expires_at < ? OR (status = 'uploading' AND updated_at < ?))", (now(), now() - 86400))
-        outputs = t.all("SELECT id, job_id, client_id, path FROM outputs WHERE deleted_at IS NULL AND expires_at < ?",
+        outputs = t.all("SELECT id, job_id, client_id, path FROM outputs WHERE deleted_at IS NULL AND held_at IS NULL "
+                        "AND expires_at < ?",
                         (now(),))
     for u in uploads:
         storage.delete(storage.upload_path(u["id"]))

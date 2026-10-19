@@ -167,3 +167,8 @@ th { color: var(--muted); font-weight: 600; }
 .tip span { display: inline-flex; align-items: center; gap: 0.35rem; }
 .tip-empty { margin-top: 0.5rem; font-size: 0.85rem; }
 @media (min-width: 640px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.legal-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 1.25rem; padding: 0.5rem 1rem 1.5rem; font-size: 0.9rem; }
+.legal-links a { min-height: 44px; display: inline-flex; align-items: center; color: var(--muted); }
+fieldset.reasons { display: grid; gap: 0.25rem; margin: 0.5rem 0; }
+fieldset.reasons legend { margin-bottom: 0.25rem; }
+.quote { border-left: 3px solid var(--line); padding-left: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }

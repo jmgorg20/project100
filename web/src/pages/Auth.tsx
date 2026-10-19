@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, get, post, type AuthConfig, type MfaNeeded, type Session } from "../api";
 import { go, query } from "../App";
 import { deviceId } from "../device";
-import { getLang, t } from "../i18n";
+import { getLang, t, type WordKey } from "../i18n";
 
 const OAUTH_ERRORS: Record<string, [string, string]> = {
   invite_required: ["An invite code is needed: enter it, then use Google again.", "Kailangan ng invite code: ilagay ito, tapos Google ulit."],
@@ -267,6 +267,56 @@ export function MfaStep({ ticket, onDone }: { ticket: string; onDone: (s: Sessio
         <label>{t("code")}<input inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /></label>
         <ErrorLine text={error} />
         <button className="wide">{t("verify")}</button>
+      </form>
+    </section>
+  );
+}
+
+const REASONS = ["copyright", "child_safety", "violence", "hate", "harassment", "privacy", "illegal", "spam", "other"] as const;
+
+/** Anyone with a link to a result can report it (no account needed). */
+export function Report() {
+  const config = useConfig();
+  const [form, setForm] = useState({ link: query("link") ?? "", reason: "", details: "", email: "", website: "" });
+  const [captcha, setCaptcha] = useState("");
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await post("/v1/public/report", { ...form, email: form.email || undefined, details: form.details || undefined,
+        captcha: captcha || undefined });
+      setSent(true);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (sent) return <section className="card narrow" data-testid="report-sent"><h1>{t("reportTitle")}</h1><p>{t("reportThanks")}</p></section>;
+  return (
+    <section className="card narrow">
+      <h1>{t("reportTitle")}</h1>
+      <p className="muted">{t("reportIntro")}</p>
+      <form onSubmit={submit}>
+        <label>{t("reportLink")}<input type="url" required inputMode="url" value={form.link} onChange={set("link")} placeholder="https://…/files/out/…?t=…" /></label>
+        <fieldset className="reasons">
+          <legend>{t("reportReason")}</legend>
+          {REASONS.map((r) => (
+            <label key={r} className="check"><input type="radio" name="reason" required value={r} checked={form.reason === r} onChange={set("reason")} />
+              <span>{t(`r_${r}` as WordKey)}</span></label>
+          ))}
+        </fieldset>
+        <label>{t("reportDetails")}<textarea maxLength={2000} rows={3} value={form.details} onChange={set("details")} /></label>
+        <label>{t("reportEmail")}<input type="email" autoComplete="email" value={form.email} onChange={set("email")} /></label>
+        <input className="hp" tabIndex={-1} autoComplete="off" aria-hidden value={form.website} onChange={set("website")} name="website" />
+        <Captcha config={config} onToken={setCaptcha} />
+        <ErrorLine text={error} />
+        <button className="wide" disabled={busy}>{t("reportSend")}</button>
       </form>
     </section>
   );
