@@ -61,6 +61,9 @@ test("phone: sign up, upload, pick a style, watch, fix a caption, export, histor
   const fixed = sent.project.tracks.find((t: { kind: string }) => t.kind === "caption").clips.find((c: { id: string }) => c.id === "t2");
   expect(fixed.words.map((w: { text: string }) => w.text).join(" ")).toBe("Simple lang talaga.");
   expect(sent.project.media.every((m: { path: string }) => /^(upload|output):/.test(m.path))).toBe(true);
+  // the new render job's own page (the old page also says "succeeded": wait for the switch first)
+  const renderJob = await (await (await renderRequest).response())!.json();
+  await expect(page).toHaveURL(new RegExp(`#/jobs/${renderJob.id}$`));
   await expect(page.getByTestId("job")).toHaveAttribute("data-status", "succeeded", { timeout: 60_000 });
 
   // history: both jobs; Taglish; delete one
