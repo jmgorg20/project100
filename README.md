@@ -436,6 +436,8 @@ consent, abuse reports, holds, the content-check hook, AI labels, retention): [d
 **Going live** (the owner's step-by-step guide, English and Taglish): [docs/going-live.md](docs/going-live.md);
 day-to-day operations and incidents: [docs/runbook.md](docs/runbook.md); [docs/threat-model.md](docs/threat-model.md);
 [docs/security-checklist.md](docs/security-checklist.md); third-party licences: [LICENSES.md](LICENSES.md).
+The Android app (the web app in a Trusted Web Activity, made with Bubblewrap): [docs/android.md](docs/android.md);
+iPhone notes: [docs/ios.md](docs/ios.md).
 
 **For automation (Robot City) · Para sa automation.** The app only polishes; your workers post.
 `python editor.py polish talk.mp4 --preset viral_tiktok --format auto --out outbox --json` makes

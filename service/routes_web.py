@@ -9,7 +9,7 @@ hashed files under /app/assets/ are cached for a year, everything else is checke
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from .api import ApiError
 
@@ -33,6 +33,19 @@ def csp(settings):
             f"connect-src 'self' {extra}; img-src 'self' data: blob:; media-src 'self' blob:; "
             "style-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
             "base-uri 'none'; form-action 'self'; frame-ancestors 'none'").replace("  ", " ")
+
+
+@router.get("/.well-known/assetlinks.json", include_in_schema=False)
+def assetlinks(request: Request):
+    """Digital Asset Links: tells Android that the AutoEdit app (SERVICE_ANDROID_PACKAGE, signed with
+    one of SERVICE_ANDROID_CERT_SHA256) may show this site full screen, without the browser bar."""
+    s = request.app.state.settings
+    if not s.android_package:
+        raise ApiError(404, "not_found", "No Android app is set up.")
+    return JSONResponse([{"relation": ["delegate_permission/common.handle_all_urls"],
+                          "target": {"namespace": "android_app", "package_name": s.android_package,
+                                     "sha256_cert_fingerprints": list(s.android_cert_sha256)}}],
+                        headers={"Cache-Control": "public, max-age=3600"})
 
 
 @router.get("/", include_in_schema=False)

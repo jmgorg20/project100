@@ -1,0 +1,15 @@
+# The signing key and everything Bubblewrap builds stay out of the repository.
+*.keystore
+*.jks
+*.apk
+*.aab
+*.idsig
+app/
+build/
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+local.properties
+manifest-checksum.txt
+store_icon.png
