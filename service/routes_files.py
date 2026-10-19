@@ -104,5 +104,7 @@ def metrics(request: Request):
         lines.append(f"autoedit_workers_alive {alive}")
         pending = tx.value("SELECT COUNT(*) FROM webhook_deliveries WHERE status = 'pending'", (), 0)
         lines.append(f"autoedit_webhooks_pending {pending}")
+        lines.append(f"autoedit_reports_open {tx.value("SELECT COUNT(*) FROM reports WHERE status = 'open'", (), 0)}")
+        lines.append(f"autoedit_outputs_held {tx.value('SELECT COUNT(*) FROM outputs WHERE held_at IS NOT NULL AND deleted_at IS NULL', (), 0)}")
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")

@@ -20,7 +20,9 @@ organisation ay client din ng iisang service (parehong queue, engine, quota at u
 signups closed`. Para buksan ulit: `signups invite` o `signups open`.*
 
 How sign-up works:
-1. The person gives email, password (10+ characters, not a common one) and the invite code.
+1. The person gives email, password (10+ characters, not a common one) and the invite code, and
+   ticks "I agree to the Terms and the Privacy notice" (required; the terms version and time are
+   kept: [safety.md](safety.md)). A new Google account needs the same box ticked first.
 2. They get an email with a link (24 hours, once). Opening it confirms the email, signs them in and
    makes their own workspace (an organisation where they are the owner).
 3. Not confirmed after 7 days: the sign-up is removed and the email is free again.

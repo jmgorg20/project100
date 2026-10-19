@@ -18,6 +18,7 @@ For you and your staff: **https://API_DOMAIN/app/#/admin** (or Account → Admin
 | **Users** | search by email; disable (signs them out everywhere) / enable; make or remove staff |
 | **Sign-ups** | the switch (invite code needed / open / paused) and invite codes (make one: shown once; see uses; revoke) |
 | **Plans** | change a plan's price (in cents), minutes, storage, videos at a time, days files are kept, Paddle price id, shown or hidden; workspaces on the plan get the new limits at once |
+| **Reports** | abuse reports from the "Report a video" page: dismiss (release), remove the video, remove and suspend the workspace; purge evidence kept for child-safety reports ([safety.md](safety.md), [runbook.md](runbook.md)) |
 | **System** | videos waiting and editing now, workers online (and their engine version), the audit log |
 
 The same numbers are in the admin API (`GET /v1/admin/dashboard?days=30`, `GET /v1/admin/costs?month=2026-10`,

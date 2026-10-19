@@ -31,10 +31,13 @@ desktop app's own (`desktop/src/shared`), not a copy.
 9. **My videos:** the history, by project.
 10. **Account:** language (**English / Taglish**, remembered on the account), this month's minutes,
     signed-in devices, password, two-step sign-in, the workspace's members and invitations, download
-    my data, delete my account; terms and privacy pages (placeholders until step 7.5).
+    my data, delete my account; the terms, privacy, acceptable-use, refund and AI pages (drafts for a
+    lawyer to review: [safety.md](safety.md)).
 11. **Plan and billing** (when billing is on, docs/billing.md): the trial's days left, minutes used,
     the plans, checkout and Paddle's customer portal; a notice on the New video page when the trial
     is ending or the workspace is paused.
+12. **Report a video** (`#/report`, no account needed): anyone with a result's link can report it;
+    a reported video can be put on hold (the owner sees "on hold").
 
 ## For the owner · Para sa may-ari
 
