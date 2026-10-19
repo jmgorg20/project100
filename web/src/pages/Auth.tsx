@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, get, post, type AuthConfig, type MfaNeeded, type Session } from "../api";
 import { go, query } from "../App";
 import { deviceId } from "../device";
-import { getLang, t } from "../i18n";
+import { getLang, t, type WordKey } from "../i18n";
 
 const OAUTH_ERRORS: Record<string, [string, string]> = {
   invite_required: ["An invite code is needed: enter it, then use Google again.", "Kailangan ng invite code: ilagay ito, tapos Google ulit."],
   signups_paused: ["New sign-ups are paused for now.", "Naka-pause muna ang bagong sign-up."],
   email_not_verified: ["Your Google email is not verified.", "Hindi verified ang Google email mo."],
   account_disabled: ["This account is disabled.", "Naka-disable ang account na ito."],
+  terms_required: ["New here? Sign up first and accept the Terms, then use Google.", "Bago ka? Mag-sign up muna at tanggapin ang Terms, tapos Google."],
 };
 
 function errorText(err: unknown): string {
@@ -55,12 +56,14 @@ function Captcha({ config, onToken }: { config: AuthConfig | null; onToken: (tok
   return provider ? <div ref={box} className="captcha" /> : null;
 }
 
-function GoogleButton({ config, invite }: { config: AuthConfig | null; invite?: string }) {
+/** On the sign-up page `agreed` says whether the terms box is ticked: the button waits for it. */
+function GoogleButton({ config, invite, agreed }: { config: AuthConfig | null; invite?: string; agreed?: boolean }) {
   if (!config?.providers.includes("google")) return null;
   const q = new URLSearchParams({ device_id: deviceId() });
   if (invite) q.set("invite_code", invite);
-  const href = `/v1/auth/oauth/google/start?${q}`;
-  return <a className="button ghost wide" href={href}>{t("withGoogle")}</a>;
+  if (agreed) q.set("accept_terms", "1");
+  if (agreed === false) return <button type="button" className="ghost wide" disabled>{t("withGoogle")}</button>;
+  return <a className="button ghost wide" href={`/v1/auth/oauth/google/start?${q}`}>{t("withGoogle")}</a>;
 }
 
 export function Login({ onDone }: { onDone: (s: Session) => void }) {
@@ -118,7 +121,7 @@ export function Signup() {
     setBusy(true);
     setError("");
     try {
-      await post("/v1/auth/signup", { ...form, captcha: captcha || undefined, locale: getLang(), device_id: deviceId() || undefined });
+      await post("/v1/auth/signup", { ...form, accept_terms: agree, captcha: captcha || undefined, locale: getLang(), device_id: deviceId() || undefined });
       setSent(true);
     } catch (err) {
       setError(errorText(err));
@@ -150,7 +153,7 @@ export function Signup() {
         <ErrorLine text={error} />
         <button className="wide" disabled={busy || !agree}>{t("signUp")}</button>
       </form>
-      <GoogleButton config={config} invite={form.invite_code} />
+      <GoogleButton config={config} invite={form.invite_code} agreed={agree} />
       <p className="links"><a href="#/login">{t("haveAccount")}</a></p>
     </section>
   );
@@ -264,6 +267,56 @@ export function MfaStep({ ticket, onDone }: { ticket: string; onDone: (s: Sessio
         <label>{t("code")}<input inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /></label>
         <ErrorLine text={error} />
         <button className="wide">{t("verify")}</button>
+      </form>
+    </section>
+  );
+}
+
+const REASONS = ["copyright", "child_safety", "violence", "hate", "harassment", "privacy", "illegal", "spam", "other"] as const;
+
+/** Anyone with a link to a result can report it (no account needed). */
+export function Report() {
+  const config = useConfig();
+  const [form, setForm] = useState({ link: query("link") ?? "", reason: "", details: "", email: "", website: "" });
+  const [captcha, setCaptcha] = useState("");
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await post("/v1/public/report", { ...form, email: form.email || undefined, details: form.details || undefined,
+        captcha: captcha || undefined });
+      setSent(true);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (sent) return <section className="card narrow" data-testid="report-sent"><h1>{t("reportTitle")}</h1><p>{t("reportThanks")}</p></section>;
+  return (
+    <section className="card narrow">
+      <h1>{t("reportTitle")}</h1>
+      <p className="muted">{t("reportIntro")}</p>
+      <form onSubmit={submit}>
+        <label>{t("reportLink")}<input type="url" required inputMode="url" value={form.link} onChange={set("link")} placeholder="https://…/files/out/…?t=…" /></label>
+        <fieldset className="reasons">
+          <legend>{t("reportReason")}</legend>
+          {REASONS.map((r) => (
+            <label key={r} className="check"><input type="radio" name="reason" required value={r} checked={form.reason === r} onChange={set("reason")} />
+              <span>{t(`r_${r}` as WordKey)}</span></label>
+          ))}
+        </fieldset>
+        <label>{t("reportDetails")}<textarea maxLength={2000} rows={3} value={form.details} onChange={set("details")} /></label>
+        <label>{t("reportEmail")}<input type="email" autoComplete="email" value={form.email} onChange={set("email")} /></label>
+        <input className="hp" tabIndex={-1} autoComplete="off" aria-hidden value={form.website} onChange={set("website")} name="website" />
+        <Captcha config={config} onToken={setCaptcha} />
+        <ErrorLine text={error} />
+        <button className="wide" disabled={busy}>{t("reportSend")}</button>
       </form>
     </section>
   );

@@ -3,7 +3,7 @@ import { ApiError, get, setCsrf, type Session } from "./api";
 import { setLang, t, useLang } from "./i18n";
 import { Account, AcceptInvite } from "./pages/Account";
 import { Admin } from "./pages/Admin";
-import { Forgot, Login, MfaStep, Reset, Signup, Verify } from "./pages/Auth";
+import { Forgot, Login, MfaStep, Report, Reset, Signup, Verify } from "./pages/Auth";
 import { History } from "./pages/History";
 import { JobPage } from "./pages/Job";
 import { NewVideo } from "./pages/NewVideo";
@@ -35,7 +35,7 @@ export interface SessionProps {
   setSession: (s: Session | null) => void;
 }
 
-const PUBLIC = new Set(["login", "signup", "verify", "forgot", "reset", "mfa"]);
+const PUBLIC = new Set(["login", "signup", "verify", "forgot", "reset", "mfa", "report"]);
 
 export function App() {
   const route = useRoute();
@@ -95,6 +95,7 @@ export function App() {
     else if (page === "forgot") body = <Forgot />;
     else if (page === "reset") body = <Reset token={route[1] ?? ""} />;
     else if (page === "mfa") body = <MfaStep ticket={route[1] ?? ""} onDone={done} />;
+    else if (page === "report") body = <Report />;
     else body = <Login onDone={done} />;
   } else {
     const props = { session, refresh, setSession };
@@ -117,6 +118,14 @@ export function App() {
       {!online && <div className="banner warn" role="status" data-testid="offline">{t("offline")}</div>}
       <UpdateBanner />
       <main>{body}</main>
+      {!signedIn && (
+        <footer className="legal-links">
+          <a href="/app/terms.html">{t("terms")}</a>
+          <a href="/app/privacy.html">{t("privacy")}</a>
+          <a href="/app/ai.html">AI</a>
+          <a href="#/report">{t("reportLinkHint")}</a>
+        </footer>
+      )}
       {signedIn && (
         <nav className="bottom" aria-label="Main">
           <a href="#/" className={page === "" ? "active" : ""}><span aria-hidden>＋</span>{t("navNew")}</a>

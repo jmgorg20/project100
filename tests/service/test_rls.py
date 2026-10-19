@@ -91,7 +91,7 @@ def test_requests_run_as_their_tenant(settings, db):
                 jobqueue.enqueue(t, settings, clients.get_client(t, c["id"]), "polish", {}, {"main": []})
         assert http.get("/test/unfiltered", headers=ha).json() == {"clients": [a["id"]], "jobs": 1}
         # a signed-in user, acting in their own organisation
-        http.post("/v1/auth/signup", json={"email": "u@example.com", "password": "correct horse battery"})
+        http.post("/v1/auth/signup", json={"email": "u@example.com", "password": "correct horse battery", "accept_terms": True})
         with app.state.db.tx() as t:
             body = t.value("SELECT body FROM email_outbox WHERE template = 'verify_email'")
         token = body.split("#/verify/")[1].split()[0]

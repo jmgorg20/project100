@@ -194,9 +194,16 @@ def _locale(value):
     return value if value in ("en", "tl") else None
 
 
-def signup(t, settings, email, password, name=None, invite_code=None, ip=None, locale=None, device_id=None):
+def _require_terms(accept_terms):
+    if accept_terms is not True:
+        raise AccountError("Please read and accept the Terms and the Privacy notice to sign up.", 422, "terms_required")
+
+
+def signup(t, settings, email, password, name=None, invite_code=None, ip=None, locale=None, device_id=None,
+           accept_terms=False):
     """Start a sign-up. Always answers the same (no hint whether the email has an account); the
-    email says what to do next."""
+    email says what to do next. The person must accept the current terms (the version is kept)."""
+    _require_terms(accept_terms)
     email, canon = normalize_email(email, settings)
     passwords.check_policy(password, email)
     name = _clean_name(name)
@@ -212,7 +219,8 @@ def signup(t, settings, email, password, name=None, invite_code=None, ip=None, l
         # Not confirmed yet: the newest sign-up owns it (the old password and links stop working), so
         # nobody can "reserve" someone else's email with their own password.
         t.update("users", existing["id"], {"password_hash": pw_hash, "password_changed_at": now(), "name": name,
-                                           "updated_at": now(), "signup_ip": ip, "locale": _locale(locale)})
+                                           "updated_at": now(), "signup_ip": ip, "locale": _locale(locale),
+                                           "terms_version": settings.terms_version, "terms_accepted_at": now()})
         _drop_tokens(t, existing["id"], "verify_email")
         uid = existing["id"]
     else:
@@ -221,7 +229,7 @@ def signup(t, settings, email, password, name=None, invite_code=None, ip=None, l
                            "password_changed_at": now(), "email_verified_at": None, "status": "active", "is_admin": 0,
                            "mfa_secret": None, "mfa_enabled_at": None, "mfa_last_step": None, "locale": _locale(locale),
                            "invite_code_id": code_id, "signup_ip": ip, "created_at": now(), "updated_at": now(),
-                           "last_login_at": None})
+                           "last_login_at": None, "terms_version": settings.terms_version, "terms_accepted_at": now()})
     token = new_token(t, settings, "verify_email", uid, VERIFY_HOURS * 60,
                       {"device": device_id} if isinstance(device_id, str) and len(device_id) <= 100 else None)
     mailer.queue(t, email, "verify_email", link=_link(settings, "verify", token))
@@ -532,7 +540,7 @@ def mfa_disable(t, settings, user, session, password=None, code=None):
 
 # ---------------------------------------------------------------- Google (and other OpenID) sign-in
 
-def oauth_login(t, settings, provider, profile, invite_code=None, ip=None, device_id=None):
+def oauth_login(t, settings, provider, profile, invite_code=None, ip=None, device_id=None, accept_terms=False):
     """The user for a verified identity from `provider` (profile: sub, email, email_verified, name).
     Links to an account with the same email, or makes a new account (sign-up rules apply)."""
     subject, email = str(profile.get("sub") or ""), profile.get("email")
@@ -559,13 +567,15 @@ def oauth_login(t, settings, provider, profile, invite_code=None, ip=None, devic
             revoke_all_sessions(t, user["id"])
     else:
         mode = _check_signup_allowed(t, settings, invite_code)
+        _require_terms(accept_terms)                      # a new account: the terms first
         code_id = _take_invite_code(t, settings, invite_code) if mode == "invite" else None
         uid = security.new_id("us_")
         t.insert("users", {"id": uid, "email": email, "email_canonical": canon, "name": _clean_name(profile.get("name")),
                            "password_hash": None, "password_changed_at": None, "email_verified_at": now(),
                            "status": "active", "is_admin": 0, "mfa_secret": None, "mfa_enabled_at": None,
                            "mfa_last_step": None, "locale": None, "invite_code_id": code_id, "signup_ip": ip,
-                           "created_at": now(), "updated_at": now(), "last_login_at": None})
+                           "created_at": now(), "updated_at": now(), "last_login_at": None,
+                           "terms_version": settings.terms_version, "terms_accepted_at": now()})
         user = get_user(t, uid)
         created = True
         clients.audit(t, f"user:{uid}", "user.signup", uid, {"provider": provider, "invite_code": code_id}, ip)
@@ -753,6 +763,7 @@ def export_account(t, user):
     """Everything kept about the user (not the files themselves: those are downloaded from the jobs)."""
     orgs = orgs_of(t, user["id"])
     out = {"user": public_user(user), "signup_ip": user["signup_ip"], "last_login_at": user["last_login_at"],
+           "terms": {"version": user.get("terms_version"), "accepted_at": user.get("terms_accepted_at")},
            "identities": t.all("SELECT provider, email, created_at FROM user_identities WHERE user_id = ?", (user["id"],)),
            "sessions": list_sessions(t, user["id"]), "organisations": [], "exported_at": now()}
     for o in orgs:

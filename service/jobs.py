@@ -23,6 +23,12 @@ MAX_ASSETS = 200
 CONTENT_TYPES = {"video": "video/mp4", "project": "application/json", "sidecar": "application/json",
                  "plan": "application/json"}
 FEATURE_OF = {"format": "formats", "gpu": "gpu", "provider": "ai_planner"}
+# Shown with every result: the edit (cuts, captions, effects, music) was planned by AI. Platforms ask
+# creators to disclose realistic AI-made or AI-altered content; the person decides what to post.
+AI_LABEL = {"edited_with_ai": True,
+            "text": "Edited with AI: an AI planned the cuts, captions and effects. Check it before you post, and use "
+                    "the platform's AI label if the video shows realistic people, places or events that were "
+                    "made or changed by AI."}
 
 
 class JobError(Exception):
@@ -281,7 +287,7 @@ def view(t, settings, job, base_url):
     for o in outs:
         token = security.sign_link(settings.secret_key, "out", o["id"], exp)
         links.append({"id": o["id"], "name": o["name"], "size": o["size"], "sha256": o["sha256"],
-                      "content_type": o["content_type"],
+                      "content_type": o["content_type"], "held": bool(o.get("held_at")),
                       "url": f"{base_url}/files/out/{o['id']}?t={token}&download=1",       # save (starts the clock)
                       "preview_url": f"{base_url}/files/out/{o['id']}?t={token}",          # play in the page
                       "url_expires_at": int(exp), "expires_at": o["expires_at"],
@@ -296,4 +302,5 @@ def view(t, settings, job, base_url):
             "finished_at": job["finished_at"], "input_minutes": job["input_minutes"],
             "project_id": job.get("project_id"),
             "params": loads(job["params"], {}), "inputs": loads(job["inputs"], {}),
-            "result": public_result, "outputs": links}
+            "result": public_result, "outputs": links,
+            "ai_label": AI_LABEL if job["status"] == "succeeded" else None}

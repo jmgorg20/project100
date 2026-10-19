@@ -431,7 +431,11 @@ projects, database row-level security): [docs/accounts.md](docs/accounts.md).
 The web app for phones and PCs (installable PWA at `/app/`, English and Taglish):
 [docs/web-app.md](docs/web-app.md). Plans, the 7-day free trial and payments (Paddle):
 [docs/billing.md](docs/billing.md). The owner's admin pages (money, costs per video against
-revenue, users, sign-ups, plans): [docs/admin.md](docs/admin.md).
+revenue, users, sign-ups, plans): [docs/admin.md](docs/admin.md). Safety and compliance (terms
+consent, abuse reports, holds, the content-check hook, AI labels, retention): [docs/safety.md](docs/safety.md).
+**Going live** (the owner's step-by-step guide, English and Taglish): [docs/going-live.md](docs/going-live.md);
+day-to-day operations and incidents: [docs/runbook.md](docs/runbook.md); [docs/threat-model.md](docs/threat-model.md);
+[docs/security-checklist.md](docs/security-checklist.md); third-party licences: [LICENSES.md](LICENSES.md).
 
 **For automation (Robot City) · Para sa automation.** The app only polishes; your workers post.
 `python editor.py polish talk.mp4 --preset viral_tiktok --format auto --out outbox --json` makes

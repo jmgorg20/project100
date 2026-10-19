@@ -19,10 +19,10 @@ interface Dashboard {
 }
 
 const usd = (v: number | null | undefined, digits = 2) => (v === null || v === undefined ? "—" : `$${v.toFixed(digits)}`);
-const TABS = ["overview", "costs", "users", "signups", "plans", "system"] as const;
+const TABS = ["overview", "costs", "users", "signups", "plans", "reports", "system"] as const;
 type Tab = (typeof TABS)[number];
 const LABEL: Record<Tab, string> = { overview: "Overview", costs: "Costs", users: "Users", signups: "Sign-ups",
-  plans: "Plans", system: "System" };
+  plans: "Plans", reports: "Reports", system: "System" };
 
 function useLoad<T>(path: string | null) {
   const [data, setData] = useState<T | null>(null);
@@ -62,6 +62,7 @@ export function Admin() {
       {tab === "users" && <Users />}
       {tab === "signups" && <Signups />}
       {tab === "plans" && <Plans />}
+      {tab === "reports" && <Reports />}
       {tab === "system" && <System d={probe.data} />}
     </section>
   );
@@ -352,6 +353,73 @@ function PlanEditor({ plan, onSaved }: { plan: PlanRow; onSaved: () => void }) {
       </div>
       <button className="small">Save</button> {note && <span className="muted" role="status">{note}</span>}
     </form>
+  );
+}
+
+interface ReportRow { id: string; reason: string; details: string | null; reporter_email: string | null; status: string;
+  created_at: number; client_id: string | null; client_name: string | null; client_status: string | null; job_id: string | null;
+  output_id: string | null; held_at: number | null; output_deleted_at: number | null; resolution: string | null }
+
+const URGENT = new Set(["child_safety", "violence", "illegal"]);
+
+function Reports() {
+  const [status, setStatus] = useState("open");
+  const { data, error, reload } = useLoad<{ reports: ReportRow[] }>(`/v1/admin/reports?status=${status}`);
+  const [note, setNote] = useState("");
+  const act = (r: ReportRow, action: string) => {
+    const ask = action === "dismiss" ? "Release this video and close the report?" : action === "remove"
+      ? "Delete this video's files now?" : "Delete the files AND suspend the whole workspace?";
+    if (!window.confirm(ask)) return;
+    void post(`/v1/admin/reports/${r.id}/resolve`, { action, note: note || undefined })
+      .then(() => {
+        setNote("");
+        reload();
+      }).catch((err) => window.alert((err as ApiError).message));
+  };
+  return (
+    <div className="stack">
+      <p className="muted">Reports come from anyone with a link (the "Report a video" page). A child-safety report, or reports
+        from three different addresses, holds the video at once. Child sexual abuse material must not be deleted before it is
+        reported to the authorities (Philippines: Republic Act 11930): follow docs/runbook.md, "Child safety report".</p>
+      <div className="row wrap" role="radiogroup" aria-label="Report status">
+        {["open", "dismissed", "removed", "suspended", "all"].map((s) => (
+          <button key={s} role="radio" aria-checked={status === s} className={status === s ? "small" : "small ghost"} onClick={() => setStatus(s)}>{s}</button>
+        ))}
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+      {data && data.reports.length === 0 && <p className="muted" data-testid="no-reports">No {status === "all" ? "" : status} reports.</p>}
+      {status === "open" && data && data.reports.length > 0 && (
+        <label>Note for the record (optional)<input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></label>
+      )}
+      {data?.reports.map((r) => (
+        <article key={r.id} className="card" data-testid={`report-${r.id}`}>
+          <h3>{URGENT.has(r.reason) ? "⚠ " : ""}{r.reason.replace("_", " ")} <small className="muted">· {new Date(r.created_at * 1000).toLocaleString()}</small></h3>
+          <p>{r.client_name ?? "(deleted)"} <small className="muted">({r.client_id}, {r.client_status ?? "?"})</small> · job <code>{r.job_id}</code></p>
+          {r.details && <p className="quote">{r.details}</p>}
+          <p className="muted">{r.reporter_email ? `From ${r.reporter_email}` : "No contact given"} ·{" "}
+            {r.output_deleted_at ? "files deleted" : r.held_at ? "on hold (downloads stopped)" : "still downloadable"}</p>
+          {r.resolution && <p className="muted">Note: {r.resolution}</p>}
+          {r.status === "open" ? (
+            <div className="row wrap">
+              <button className="small ghost" onClick={() => act(r, "dismiss")}>Dismiss (release)</button>
+              <button className="small danger" onClick={() => act(r, "remove")}>Remove video</button>
+              <button className="small danger" onClick={() => act(r, "suspend")}>Remove + suspend workspace</button>
+            </div>
+          ) : (
+            <div className="row wrap">
+              <strong>{r.status}</strong>
+              {r.status !== "dismissed" && r.held_at && !r.output_deleted_at && (
+                <button className="small danger" onClick={() => {
+                  if (window.confirm("Kept as evidence. Delete these files for good? Only after the authorities have what they need.")) {
+                    void post(`/v1/admin/reports/${r.id}/purge`).then(reload).catch((err) => window.alert((err as ApiError).message));
+                  }
+                }}>Purge evidence files</button>
+              )}
+            </div>
+          )}
+        </article>
+      ))}
+    </div>
   );
 }
 

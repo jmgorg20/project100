@@ -3,11 +3,13 @@
 - jobs whose worker went quiet or that ran too long go back to the queue (jobqueue.reap);
 - uploads and results past their expiry are deleted from disk and marked deleted (cloud storage is
   temporary: SERVICE_RETENTION_DAYS, and results also SERVICE_DELETE_AFTER_DOWNLOAD_HOURS after the
-  first download); a "files.expiring" webhook goes out about a day before;
+  first download); a "files.expiring" webhook goes out about a day before; results held because of
+  an abuse report wait for the staff's decision;
 - unfinished uploads older than a day are removed;
 - old rate counters are dropped;
 - unconfirmed sign-ups (after 7 days), old one-time tokens and ended sessions are removed;
-- billing: trial reminders, and the end of trials, grace periods and canceled plans.
+- billing: trial reminders, and the end of trials, grace periods and canceled plans;
+- the audit log and handled abuse reports older than SERVICE_AUDIT_RETENTION_DAYS are removed.
 """
 
 from . import accounts, billing, jobqueue, ratelimit, webhooks
@@ -20,7 +22,8 @@ def expire_files(db, storage, warn_hours=24):
     with db.tx() as t:
         uploads = t.all("SELECT id, client_id, path FROM uploads WHERE status IN ('uploading', 'ready', 'rejected') "
                         "AND (expires_at < ? OR (status = 'uploading' AND updated_at < ?))", (now(), now() - 86400))
-        outputs = t.all("SELECT id, job_id, client_id, path FROM outputs WHERE deleted_at IS NULL AND expires_at < ?",
+        outputs = t.all("SELECT id, job_id, client_id, path FROM outputs WHERE deleted_at IS NULL AND held_at IS NULL "
+                        "AND expires_at < ?",
                         (now(),))
     for u in uploads:
         storage.delete(storage.upload_path(u["id"]))
@@ -52,8 +55,19 @@ def run_once(db, storage, settings):
         ratelimit.cleanup(t)
         accounts.cleanup(t)
         billing_done = billing.tick(t, settings)
+        old_records = trim_records(t, settings)
         for job_id in reaped:
             job = t.one("SELECT * FROM jobs WHERE id = ?", (job_id,))
             if job and job["status"] in ("failed", "cancelled"):
                 webhooks.emit(t, job["client_id"], f"job.{job['status']}", webhooks.payload_for_job(job))
-    return {"reaped": reaped, **files, "billing": billing_done}
+    return {"reaped": reaped, **files, "billing": billing_done, "records_trimmed": old_records}
+
+
+def trim_records(t, settings):
+    """The audit log and handled abuse reports are kept SERVICE_AUDIT_RETENTION_DAYS (0 = forever)."""
+    if settings.audit_retention_days <= 0:
+        return 0
+    before = now() - settings.audit_retention_days * 86400
+    n = t.run("DELETE FROM audit_log WHERE at < ?", (before,))
+    n += t.run("DELETE FROM reports WHERE status <> 'open' AND resolved_at < ?", (before,))
+    return n

@@ -2,3 +2,7 @@ body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #111318; col
 main { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1rem; }
 a { color: #8ab4ff; }
 .placeholder { border: 1px solid #f0b400; padding: 0.75rem; border-radius: 8px; }
+.legal-nav { font-size: 0.9rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; display: block; overflow-x: auto; }
+th, td { border-bottom: 1px solid #2a2f3b; padding: 0.4rem; text-align: left; vertical-align: top; }
+h2 { margin-top: 1.75rem; }

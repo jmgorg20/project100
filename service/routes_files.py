@@ -47,6 +47,8 @@ def download(request: Request, output_id: str, t: str = "", download: int = 0):
                    "WHERE o.id = ? AND o.deleted_at IS NULL", (output_id,))
         if not o or not o["path"]:
             raise ApiError(410, "gone", "This file was deleted (files are kept only for a few days).")
+        if o.get("held_at"):
+            raise ApiError(451, "held", "This file was reported and is held while it is reviewed.")
         if download and o["first_download_at"] is None:
             later = now() + float(o["delete_after_download_hours"]) * 3600
             tx.run("UPDATE outputs SET first_download_at = ?, expires_at = CASE WHEN expires_at > ? THEN ? ELSE "
@@ -102,5 +104,7 @@ def metrics(request: Request):
         lines.append(f"autoedit_workers_alive {alive}")
         pending = tx.value("SELECT COUNT(*) FROM webhook_deliveries WHERE status = 'pending'", (), 0)
         lines.append(f"autoedit_webhooks_pending {pending}")
+        lines.append(f"autoedit_reports_open {tx.value("SELECT COUNT(*) FROM reports WHERE status = 'open'", (), 0)}")
+        lines.append(f"autoedit_outputs_held {tx.value('SELECT COUNT(*) FROM outputs WHERE held_at IS NOT NULL AND deleted_at IS NULL', (), 0)}")
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")

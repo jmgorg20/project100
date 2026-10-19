@@ -85,6 +85,7 @@ export interface AuthConfig {
   providers: string[];
   captcha: { provider: string | null; site_key: string | null };
   password_min_length: number;
+  terms_version?: string;
 }
 export interface Preset {
   id: string;
@@ -128,6 +129,7 @@ export interface OutputView {
   preview_url: string;
   url_expires_at: number;
   expires_in_seconds: number;
+  held?: boolean;
 }
 export interface JobView {
   id: string;

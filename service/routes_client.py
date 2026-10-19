@@ -211,6 +211,8 @@ def complete_upload(request: Request, upload_id: str, client=Depends(require_cli
             raise media.MediaError("The file arrived damaged (its checksum does not match). Upload it again.")
         media.scan(path, s.settings.scan_command)
         info = media.check(path, u["filename"], s.settings.max_duration_seconds)
+        if info.get("kind") in ("video", "image", "audio"):
+            media.moderate(path, s.settings.moderation_command)
     except media.MediaError as exc:
         error = str(exc)
     with s.db.tx() as t:

@@ -71,6 +71,11 @@ test("the owner's admin pages: two-step sign-in, money, costs, users, sign-ups, 
   await page.request.put("/v1/admin/plans/creator", { data: { monthly_minutes: 300 }, headers: ADMIN });   // as it was
   await page.getByRole("navigation", { name: "Admin" }).getByRole("link", { name: "Users" }).click();
   await expect(page.getByTestId("admin-users")).toContainText(email);
+  await page.getByRole("navigation", { name: "Admin" }).getByRole("link", { name: "Reports" }).click();
+  await expect(page.getByRole("radiogroup", { name: "Report status" })).toBeVisible();
+  await page.getByRole("radio", { name: "all" }).click();
+  await expect(page.getByRole("radio", { name: "all" })).toHaveAttribute("aria-checked", "true");
+  await checkPhoneLayout(page);
   await page.getByRole("navigation", { name: "Admin" }).getByRole("link", { name: "System" }).click();
   await expect(page.getByTestId("audit")).toContainText("plan.saved");
   await expect(page.getByTestId("audit")).toContainText("signups.mode");

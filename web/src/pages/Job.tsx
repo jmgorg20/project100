@@ -147,10 +147,11 @@ export function JobPage({ id }: { id: string } & SessionProps) {
       )}
       {error && <p className="error" role="alert">{error}</p>}
 
-      {job.status === "succeeded" && video && (
+      {job.status === "succeeded" && video?.held && <p className="banner warn" role="status" data-testid="held">{t("held")}</p>}
+      {job.status === "succeeded" && video && !video.held && (
         <>
           <video className="preview" src={video.preview_url} controls playsInline preload="metadata" data-testid="preview" />
-          <p className="ai-note">{t("aiNote")}</p>
+          <p className="ai-note" data-testid="ai-label">{t("aiNote")} <small>{t("aiNoteMore")}</small></p>
           {qc && (
             <p className={qc.passed ? "ok" : "warn"} data-testid="qc">
               {qc.passed ? `✓ ${t("checksPassed")}` : `⚠ ${t("checksWarn")}: ${(qc.failed ?? []).join(", ")}`}

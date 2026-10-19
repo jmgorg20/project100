@@ -77,6 +77,21 @@ def scan(path, command):
         raise MediaError("The file did not pass the safety scan.")
 
 
+def moderate(path, command):
+    """Your content check (SERVICE_MODERATION_COMMAND): exit 0 = allowed. Its first output line is
+    the reason shown when a file is refused. Fails closed: if the check cannot run, the file is refused."""
+    if not command:
+        return
+    args = [a.replace("{path}", str(path)) for a in shlex.split(command)]
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise MediaError(f"The file could not be checked ({exc.__class__.__name__}); it was not accepted.")
+    if r.returncode != 0:
+        reason = (r.stdout or "").strip().splitlines()[:1]
+        raise MediaError("The file was not accepted by the content check" + (f": {reason[0][:200]}" if reason else "."))
+
+
 def check(path, filename, max_duration):
     """What the file is: {"kind", "duration", "width", "height", "has_audio", "format"}.
     Raises MediaError with a message for the user."""

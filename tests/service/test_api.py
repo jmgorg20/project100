@@ -419,6 +419,7 @@ def test_admin_release_gate_and_metrics(http):
     assert http.post("/v1/admin/releases/1.1.0/promote", headers=admin(http)).json() == {"stable_version": "1.1.0"}
     m = http.get("/metrics", headers=admin(http)).text
     assert "autoedit_requests_total" in m and "autoedit_workers_alive" in m
+    assert "autoedit_reports_open 0" in m and "autoedit_outputs_held 0" in m
 
 
 def test_each_client_has_its_own_presets(http, video, app):
