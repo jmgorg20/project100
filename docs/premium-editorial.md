@@ -166,6 +166,7 @@ into graphics, each starting on the exact word. The rules are in `autoedit/cues.
 | "tingnan ninyo ang results ko **sa phone / app**" | your matching screenshot inside a floating phone |
 | (anything: the rhythm) | never more than 4 s with nothing changing on screen: where nothing else happens, a camera move (a slow push or a punch-in, alternating) lands on a spoken word, and the summary says how many |
 | an opening with plenty coming (5 or more spoken cards) | the first scene as a magazine cover: the first title word as the masthead, your first sentence under it, three later cards as cover lines |
+| "show tiktok logo when I say TikTok", "ipakita ang search result pag sinabi ko resulta" (in your instruction) | that photo of yours on that word, each time it is said (a logo as an app tile, any other picture floating in); if the word is never said or no file has that name, the summary says so |
 | a floating picture-in-picture (a beat, when you gave clips or photos) | a small label under it with the words it goes with |
 
 **How the cues fit the rest:**
@@ -183,6 +184,19 @@ into graphics, each starting on the exact word. The rules are in `autoedit/cues.
 
 The acceptance test (`scripts/acceptance.py`, results in `docs/acceptance/`) renders a talking
 video and checks every cue: the right graphic, the right text, the right second.
+
+## Your photos: where each one went · Ang mga litrato mo
+
+Photos are matched to what you say by their file names (spaces and capitals do not matter:
+`TikTok logo.png` is the TikTok logo, `search result.png` goes with "resulta") and by meaning in
+Taglish / English (`benta` = sales, `resulta` = result, `larawan` = picture...). *What the AI did*
+has one line per photo: where it was used and why (`search result.png: used at 0:14 as
+screenshot-collage (matched 'resulta' in "Ito ang screenshot ng resulta ko")`), or why not
+(`TikTok logo.png: not used - TikTok is never said. To use it, say what it shows or pin it in the
+instruction ("show TikTok logo when I say ...")`). Pop-ups the preset leaves out are not reported
+as "skipped" any more (that was the "search result.png skipped twice" line of the Windows run:
+the AI had planned two plain pop-ups for it, which this preset replaces with its floating
+screenshot).
 
 ## Changing one scene · Pagbago ng isang eksena
 
