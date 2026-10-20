@@ -93,6 +93,27 @@ follow-up) and "Apply" (after review) start from.
 
 Change the models in the app's Settings or in `config.yaml` under `ai:`.
 
+## When the AI is slow or rate limited · Kapag mabagal o limitado ang AI
+
+No AI request can hold the edit up:
+
+- **A time limit per request:** 90 s (`ai: timeout`), then it is asked again, up to 2 times
+  (`ai: retries`), after a timeout, a lost connection or a server error.
+- **Rate limits (429):** Groq's free tier allows a number of tokens per minute. When it says
+  "wait", the app waits the time Groq asks for (when it is under a minute) and says so on screen:
+  *Planning the editorial scenes - Groq is rate limiting the requests (429): trying again in 8 s
+  (1 of 2)*. A longer wait is not waited out.
+- **Small requests:** the scene plan asks only for the scenes your words have not already set
+  (none at all when every scene is set), with only the beats your files allow, short scene text, a
+  short instruction, and a right-sized answer (on the user's clip: ~2,800 tokens counted against
+  the per-minute limit instead of ~9,700). When it would still not fit `ai: groq_tpm` (8000), it is
+  sent in parts; if Groq still says it is too large, each part is halved.
+- **The rules take over:** when the AI cannot be asked, the scenes are planned by the editorial
+  rules (what you say still sets the graphics), and *What the AI did* says why, with the log's path.
+- **The log:** `work/logs/ai-plan.log`: every request with the time, its size, how many answer
+  tokens it allows, the status (200, 429, 413, a timeout...), how long it took and the tokens
+  used. Never your key or your words.
+
 ## Cost estimate
 
 `estimate` and the app show an estimate before running; the summary shows the cost of the
@@ -110,6 +131,15 @@ app refuses to store the key and asks you to use `.env` instead. The command lin
 `GROQ_API_KEY` / `ANTHROPIC_API_KEY` from the environment or `.env`.
 
 ## What was and was not verified
+
+**Slow / rate-limited AI (Linux, a local stand-in for Groq's API):** a request that never answers is
+given up on after the limit and 2 retries; a 429 is waited out and said on screen; a long wait is
+not; a too-large request is split; cancel works while waiting; the app's own command
+(`editor.py ai-edit`, plan given, Groq hanging) finishes with the rules' scene plan and the reason.
+**NOT VERIFIED:** Windows, and the real Groq API (no key here): the free-tier figure (8000 tokens a
+minute) and Groq's exact 429 / 413 wording are taken from Groq's documented error format and should
+be checked against your account's limits page.
+
 
 **Verified (Linux, automated tests):** plan checks and their messages; the exact request
 each provider gets (with the HTTP library or SDK replaced by a fake: URL, model, JSON mode

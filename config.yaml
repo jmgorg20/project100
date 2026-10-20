@@ -161,6 +161,10 @@ ai:                           # the AI edit (desktop app, or: python editor.py a
   anthropic_model: claude-opus-5-5
   anthropic_effort: medium    # low, medium, high: more effort = better plans, more cost
   max_tokens: 8000
+  timeout: 90                 # seconds an AI request may take before it is asked again (then the rules plan)
+  retries: 2                  # asks again after a timeout, a lost connection or a short rate-limit wait
+  groq_tpm: 8000              # Groq's free-tier tokens per minute for your model: big requests are split to fit
+                              # (every request is logged to work/logs/ai-plan.log)
   cache_folder: work/cache    # saved transcripts and plans (re-runs cost nothing)
   # Prices in US$ for the cost estimate only. Check them on the provider's pricing page:
   # the Groq prices were NOT checked against groq.com when this file was written.

@@ -1,0 +1,30 @@
+{
+ "plan": {
+  "summary": "Preset edit: pauses and filler words cut, jump-cut zooms, captions.",
+  "style": "editorial_card",
+  "grade": "natural_clean",
+  "pacing": {
+   "silence_threshold": 0.25,
+   "remove_fillers": true
+  },
+  "zoom": {
+   "enabled": true,
+   "amount": 1.15
+  },
+  "captions": {
+   "enabled": true,
+   "size_scale": 1.0,
+   "position": null,
+   "highlight_words": []
+  },
+  "cuts": [],
+  "zooms": [],
+  "grades": [],
+  "effects": [],
+  "tracked_effects": [],
+  "photos": [],
+  "notes": [],
+  "ai_clips": [],
+  "voiceovers": []
+ }
+}

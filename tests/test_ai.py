@@ -150,7 +150,7 @@ def test_groq_errors_are_clear(monkeypatch, status, message):
     monkeypatch.setenv("GROQ_API_KEY", "gsk_x")
     monkeypatch.setattr(requests, "post", lambda *a, **k: FakeResponse(status, text="err"))
     with pytest.raises(llm.LLMError, match=message):
-        llm.ask_json("groq", "m", "s", "p", {})
+        llm.ask_json("groq", "m", "s", "p", {}, retries=0)      # retries: tests/test_ai_timeout.py
 
 
 def test_missing_key_is_clear(monkeypatch):
