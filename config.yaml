@@ -86,6 +86,9 @@ tracking:                     # effects that follow your hands / face (docs/trac
   pose_model: ""              # optional pose_landmarker_*.task for a better body
   auto_install: true          # without MediaPipe, a built-in face finder (OpenCV) keeps graphics off
                               # your face; true = install it by itself the first time if missing
+  face_finder: auto           # auto = the built-in face finder runs (in its own process); off = never
+  face_timeout: 60            # seconds before a stuck face finder is stopped (the edit goes on with
+                              # safe zones); its log: work/logs/face-finder.log
   fps: 30                     # points per second (your video's rate is a good choice)
   min_confidence: 0.5
   swap_hands: false           # true if "left" and "right" come out the wrong way round

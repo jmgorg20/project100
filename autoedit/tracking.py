@@ -385,6 +385,17 @@ def import_mediapipe():
             "python -m pip install mediapipe  (see docs/tracking.md)")
 
 
+def face_ready(cfg):
+    """MediaPipe face tracking can run (installed and its face model set), found without importing it."""
+    import importlib.util
+    model = settings_of(cfg)["face_model"]
+    try:
+        installed = importlib.util.find_spec("mediapipe") is not None
+    except (ImportError, ValueError):
+        installed = False
+    return installed and bool(model) and Path(model).is_file()
+
+
 def status(cfg):
     """What tracking can do right now: {"available", "hands", "face", "pose", "problems"}."""
     s = settings_of(cfg)

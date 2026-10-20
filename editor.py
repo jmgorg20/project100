@@ -111,6 +111,8 @@ def build_parser():
                     help="captions without , . ! ? ; : and quotes (remove, the default) or as said (keep)")
     ai.add_argument("--sfx", choices=["auto", "off"], help="sound effects synced to the graphics (auto, the "
                     "default, for presets that use them) or none (off)")
+    ai.add_argument("--face-finder", choices=["auto", "off"], help="the built-in face finder that keeps "
+                    "graphics off your face: auto (default) or off (graphics use safe zones)")
     ai.add_argument("--sfx-volume", type=float, help="how loud the sound effects are, 0-1 (default 0.35)")
     ai.add_argument("--caption-style", help="caption style (a name from `python editor.py styles`, e.g. "
                     "editorial_card); wins over the preset's and the AI's choice")
@@ -288,6 +290,9 @@ def build_parser():
                                                  "ones the project's effects use)")
     trk.add_argument("--output", help="a video only: write the points to this .json file")
     sub.add_parser("track-status", help="can this PC track hands/face? (MediaPipe + models)")
+    ff = sub.add_parser("face-finder", help="the built-in face finder: status, or repair (reinstall "
+                                            "OpenCV and test it)")
+    ff.add_argument("action", choices=["status", "repair"])
     tm = sub.add_parser("track-models", help="the MediaPipe model files tracking needs: shows "
                                              "what they are, and downloads them only if you say so")
     tm.add_argument("--download", nargs="+", choices=["hand", "face", "pose", "segment"],
@@ -648,6 +653,24 @@ def cmd_track_status(args, reporter):
     reporter.result(**st, models=tracking.model_info())
 
 
+def cmd_face_finder(args, reporter):
+    from autoedit import face_detect
+    cfg = load_config(args.config)
+    if args.action == "repair":
+        r = face_detect.repair(cfg, reporter)
+        print(("The face finder works" + (f" (OpenCV {r.get('cv2')})" if r.get("cv2") else "") + ".") if r["ok"]
+              else f"!!  The face finder still does not work: {r['reason']}")
+        print(f"Log: {r['log']}")
+        reporter.result(**r)
+        if not r["ok"]:
+            sys.exit(1)
+    else:
+        st = face_detect.status(cfg)
+        print(f"Face finder: {st['mode']}   state: {st['state']}" + (f"   ({st['reason']})" if st["reason"] else ""))
+        print(f"Log: {st['log']}")
+        reporter.result(**st)
+
+
 def cmd_track_models(args, reporter):
     from autoedit import tracking
     info = tracking.model_info()
@@ -809,6 +832,8 @@ def caption_punctuation(cfg, args):
         cfg["captions"]["punctuation"] = args.caption_punctuation
     if getattr(args, "sfx", None):
         cfg["sfx"]["auto"] = args.sfx
+    if getattr(args, "face_finder", None):
+        cfg.setdefault("tracking", {})["face_finder"] = args.face_finder
     if getattr(args, "sfx_volume", None) is not None:
         cfg["sfx"]["auto_volume"] = max(0.0, min(1.0, args.sfx_volume))
     if getattr(args, "caption_style", None):
@@ -1292,6 +1317,8 @@ def run_command(args, reporter, cancel, json_mode=False):
             cmd_track(args, reporter, cancel)
         elif args.command == "track-status":
             cmd_track_status(args, reporter)
+        elif args.command == "face-finder":
+            cmd_face_finder(args, reporter)
         elif args.command == "track-models":
             cmd_track_models(args, reporter)
         elif args.command == "retranscribe":

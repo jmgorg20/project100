@@ -58,6 +58,7 @@ const api: AppApi = {
   setVocabulary: (v) => ipcRenderer.invoke("vocab:set", v),
   listLibrary: (kind) => ipcRenderer.invoke("library:list", kind),
   trackStatus: () => ipcRenderer.invoke("track:status"),
+  repairFaceFinder: () => ipcRenderer.invoke("face:repair"),
   startTrack: (projectPath) => ipcRenderer.invoke("track:start", projectPath),
   cancelTrack: (taskId) => ipcRenderer.invoke("track:cancel", taskId),
   onTrack: (callback) => listen<TrackUpdate>("track:task", callback),

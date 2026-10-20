@@ -6,7 +6,7 @@ import type { BrollFound, BrollRequest, BrollUpdate, ExportOptions, ExportUpdate
 import { versionFromJob } from "../shared/jobs";
 import { cleanVocabulary } from "../shared/captionEdit";
 import { backupPathFor } from "../shared/paths";
-import type { ContentType, EngineEvent, Job, JobRequest, Plan, Project, Provider, Settings } from "../shared/types";
+import type { ContentType, EngineEvent, FaceFinderRepair, Job, JobRequest, Plan, Project, Provider, Settings } from "../shared/types";
 import { runEngine, type EngineConfig, type RunHandle } from "./engine";
 import { startGraphicsService, type GraphicsService } from "./graphics";
 import { HistoryStore } from "./historyStore";
@@ -436,6 +436,11 @@ function registerIpc(): void {
   ipcMain.handle("track:status", async () => {
     const r = await engineOnce(["track-status"]);
     return r.error || !r.result ? { error: r.error ?? "No answer from the editor engine." } : (r.result as unknown as TrackStatus);
+  });
+  ipcMain.handle("face:repair", async () => {
+    const r = await engineOnce(["face-finder", "repair"]);
+    if (r.result) return r.result as unknown as FaceFinderRepair;
+    return { ok: false, error: r.error ?? "No answer from the editor engine." };
   });
   ipcMain.handle("track:start", (_e, projectPath: string) => startTrack(projectPath));
   ipcMain.handle("track:cancel", (_e, taskId: string) => trackTasks.get(taskId)?.cancel());

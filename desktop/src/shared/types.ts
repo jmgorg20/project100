@@ -464,8 +464,20 @@ export interface Settings {
   /** Sound effects synced to the graphics: "auto" (default) or "off"; volume 0-1. */
   soundEffects?: "auto" | "off";
   soundEffectsVolume?: number;
+  /** The built-in face finder that keeps graphics off your face: "auto" (default) or "off" (safe zones). */
+  faceFinder?: "auto" | "off";
   /** Show the transcript to fix its words before the AI edit (Ayusin muna ang captions). */
   fixCaptionsFirst: boolean;
+}
+
+/** Settings -> Repair face finder: reinstall it and test it. */
+export interface FaceFinderRepair {
+  ok: boolean;
+  reason?: string;
+  /** The face finder's log file (every step, with the time). */
+  log?: string;
+  cv2?: string;
+  error?: string;
 }
 
 export interface KeyStatus {

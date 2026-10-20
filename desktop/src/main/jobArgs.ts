@@ -17,6 +17,7 @@ export function jobArgs(job: Job, settings: Settings, files: { instructionFile: 
     "--caption-punctuation", settings.captionPunctuation ?? "remove",
     ...(settings.captionStyle && settings.captionStyle !== "preset" ? ["--caption-style", settings.captionStyle] : []),
     ...(settings.soundEffects === "off" ? ["--sfx", "off"] : []),
+    ...(settings.faceFinder === "off" ? ["--face-finder", "off"] : []),
     ...(settings.soundEffectsVolume !== undefined && settings.soundEffectsVolume !== 0.35 ? ["--sfx-volume", String(settings.soundEffectsVolume)] : []),
     "--instruction-file", files.instructionFile,
   ];

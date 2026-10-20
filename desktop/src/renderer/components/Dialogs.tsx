@@ -1,7 +1,7 @@
 // Settings (API keys, provider, Python), the consent notice, and the exact-frame viewer.
 import { useEffect, useState } from "react";
 import type { EngineCheck } from "../../shared/api";
-import type { KeyName, KeysStatus, Provider, Settings } from "../../shared/types";
+import type { FaceFinderRepair, KeyName, KeysStatus, Provider, Settings } from "../../shared/types";
 import { api } from "../lib/api";
 import engineData from "../../shared/engine-data.json";
 
@@ -51,6 +51,7 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
   const [keys, setKeys] = useState<KeysStatus | null>(null);
   const [draft, setDraft] = useState(settings);
   const [check, setCheck] = useState<EngineCheck | null>(null);
+  const [repair, setRepair] = useState<FaceFinderRepair | "busy" | null>(null);
   useEffect(() => {
     api.keysStatus().then(setKeys);
   }, []);
@@ -113,6 +114,25 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
           <label htmlFor="sound-effects-volume">Volume: {Math.round((draft.soundEffectsVolume ?? 0.35) * 100)}%</label>
           <input id="sound-effects-volume" type="range" min={0} max={100} step={5} value={Math.round((draft.soundEffectsVolume ?? 0.35) * 100)}
             onChange={(e) => set("soundEffectsVolume", Number(e.target.value) / 100)} disabled={draft.soundEffects === "off"} data-testid="sound-effects-volume" />
+        </div>
+        <div className="field">
+          <label htmlFor="face-finder">Face finder · Panghanap ng mukha (keeps the graphics off your face)</label>
+          <select id="face-finder" value={draft.faceFinder ?? "auto"} onChange={(e) => set("faceFinder", e.target.value as Settings["faceFinder"])} data-testid="face-finder">
+            <option value="auto">Auto: finds your face in its own process (stopped after 60 s; the edit never waits on it)</option>
+            <option value="off">Off: graphics use the safe zones (never over where a face usually is)</option>
+          </select>
+          <div className="row">
+            <button className="btn small" disabled={repair === "busy"} data-testid="repair-face-finder"
+              onClick={async () => { setRepair("busy"); setRepair(await api.repairFaceFinder()); }}>
+              {repair === "busy" ? "Repairing… (reinstalls and tests it)" : "Repair face finder"}
+            </button>
+          </div>
+          {repair && repair !== "busy" && (
+            <p className={repair.ok ? "muted small" : "warn"} data-testid="face-finder-repair-result" style={{ overflowWrap: "anywhere", userSelect: "text" }}>
+              {repair.ok ? `The face finder works${repair.cv2 ? ` (OpenCV ${repair.cv2})` : ""}.` : `The face finder still does not work: ${repair.reason ?? repair.error}`}
+              {repair.log ? ` Log: ${repair.log}` : ""}
+            </p>
+          )}
         </div>
         <label className="row">
           <input type="checkbox" checked={draft.fixCaptionsFirst} onChange={(e) => set("fixCaptionsFirst", e.target.checked)} data-testid="fix-captions-first" />
