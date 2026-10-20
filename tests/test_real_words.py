@@ -109,6 +109,10 @@ def test_the_app_entry_point_makes_every_spoken_card(tmp_path):
     # a talking-head preset: never the Ranking format because "countdown" was asked for
     assert project["meta"]["format"] == "talking_head" and not any(d.startswith("Format:") for d in details)
     assert any(d.startswith("Graphics: You asked for checklist: made at") for d in details)
+    # every photo: used where and why, or why not - never "skipped" for a pop-up the preset drops
+    assert any(d.startswith("Photo search_results.png: used at") for d in details)
+    assert any(d.startswith("Photo profile_photo.png: used at") for d in details)
+    assert not any(d.startswith("Skipped photo") or d.startswith("Photos not used") for d in details)
     captions = [w["text"] for t in project["tracks"] if t["kind"] == "caption" for c in t["clips"]
                 for w in c.get("words", [])]
     assert "Tatlo" in captions and "Tatyo" not in captions                   # the captions say it right

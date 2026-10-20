@@ -311,7 +311,9 @@ def describe(project, plan, result, raw_duration, photo_names, generation=None, 
             details.append(f"Skipped photo {photo['file']}: that part was cut, or another "
                            f"photo was already on screen.")
     unused = sorted(set(photo_names) - {p["file"] for p in plan["photos"]})
-    if unused:
+    if graphics and graphics.get("assets") is not None:
+        details += [f"Photo {line}" for line in graphics["assets"]]     # every photo: used where and why, or why not
+    elif unused:
         details.append("Photos not used: " + ", ".join(unused) + ".")
     for t in tracks:
         for c in t["clips"]:
@@ -611,7 +613,10 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                                    "photos": "Placing photos"}[stage])
             reporter.event("project", stage=stage, project=view)
 
-        summary = describe(project, result.plan, result, duration, list(photos), generation, tracking,
+        # the plan as it was built (a preset's own rules, e.g. no plain photo pop-ups, applied), so
+        # photos it dropped are not reported as "skipped"
+        summary = describe(project, pre.pin_plan(look, result.plan) if look else result.plan, result, duration,
+                           list(photos), generation, tracking,
                            graphics_result)
         if format_id != fmt.DEFAULT_FORMAT:
             summary["details"] = ([f"Format: {spec['name']} ({format_reason})."]

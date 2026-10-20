@@ -36,7 +36,13 @@ ASSETS = {  # name -> (colour, size, label drawn on it)
 }
 
 
-def make_assets(folder):
+# the names the user's own files had on the real Windows run (spaces, capitals)
+SPACED = {"search_results.png": "search result.png", "tiktok_logo.png": "TikTok logo.png",
+          "facebook_logo.png": "Facebook logo.png", "youtube_logo.png": "YouTube logo.png",
+          "profile_photo.png": "profile photo.png"}
+
+
+def make_assets(folder, spaced=False):
     """Simple test pictures (a fake results screenshot, letter logos, a face-coloured photo), drawn
     here for this test only."""
     from PIL import Image, ImageDraw
@@ -55,7 +61,7 @@ def make_assets(folder):
                 d.rectangle((60, y + 100, w - 260, y + 124), fill="#9aa0a6")
         else:
             d.ellipse((w * 0.2, h * 0.2, w * 0.8, h * 0.8), fill="#ffffff" if colour != "#c8a27a" else "#7a5230")
-        path = folder / name
+        path = folder / (SPACED.get(name, name) if spaced else name)
         img.save(path)
         out.append(path)
     return out
@@ -207,7 +213,7 @@ def run_cli(out, video, cfg, instruction, photos, preset, words_file):
 
 
 def run(out, video=None, words_file=DATA / "base_words.json", cues_file=DATA / "base_cues.json", preset=None,
-        real=False, seconds=29.8, instruction="", cli=False):
+        real=False, seconds=29.8, instruction="", cli=False, spaced=False):
     from autoedit import ai_edit
     from autoedit.config import load_config
     from autoedit.words import load_transcript
@@ -220,7 +226,7 @@ def run(out, video=None, words_file=DATA / "base_words.json", cues_file=DATA / "
         source = f"a {seconds:g} s stand-in clip made with FFmpeg (the base video was not available here)"
     else:
         source = f"the video {video}"
-    photos = make_assets(out / "assets")
+    photos = make_assets(out / "assets", spaced)
     if not real:
         words = load_transcript(words_file)
         ai_edit.transcribe = lambda *a, **k: list(words)            # the fixture stands in for Whisper
@@ -291,9 +297,12 @@ def main():
     ap.add_argument("--instruction-file")
     ap.add_argument("--real-transcription", action="store_true")
     ap.add_argument("--cli", action="store_true", help="run editor.py ai-edit as the desktop app does")
+    ap.add_argument("--spaced-names", action="store_true", help="name the test pictures like the real run's "
+                    "(\"search result.png\", \"TikTok logo.png\"...)")
     a = ap.parse_args()
     instruction = Path(a.instruction_file).read_text(encoding="utf-8") if a.instruction_file else a.instruction
-    r = run(a.out, a.video, a.words, a.cues, a.preset, a.real_transcription, instruction=instruction, cli=a.cli)
+    r = run(a.out, a.video, a.words, a.cues, a.preset, a.real_transcription, instruction=instruction, cli=a.cli,
+            spaced=a.spaced_names)
     print(markdown(r))
     sys.exit(0 if r["failed"] == 0 else 1)
 

@@ -81,7 +81,7 @@ CUE_ONLY = {"before_after", "screenshot", "platforms", "stats", "magazine", "rec
 BIG_CARDS = {"countdown-timer", "editorial-checklist", "storyboard-doc", "search-bar", "stat-cards", "kinetic-words",
              "editorial-headline", "magazine-cover", "tile-mosaic", "timeline-card", "chat-cards", "strike-text",
              "phone-mockup"}
-CUE_BEAT = {"countdown": "countdown", "keyword": "kinetic", "before_after": "before_after", "search": "search",
+CUE_BEAT = {"pin": "screenshot", "countdown": "countdown", "keyword": "kinetic", "before_after": "before_after", "search": "search",
             "screenshot": "screenshot", "checklist": "checklist", "platforms": "platforms", "handle": "profile",
             "storyboard": "storyboard", "stats": "stats", "follow": "profile", "recap": "recap",
             "timeline": "timeline", "comment": "comment", "magazine": "magazine"}
@@ -127,6 +127,19 @@ class Scene:
 
 
 # ---------------------------------------------------------------- the creator's own files
+
+# words that mean the same thing in a file name and in what is said (Taglish / English)
+MEANING = [{"resulta", "result", "results", "outcome", "proof"}, {"benta", "sales", "sale", "sold", "orders", "order"},
+           {"kita", "kinita", "income", "earnings", "profit", "kumita"}, {"larawan", "litrato", "picture", "photo", "pic"},
+           {"screenshot", "screen", "ss"}, {"komento", "comment", "comments"}, {"review", "reviews", "feedback"},
+           {"analytics", "stats", "insights", "dashboard", "graph", "chart"}, {"followers", "follower", "fans"},
+           {"menu", "presyo", "price", "prices"}, {"produkto", "product", "products", "item"}]
+
+
+def same_meaning(a, b):
+    a, b = a.lower(), b.lower()
+    return any(a in g and b in g for g in MEANING)
+
 
 class Assets:
     """The creator's pictures and clips in the project (the main video and sound files excluded)."""
@@ -174,15 +187,27 @@ class Assets:
         return {"images": list(self.images), "videos": list(self.videos), "logo": self.logo, "avatar": self.avatar,
                 "platform_logos": dict(self.platform_logos)}
 
-    def matching_images(self, tokens):
-        """Your screenshots, the ones whose file names match the spoken words first ("resulta" ->
-        search_results.png: a shared 5-letter start)."""
-        said = {t for t in (norm(x) for x in tokens) if len(t) >= 4}
+    def name_parts(self, mid):
+        """The words of a file name ("Search Result.PNG" -> ["search", "result"])."""
+        return [p for p in re.split(r"[^a-z0-9]+", self.names.get(mid, "").lower().rsplit(".", 1)[0]) if len(p) >= 3]
 
-        def score(mid):
-            parts = [p for p in re.split(r"[^a-z0-9]+", self.names.get(mid, "").lower().rsplit(".", 1)[0]) if len(p) >= 4]
-            return sum(1 for p in parts for t in said if p[:5] == t[:5])
-        return sorted(self.images, key=lambda mid: (-score(mid), self.images.index(mid)))
+    def name_matches(self, mid, tokens):
+        """The spoken words that match the file's name: by spelling (a shared 5-letter start:
+        "resulta" ~ "result"), or by meaning in Taglish / English ("benta" ~ "sales")."""
+        hits = []
+        for t in tokens:
+            t = norm(t)
+            if len(t) < 3:
+                continue
+            for part in self.name_parts(mid):
+                if (len(t) >= 4 and len(part) >= 4 and part[:5] == t[:5]) or same_meaning(part, t):
+                    hits.append(t)
+                    break
+        return hits
+
+    def matching_images(self, tokens):
+        """Your screenshots, the ones whose file names match the spoken words first."""
+        return sorted(self.images, key=lambda mid: (-len(self.name_matches(mid, tokens)), self.images.index(mid)))
 
     def satisfies(self, need, scene_info=None):
         if need == "images2":
@@ -874,6 +899,92 @@ def rel(ctx, idx, start):
     return [round(max(0.0, ctx.words[i]["start"] - start), 3) for i in idx]
 
 
+PIN = re.compile(r"(?:show|put|add|ipakita|ilagay|lagyan(?: ng)?)\s+(?:the\s+|ang\s+|yung\s+)?(?P<photo>[\w .'-]+?)\s+"
+                 r"(?:when i say|when i mention|kapag sinabi ko|pag sinabi ko|pagsabi ko ng|pagsabi ko|sa salitang|on the word)"
+                 r"\s+[\"'“]?(?P<word>[\w-]+(?: [\w-]+)?)", re.I)
+
+
+def photo_by_name(assets, text):
+    """The picture of yours a few words name ("tiktok logo" -> TikTok logo.png), or None."""
+    want = [t for t in re.split(r"[^a-z0-9]+", text.lower()) if len(t) >= 3 and t not in ("the", "ang", "yung", "ko", "my")]
+    best, score = None, 0
+    for mid in list(assets.names):
+        parts = assets.name_parts(mid)
+        hit = sum(1 for w in want if any(p[:5] == w[:5] or same_meaning(p, w) for p in parts))
+        if hit > score:
+            best, score = mid, hit
+    return best
+
+
+def pinned_cues(ctx, assets):
+    """Cues for the pictures your instruction pins to a word: one on each time the word is said
+    (a word one letter off counts: "TikTok" heard as "Tiktak"). Notes for pins that cannot be done."""
+    from .taglish import one_edit
+    out, notes = [], []
+    for m in PIN.finditer(ctx.instruction or ""):
+        mid = photo_by_name(assets, m.group("photo"))
+        word = m.group("word").strip()
+        if mid is None:
+            notes.append(f"You asked to show \"{m.group('photo').strip()}\" on \"{word}\", but none of your files "
+                         "has that name.")
+            continue
+        toks = [norm(t) for t in word.split()]
+        def same(heard, t):          # the word, or one letter off it (not its plural / singular)
+            return heard == t or (len(t) >= 5 and one_edit(heard, t) and heard + "s" != t and t + "s" != heard)
+        hits = [i for i in range(len(ctx.words) - len(toks) + 1)
+                if all(same(norm(ctx.words[i + k]["text"]), t) for k, t in enumerate(toks))]
+        if not hits:
+            notes.append(f"You asked to show {assets.names[mid]} when you say \"{word}\", but \"{word}\" is not "
+                         "said in the video.")
+            continue
+        for i in hits[:3]:
+            cue = cues_mod.Cue("pin", i, i + len(toks) - 1, text=" ".join(shown(ctx.words[i + k]) for k in range(len(toks))),
+                               number=mid, priority=10)
+            out.append(cue)
+    return out, notes
+
+
+def asset_report(project, assets, ctx):
+    """One line per picture of yours: where it was used and why, or why not."""
+    by_mid = {}
+    for t in project["tracks"]:
+        for c in t["clips"]:
+            why = ((c.get("director") or {}).get("assets") or {})
+            mids = set(why) | ({c["params"].get("image")} if c.get("params", {}).get("image") else set()) | \
+                set((c.get("params") or {}).get("images") or [])
+            if t["kind"] == "overlay" and c.get("media"):
+                mids.add(c["media"])
+            for mid in mids:
+                if mid in assets.names:
+                    what = c.get("template") or ("a floating picture" if "picture-in-picture" in c.get("label", "")
+                                                 else "a picture")
+                    by_mid.setdefault(mid, []).append((c["start"], what, why.get(mid, "")))
+    lines = []
+    tokens = [(w["start"], norm(w["text"])) for w in ctx.words]
+    for mid, name in assets.names.items():
+        uses = sorted(by_mid.get(mid, []))
+        if uses:
+            where = "; ".join(f"{director.mmss(t)} as {tpl}" + (f" ({why})" if why else "") for t, tpl, why in uses[:3])
+            lines.append(f"{name}: used at {where}.")
+            continue
+        said = [(t, w) for t, w in tokens if assets.name_matches(mid, [w])]
+        platform = next((p for p, m in assets.platform_logos.items() if m == mid), None)
+        if platform and not any(w == platform for _t, w in tokens):
+            why = f"{cues_mod.PLATFORMS.get(platform, platform.title())} is never said"
+        elif mid == assets.avatar:
+            why = "no @handle, \"i-follow\" or comment call is said"
+        elif said:
+            t, w = said[0]
+            why = (f"its name matches \"{w}\" at {director.mmss(t)}, but no picture card was made there (another card "
+                   "was on screen, or it did not fit)")
+        else:
+            parts = ", ".join(assets.name_parts(mid)) or name
+            why = f"no spoken word matches its name ({parts})"
+        lines.append(f"{name}: not used - {why}. To use it, say what it shows or pin it in the instruction "
+                     f"(\"show {name.rsplit('.', 1)[0]} when I say ...\").")
+    return lines
+
+
 def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
     """Graphic items and effect specs for the spoken cues. Returns (items, effects, notes, used): `used`
     = the cues that made something (a cue with nothing to show leaves its scene to the beats)."""
@@ -932,11 +1043,16 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
                 continue
             for m in pics:
                 used_images[m] += 1
+            said = [t for _k, t in cue.items]
+            why = {m: (f"matched '{', '.join(dict.fromkeys(assets.name_matches(m, said)))}' in \"{cue.text[:40]}\""
+                       if assets.name_matches(m, said) else f"your screenshot for \"{cue.text[:40]}\" (no word of its name was said)")
+                   for m in pics}
             if getattr(cue, "phone", False):
                 # "sa phone / app ko": the first screenshot inside a floating phone
                 it = cue_item(ctx, cue, "phone-mockup", "phone", cue.number if cue.number is not None else cue.i0,
                               last_end + hold + 0.6, s, image=pics[0], text="")
                 it["zone"] = "center"
+                it["asset_why"] = {pics[0]: why[pics[0]]}
                 items.append(it)
                 continue
             it = cue_item(ctx, cue, "screenshot-collage", beat, cue.number if cue.number is not None else cue.i0,
@@ -944,6 +1060,7 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
             it["cues"] = rel(ctx, [cue.number if cue.number is not None else cue.i0] * len(pics), it["start"])
             it["cues"] = [round(c + 0.35 * k, 3) for k, c in enumerate(it["cues"])]
             it["zone"] = "center"
+            it["asset_why"] = why
             items.append(it)
         elif cue.kind in ("checklist", "storyboard"):
             template = "editorial-checklist" if cue.kind == "checklist" else "storyboard-doc"
@@ -961,6 +1078,8 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
                               **({"image": logo} if logo else {}))
                 it["prefer"] = (x, 0.16)
                 it["importance"] = 0.97
+                if logo:
+                    it["asset_why"] = {logo: f"you said \"{shown(sw[k])}\""}
                 items.append(it)
                 if not logo:
                     notes.append(f"No logo file of yours for {name}, so its tile shows the name (add e.g. "
@@ -987,6 +1106,8 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
             it["cues"] = [round(it["cues"][0] + (0.25 if cue.kind == "follow" else 0.9), 3)]
             if cue.kind == "handle":
                 it["prefer"] = (0.5, 0.36)
+            if profile_photo:
+                it["asset_why"] = {profile_photo: f"your profile photo, for \"{director.shorten(cue.text or who, 40)}\""}
             items.append(it)
         elif cue.kind == "stats":
             it = cue_item(ctx, cue, "stat-cards", beat, cue.i0, last_end + hold + 0.8, s,
@@ -1018,6 +1139,22 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
             it = cue_item(ctx, cue, "chat-cards", beat, cue.i0, last_end + hold + 0.8, s, text=who,
                           list=[director.shorten(cue.text, 80)], **({"image": profile_photo} if profile_photo else {}))
             it["cues"] = [0.15]
+            if profile_photo:
+                it["asset_why"] = {profile_photo: "your profile photo, on the comment card"}
+            items.append(it)
+        elif cue.kind == "pin":
+            # "show tiktok logo when I say TikTok": your picture on that word, as you asked
+            mid = cue.number
+            logo = mid in assets.platform_logos.values() or mid == assets.logo
+            it = cue_item(ctx, cue, "app-tile" if logo else "screenshot-collage", "screenshot", cue.i0,
+                          last_end + hold + 0.6, s, text=cue.text if logo else "",
+                          **({"image": mid} if logo else {"images": [mid]}))
+            if not logo:
+                it["cues"] = [0.0]
+            it["zone"] = "upper" if logo else "center"
+            it["importance"] = 0.99
+            it["asset_why"] = {mid: f"pinned in your instruction to \"{shown(sw[cue.i0])}\""}
+            used_images[mid] += 1
             items.append(it)
         if len(items) > made_items:
             heads.append(head_of(items[-1]))
@@ -1027,7 +1164,8 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
     # one spoken cue's card gives way to the next one's (a few tiles of one sentence stay together)
     order = sorted(items, key=lambda x: x["start"])
     for k, it in enumerate(order):
-        nxt = next((o for o in order[k + 1:] if o["i0"] != it["i0"] and o["cue"] != it["cue"]), None)
+        nxt = next((o for o in order[k + 1:] if o["i0"] != it["i0"] and (o["cue"] != it["cue"] or o["cue"] == "pin")),
+                   None)
         if nxt is not None and it["end"] > nxt["start"] - 0.08:
             it["end"] = snap(max(it["start"] + 1.2, nxt["start"] - 0.08), ctx.fps)
     cover = magazine_cover(ctx, found, used, order, heads, scenes)
@@ -1452,7 +1590,8 @@ def build(ctx, project, scenes, chosen, assets, captions_on, extra=(), used_imag
                                    "importance": it["importance"], "reason": it["reason"],
                                    "kind": meta["category"],
                                    **({"covers_face": True, "cue": it["cue"]} if it.get("covers_face") else
-                                      ({"cue": it["cue"]} if it.get("cue") else {}))}})
+                                      ({"cue": it["cue"]} if it.get("cue") else {})),
+                                   **({"assets": it["asset_why"]} if it.get("asset_why") else {})}})
     return clips, placed, effects, pips
 
 
@@ -1505,6 +1644,8 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     captions_on = captions_present(project)
     # what is said decides its scenes (a countdown, a search, a list...); the others get beats
     found = cues_mod.extract(ctx.words)
+    pins, pin_notes = pinned_cues(ctx, assets)
+    found = sorted(found + pins, key=lambda c: (ctx.words[c.i0]["start"], -c.priority))
     handle = next((c.text for c in found if c.kind == "handle"), None)
     used_images = Counter()
     cue_items, cue_effects, cue_notes, made = cue_elements(ctx, found, scenes, assets, used_images, handle)
@@ -1547,7 +1688,7 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     notes = list(ctx.notes) + [n for n in cue_notes if n not in ctx.notes]
     made = [(it["cue"], it["start"], it.get("spoken") or it.get("text") or "") for it in placed if it.get("cue")]
     made += [("before_after", e["start"], "") for e in cue_effects if e["type"] == "look"]
-    notes = requested_lines(instruction, made) + notes
+    notes = requested_lines(instruction, made) + pin_notes + notes
     if not (assets.images or assets.videos or assets.logo):
         notes.append("No screenshots, photos or clips of yours were given, so the picture beats "
                      "(collage, montage, phone, PiP...) were left out. Add your own files to use them.")
@@ -1563,7 +1704,7 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     return {"project": project, "count": len(clips), "style": STYLE, "notes": notes, "fallback": fallback,
             "reason": reason, "cost": cost, "usage": usage, "model": used_model, "plan": placed, "wipe": None,
             "removed": removed, "summary": f"{len(scenes)} scenes", "attempts": attempts, "cached": cached,
-            "scenes": rows}
+            "scenes": rows, "assets": asset_report(project, assets, ctx)}
 
 
 # what an instruction can ask for -> (cue kinds that make it, a name, what to say to get it)
@@ -1572,7 +1713,7 @@ REQUESTS = [
      "say the numbers down, e.g. \"Tatlo, dalawa, isa!\""),
     ("big word title", re.compile(r"big word|malaking (word|salita)|word card|title|kinetic", re.I), {"keyword", "magazine"},
      "say \"Una: DISIPLINA\" (a word after Una / Pangalawa)"),
-    ("search bar", re.compile(r"search ?bar|search", re.I), {"search"},
+    ("search bar", re.compile(r"search ?bar|search box|nagta-?type|typing", re.I), {"search"},
      "say \"sa search bar, hinanap ko ...\""),
     ("screenshot", re.compile(r"screenshot|resulta", re.I), {"screenshot"},
      "say \"tingnan ninyo ang screenshot / resulta ko\" with a picture whose name matches"),
