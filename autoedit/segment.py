@@ -149,7 +149,7 @@ def person_mask(video, start, end, fps, cfg=None, cancel=None, reporter=None, fo
     decode = subprocess.Popen(
         [find_tool("ffmpeg"), "-v", "error", "-ss", f"{start:.4f}", "-t", f"{length + 1 / fps:.4f}",
          "-i", str(video), "-vf", f"fps={fps},scale={w}:{h}", "-frames:v", str(frames),
-         "-pix_fmt", "rgb24", "-f", "rawvideo", "-"], stdout=subprocess.PIPE)
+         "-pix_fmt", "rgb24", "-f", "rawvideo", "-"], stdout=subprocess.PIPE, stdin=subprocess.DEVNULL)
     part = out.with_name(out.stem + ".part.mkv")
     encode = subprocess.Popen(
         [find_tool("ffmpeg"), "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "gray", "-s", f"{w}x{h}",
@@ -205,7 +205,7 @@ def looks_like_green_screen(video, at=None):
     t = at if at is not None else min(1.0, info["duration"] / 2)
     raw = subprocess.run([find_tool("ffmpeg"), "-v", "error", "-ss", f"{t:.3f}", "-i", str(video),
                           "-frames:v", "1", "-vf", "scale=96:-2", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"],
-                         capture_output=True).stdout
+                         capture_output=True, stdin=subprocess.DEVNULL).stdout
     if not raw:
         return None
     w = 96

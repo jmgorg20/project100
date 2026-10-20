@@ -23,7 +23,7 @@ def _run(cmd, timeout=PROBE_TIMEOUT):
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
                                 encoding="utf-8", errors="replace",
-                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), stdin=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):
         return None
     return result.stdout if result.returncode == 0 else None

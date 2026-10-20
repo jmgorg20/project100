@@ -57,8 +57,83 @@ class TextReporter:
         pass
 
 
+class BackgroundStream:
+    """Writes to `stream` on its own thread, so the edit never waits for whoever reads the pipe (a
+    busy or stuck app window must not stop the engine). Lines marked droppable (progress, heartbeat,
+    log) are dropped while too many are waiting; the others never are. close() waits for the rest
+    (up to a limit)."""
+
+    MAX_PENDING = 2000
+
+    def __init__(self, stream):
+        import collections
+        self.stream = stream
+        self.pending = collections.deque()
+        self.cond = threading.Condition()
+        self.closed = False
+        self.dropped = 0
+        self.thread = threading.Thread(target=self._run, daemon=True, name="pipe-writer")
+        self.thread.start()
+
+    def write(self, text, droppable=False):
+        if not text:
+            return 0
+        with self.cond:
+            if droppable and len(self.pending) >= self.MAX_PENDING:
+                self.dropped += 1
+                return len(text)
+            self.pending.append(text)
+            self.cond.notify()
+        return len(text)
+
+    def flush(self):
+        pass
+
+    def _run(self):
+        while True:
+            with self.cond:
+                while not self.pending and not self.closed:
+                    self.cond.wait()
+                if not self.pending and self.closed:
+                    return
+                text = self.pending.popleft()
+                self.cond.notify_all()
+            try:
+                self.stream.write(text)
+                self.stream.flush()
+            except (OSError, ValueError):       # the reader is gone: nothing more to say
+                with self.cond:
+                    self.pending.clear()
+                    self.closed = True
+                return
+
+    def close(self, timeout=10.0):
+        """Write what is waiting (at most `timeout` s), then stop."""
+        import time as _time
+        end = _time.monotonic() + timeout
+        with self.cond:
+            self.closed = True
+            self.cond.notify_all()
+            while self.pending and _time.monotonic() < end:
+                self.cond.wait(0.1)
+        self.thread.join(max(0.0, end - _time.monotonic()))
+
+    # what io.TextIOBase offers, for print() / tracebacks redirected here
+    def isatty(self):
+        return False
+
+    @property
+    def encoding(self):
+        return getattr(self.stream, "encoding", "utf-8")
+
+
+DROPPABLE = {"progress", "heartbeat", "log"}
+
+
 class JsonReporter:
-    """Writes JSON lines to `stream` (the real stdout). Thread-safe; progress is throttled."""
+    """Writes JSON lines to `stream` (the real stdout). Thread-safe; progress is throttled. With a
+    BackgroundStream the edit never waits for the reader (progress / log lines may be dropped when
+    the reader falls far behind; results and errors are not)."""
 
     def __init__(self, stream):
         self.stream = stream
@@ -70,8 +145,11 @@ class JsonReporter:
     def emit(self, **data):
         line = json.dumps(data)   # ASCII-only: safe on any console encoding
         with self.lock:
-            self.stream.write(line + "\n")
-            self.stream.flush()
+            if isinstance(self.stream, BackgroundStream):
+                self.stream.write(line + "\n", droppable=data.get("type") in DROPPABLE)
+            else:
+                self.stream.write(line + "\n")
+                self.stream.flush()
 
     def stage(self, key, label):
         self.current = key

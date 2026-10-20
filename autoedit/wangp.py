@@ -289,7 +289,7 @@ class Bridge:
         if self.proc.poll() is None:
             if sys.platform == "win32":
                 subprocess.run(["taskkill", "/pid", str(self.proc.pid), "/T", "/F"],
-                               capture_output=True)
+                               capture_output=True, stdin=subprocess.DEVNULL)
             else:
                 self.proc.kill()
             self.proc.wait(timeout=30)

@@ -57,7 +57,7 @@ def result(check, ok, message, **details):
 def ffprobe(path):
     cmd = [find_tool("ffprobe"), "-v", "error", "-print_format", "json", "-show_format", "-show_streams",
            str(path)]
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL)
     if r.returncode != 0:
         return None, (r.stderr or "ffprobe could not read the file").strip()[-500:]
     try:
@@ -72,7 +72,7 @@ def scan(path):
            "-vf", f"blackdetect=d={BLACK_MIN}:pix_th=0.10",
            "-af", f"silencedetect=n={SILENCE_DB}dB:d={SILENCE_MIN},astats=measure_perchannel=none",
            "-f", "null", "-"]
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL)
     log = r.stderr or ""
     black = [(float(a), float(b)) for a, b in
              re.findall(r"black_start:\s*([\d.]+)\s+black_end:\s*([\d.]+)", log)]

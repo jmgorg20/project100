@@ -70,6 +70,15 @@ function killTree(child: ChildProcess, spawnFn: EngineConfig["spawn"]): void {
   }
 }
 
+/** Hand an engine event to the app; an error in the app's handling is logged, and reading goes on. */
+function safely(onEvent: (e: EngineEvent) => void, event: EngineEvent): void {
+  try {
+    onEvent(event);
+  } catch (error) {
+    console.error(`An engine event could not be handled (${event.type}): ${(error as Error).message}`);
+  }
+}
+
 export function runEngine(config: EngineConfig, args: string[], onEvent: (e: EngineEvent) => void): RunHandle {
   const spawnFn = config.spawn ?? nodeSpawn;
   const script = config.script ?? path.join(config.engineDir, "editor.py");
@@ -100,13 +109,14 @@ export function runEngine(config: EngineConfig, args: string[], onEvent: (e: Eng
       readline.createInterface({ input: child.stdout }).on("line", (line) => {
         lastActivity = Date.now();
         const event = parseLine(line);
-        if (event) onEvent(event);
+        // a line the app cannot handle must never stop it reading: the engine would wait for ever
+        if (event) safely(onEvent, event);
       });
     }
     if (child.stderr) {
       readline.createInterface({ input: child.stderr }).on("line", (line) => {
         lastActivity = Date.now();
-        if (line.trim()) onEvent({ type: "log", message: line, stream: "stderr" });
+        if (line.trim()) safely(onEvent, { type: "log", message: line, stream: "stderr" });
       });
     }
     child.stdin?.on("error", () => {
