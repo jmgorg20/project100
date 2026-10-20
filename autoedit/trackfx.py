@@ -297,7 +297,7 @@ def decode_effect_clip(path, seconds, fps, alpha, width=256):
     chans = 4 if alpha else 3
     cmd = ["ffmpeg", "-v", "error", "-i", str(path), "-t", f"{seconds:.4f}", "-an",
            "-vf", f"fps={fps:g},scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", pix, "-"]
-    raw = subprocess.run(cmd, capture_output=True, check=False)
+    raw = subprocess.run(cmd, capture_output=True, check=False, stdin=subprocess.DEVNULL)
     if raw.returncode != 0 and not raw.stdout:
         raise EditorError(f"Could not read the effect clip {Path(path).name}: "
                           f"{raw.stderr.decode(errors='replace')[-200:]}")

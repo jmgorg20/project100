@@ -15,6 +15,7 @@ For the desktop app: --json prints progress as JSON lines on stdout (logs go to 
 
 import argparse
 import contextlib
+import os
 import sys
 import threading
 from pathlib import Path
@@ -1204,16 +1205,49 @@ def cmd_check(args):
 
 
 def watch_stdin(cancel):
-    """Set `cancel` when the app writes "cancel" or closes stdin (so no render is orphaned)."""
+    """Set `cancel` when the app writes "cancel" or closes stdin (so no render is orphaned).
+
+    On Windows the pipe is only read when something is in it (PeekNamedPipe): a read left waiting on
+    the app's stdin pipe could hold up anything else that touches that pipe."""
     def run():
         try:
+            if os.name == "nt" and _watch_pipe_windows(cancel):
+                return
             for line in sys.stdin:
                 if line.strip().lower() == "cancel":
                     break
         except (OSError, ValueError):
             pass
         cancel.set()
-    threading.Thread(target=run, daemon=True).start()
+    threading.Thread(target=run, daemon=True, name="stdin-control").start()
+
+
+def _watch_pipe_windows(cancel):
+    """Poll the stdin pipe (Windows); True when it handled stdin (cancel set), False to fall back."""
+    import time
+    try:
+        import _winapi
+        import msvcrt
+        handle = msvcrt.get_osfhandle(sys.stdin.fileno())
+        _winapi.PeekNamedPipe(handle, 0)        # not a pipe (a console, a file): fall back
+    except (ImportError, OSError, ValueError, AttributeError):
+        return False
+    text = b""
+    while True:
+        try:
+            available = _winapi.PeekNamedPipe(handle, 0)[1]
+        except OSError:                          # the app closed it
+            break
+        if available:
+            data, _ = _winapi.ReadFile(handle, available)
+            text += data
+            if any(line.strip().lower() == b"cancel" for line in text.splitlines()):
+                break
+            text = text[-64:]
+        else:
+            time.sleep(0.25)
+    cancel.set()
+    return True
 
 
 SERVICE_COMMANDS = ("serve", "worker", "service-admin")
@@ -1239,19 +1273,33 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    reporter = JsonReporter(sys.stdout)
+    from autoedit import steplog
+    from autoedit.progress import BackgroundStream
+    steplog.arm()                     # a stuck step stops this engine with a clear error
+    # The app reads both pipes; the edit never waits for it to (a busy window must not stop the
+    # engine): lines are written by their own threads, and the rest is written at the end.
+    out, err = BackgroundStream(sys.stdout), BackgroundStream(sys.stderr)
+    reporter = JsonReporter(out)
+    real_stderr = sys.stderr
+    sys.stderr = err
     # Ordinary messages go to stderr so stdout carries only JSON lines.
-    with contextlib.redirect_stdout(sys.stderr):
-        try:
-            return run_command(args, reporter, cancel, json_mode=True)
-        except Cancelled:
-            reporter.cancelled()
-            return 130
-        except Exception as exc:      # unexpected bug: still tell the app, with a traceback
-            import traceback
-            traceback.print_exc()
-            reporter.error(f"Unexpected error: {exc}")
-            return 1
+    try:
+        with contextlib.redirect_stdout(err):
+            try:
+                return run_command(args, reporter, cancel, json_mode=True)
+            except Cancelled:
+                reporter.cancelled()
+                return 130
+            except Exception as exc:      # unexpected bug: still tell the app, with a traceback
+                import traceback
+                traceback.print_exc()
+                reporter.error(f"Unexpected error: {exc}")
+                return 1
+    finally:
+        # the work is done: wait (up to 2 minutes) for a slow app to read the rest, the result included
+        out.close(120.0)
+        err.close(10.0)
+        sys.stderr = real_stderr
 
 
 def run_command(args, reporter, cancel, json_mode=False):

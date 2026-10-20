@@ -67,6 +67,23 @@ describe("engine runner", () => {
     try { process.kill(left); } catch { /* already gone */ }
   });
 
+  it("keeps reading when handling one engine line fails (the engine would otherwise wait for ever)", async () => {
+    const chatty = script(
+      "import json\n" +
+      "for i in range(3000):\n    print(json.dumps({'type': 'log', 'message': 'x' * 100, 'i': i}), flush=True)\n" +
+      "print(json.dumps({'type': 'result', 'done': True}), flush=True)\n");
+    let seen = 0;
+    let done = false;
+    const result = await runEngine({ python, engineDir: repo, script: chatty }, [], (e) => {
+      seen += 1;
+      if (e.type === "result") done = true;
+      if (seen === 5) throw new Error("the window could not take this one");
+    }).done;
+    expect(result.code).toBe(0);
+    expect(done).toBe(true);
+    expect(seen).toBeGreaterThan(3000);
+  });
+
   it("kills the process if it ignores cancel", async () => {
     const stubborn = script("import time, json\nprint(json.dumps({'type': 'stage', 'stage': 's', 'label': 'x'}), flush=True)\ntime.sleep(60)\n");
     let handle!: ReturnType<typeof runEngine>;

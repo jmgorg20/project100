@@ -77,8 +77,8 @@ def sound_file(name, own=True):
     out.parent.mkdir(parents=True, exist_ok=True)
     expr, seconds, extra = SOUNDS[name]
     part = out.with_name(out.stem + ".part.wav")
-    subprocess.run([find_tool("ffmpeg"), "-v", "error", "-y", "-f", "lavfi", "-i",
+    subprocess.run([find_tool("ffmpeg"), "-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i",
                     f"aevalsrc='{expr}':s=48000:d={seconds}", "-af", f"afade=t=out:st={seconds * 0.8:.3f}:"
-                    f"d={seconds * 0.2:.3f}{extra}", "-ac", "2", str(part)], check=True)
+                    f"d={seconds * 0.2:.3f}{extra}", "-ac", "2", str(part)], check=True, stdin=subprocess.DEVNULL, timeout=60)
     os.replace(part, out)
     return out

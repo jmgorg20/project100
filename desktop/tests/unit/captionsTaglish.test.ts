@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { jobArgs } from "../../src/main/jobArgs";
 import { cleanSettings, defaultSettings } from "../../src/main/settings";
 import { retimeLine, setCaptionPunctuation, transcriptLines } from "../../src/shared/captionEdit";
-import { applyEvent, newJob } from "../../src/shared/jobs";
+import { applyEvent, finishJob, newJob } from "../../src/shared/jobs";
 import type { Job, Project } from "../../src/shared/types";
 import { captionAt, displayText, stripPunctuation, styleFor } from "../../src/renderer/lib/timeline";
 
@@ -69,6 +69,17 @@ describe("sound effects setting", () => {
     const args = jobArgs(job as Job, { ...d, soundEffects: "off", soundEffectsVolume: 0.6 }, { instructionFile: "i.txt", output: "o.mp4" }).join(" ");
     expect(args).toContain("--sfx off");
     expect(args).toContain("--sfx-volume 0.6");
+  });
+});
+
+describe("a stuck engine", () => {
+  it("exit code 3 says it got stuck and where its logs are", () => {
+    const job = newJob("j5", { video: "C:/v.mp4", photos: [], instruction: "", provider: "groq", auto: true, mode: "new" });
+    const ended = finishJob({ ...job, status: "running" } as Job, 3, false);
+    expect(ended.status).toBe("failed");
+    expect(ended.error).toContain("got stuck");
+    expect(ended.error).toContain("edit.log");
+    expect(ended.error).toContain("engine-stack.log");
   });
 });
 

@@ -32,7 +32,7 @@ def check_ffmpeg():
     """Make sure ffmpeg + ffprobe exist and ffmpeg can burn in subtitles."""
     ffmpeg = find_tool("ffmpeg")
     find_tool("ffprobe")
-    result = subprocess.run([ffmpeg, "-hide_banner", "-filters"], capture_output=True, text=True)
+    result = tool_run([ffmpeg, "-hide_banner", "-filters"], 60, "FFmpeg (-filters)")
     if " subtitles " not in result.stdout:
         raise EditorError(
             "Your FFmpeg was built without libass, so it cannot draw captions.\n"
@@ -42,7 +42,7 @@ def check_ffmpeg():
 
 @lru_cache(maxsize=None)
 def ffmpeg_major_version():
-    out = subprocess.run([find_tool("ffmpeg"), "-version"], capture_output=True, text=True).stdout
+    out = tool_run([find_tool("ffmpeg"), "-version"], 60, "FFmpeg (-version)").stdout
     match = re.search(r"ffmpeg version n?(\d+)\.", out)
     return int(match.group(1)) if match else 7  # git builds have no number: assume new
 
@@ -58,6 +58,19 @@ def filter_script_args(script_path):
     return ["-filter_complex_script", str(script_path)]
 
 
+PROBE_TIMEOUT = 60
+
+
+def tool_run(cmd, timeout, what):
+    """A short FFmpeg / ffprobe call: no input (it never shares the app's stdin pipe), its output
+    captured, and a time limit (a stuck tool is an error that says which, never a silent wait)."""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              stdin=subprocess.DEVNULL, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise EditorError(f"{what} did not finish within {timeout} s and was stopped.")
+
+
 def probe(path):
     """Read basic facts about a media file: duration, size, audio/video present."""
     path = Path(path)
@@ -65,7 +78,7 @@ def probe(path):
         raise EditorError(f"File not found: {path}")
     cmd = [find_tool("ffprobe"), "-v", "error", "-print_format", "json",
            "-show_format", "-show_streams", str(path)]
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    result = tool_run(cmd, PROBE_TIMEOUT, f"ffprobe ({path.name})")
     if result.returncode != 0:
         raise EditorError(
             f"FFmpeg cannot read '{path.name}'. It may be damaged or not a video/image file.\n"
@@ -92,9 +105,8 @@ def decoded_duration(path):
     """Length found by decoding the file, for files that do not state it (e.g. a voice-over
     recorded in the app: browsers write WebM without a duration). 0 if it cannot be read."""
     import re
-    result = subprocess.run([find_tool("ffmpeg"), "-v", "info", "-nostats", "-i", str(path),
-                             "-progress", "pipe:1", "-f", "null", "-"],
-                            capture_output=True, text=True, encoding="utf-8", errors="replace")
+    result = tool_run([find_tool("ffmpeg"), "-nostdin", "-v", "info", "-nostats", "-i", str(path),
+                       "-progress", "pipe:1", "-f", "null", "-"], 300, f"FFmpeg (length of {Path(path).name})")
     times = re.findall(r"out_time_us=(\d+)", result.stdout)
     return int(times[-1]) / 1e6 if times else 0.0
 
@@ -126,7 +138,7 @@ def run_ffmpeg(args, description, cwd=None, show_progress=True):
         cmd.append("-stats")
     cmd += [str(a) for a in args]
     print(f"  > {description}")
-    proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
     tail = b""
     while True:
         chunk = proc.stderr.read(256)
@@ -150,7 +162,7 @@ def detect_silences(path, noise_db, min_duration):
     """Use ffmpeg's silencedetect to find quiet parts of the audio. Returns [(start, end)]."""
     cmd = [find_tool("ffmpeg"), "-hide_banner", "-nostats", "-i", str(path), "-vn",
            "-af", f"silencedetect=noise={noise_db}dB:d={min_duration}", "-f", "null", "-"]
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL)
     starts = [float(x) for x in re.findall(r"silence_start: (-?[\d.]+)", result.stderr)]
     ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", result.stderr)]
     silences = []

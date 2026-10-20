@@ -67,6 +67,10 @@ export function finishJob(job: Job, exitCode: number | null, cancelled: boolean,
   if (job.stage && !job.stagesDone.includes(job.stage)) next.stagesDone = [...job.stagesDone, job.stage];
   if (startError) return { ...next, status: "failed", error: startError };
   if (cancelled) return { ...next, status: "cancelled" };
+  if (exitCode === 3 && !job.error) {
+    return { ...next, status: "failed", error: "The editor got stuck in a step and was stopped (exit code 3). " +
+      "What it was doing: work\\logs\\edit.log; where it was stuck: work\\logs\\engine-stack.log (in the engine folder)." };
+  }
   if (exitCode !== 0) {
     return { ...next, status: "failed", error: job.error || `The editor stopped unexpectedly (exit code ${exitCode}).` };
   }

@@ -53,7 +53,7 @@ def peaks(path, cache_dir, per_second=50):
     if info["has_audio"]:
         run = subprocess.run([find_tool("ffmpeg"), "-v", "error", "-i", str(path), "-vn",
                               "-ac", "1", "-ar", str(PEAK_RATE), "-f", "s16le", "-"],
-                             capture_output=True)
+                             capture_output=True, stdin=subprocess.DEVNULL)
         if run.returncode != 0:
             raise EditorError(f"Could not read the sound of '{path.name}': "
                               f"{run.stderr.decode('utf-8', 'replace').strip()[-300:]}")
@@ -106,7 +106,7 @@ def thumbs(path, cache_dir, height=120, max_count=300):
         args = ["-i", str(path), "-an", "-vf", f"fps=1/{every:g}:start_time=0:round=down,{scale}",
                 "-q:v", "6", str(folder / "t%05d.jpg")]
     run = subprocess.run([find_tool("ffmpeg"), "-v", "error", "-y", *args],
-                         capture_output=True, text=True, encoding="utf-8", errors="replace")
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL)
     if run.returncode != 0:
         raise EditorError(f"Could not make pictures of '{path.name}': {run.stderr.strip()[-300:]}")
     files = sorted(str(f) for f in folder.glob("t*.jpg"))
@@ -125,7 +125,7 @@ def noise_floor_db(path, window=0.05, percentile=10):
         [find_tool("ffmpeg"), "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", "48000",
          "-af", f"asetnsamples=n={int(48000 * window)},astats=metadata=1:reset=1,"
                 "ametadata=mode=print:key=lavfi.astats.Overall.RMS_level:file=-",
-         "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+         "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL)
     levels = []
     for line in run.stdout.splitlines():
         if line.startswith("lavfi.astats.Overall.RMS_level="):

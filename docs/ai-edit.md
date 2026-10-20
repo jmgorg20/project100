@@ -93,6 +93,26 @@ follow-up) and "Apply" (after review) start from.
 
 Change the models in the app's Settings or in `config.yaml` under `ai:`.
 
+## When the engine seems stuck · Kapag parang natigil ang editor
+
+Every step of an edit is logged, and a stuck step is never just waited on:
+
+- **`work/logs/edit.log`:** every step after the AI call, with the time it started and ended (each
+  line written to disk at once). The step that never ended is the last `start` without its `end`.
+  Time spent waiting for the AI is marked (`waiting for the AI ...`).
+- **A heartbeat:** the engine tells the app it is alive every 5 s.
+- **A time limit per step:** a planning step that runs longer than 60 s (`edit: step_timeout`;
+  waiting for the AI does not count, it has its own limits; transcribing, AI pictures, formats and
+  rendering report their own progress) is stuck. The app shows *"The editor got stuck in the step
+  ... Steps: ...edit.log  Where it was stuck: ...engine-stack.log"* and the engine stops (exit code 3).
+- **`work/logs/engine-stack.log`:** the Python stacks of every thread when a step is stuck, and every
+  90 s while an edit runs (Python's `faulthandler`, which works even when Python itself is blocked):
+  the last lines of the main thread are the exact line it was on.
+- **Nothing can wait on the app:** the engine writes to the app on its own threads, so a busy window
+  never stops the edit (before this, nothing after the plan happened until the app read again); a
+  line the app cannot handle never stops it reading; no FFmpeg / ffprobe / helper shares the app's
+  stdin pipe, and on Windows the "cancel" pipe is only read when something is in it.
+
 ## When the AI is slow or rate limited · Kapag mabagal o limitado ang AI
 
 No AI request can hold the edit up:

@@ -476,7 +476,7 @@ def read_frames(video, start, duration, fps, height=960, cancel=None):
     w = int(round(info["width"] * h / info["height"] / 2) * 2)
     cmd = ["ffmpeg", "-v", "error", "-ss", f"{start:.4f}", "-t", f"{duration:.4f}", "-i", str(video),
            "-an", "-vf", f"fps={fps:g},scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
     size = w * h * 3
 
     def frames():

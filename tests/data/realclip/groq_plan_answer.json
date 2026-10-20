@@ -1,0 +1,88 @@
+{
+ "summary": "Premium editorial edit: magazine hook on the three secrets, countdown on 'Tatlo dalawa isa', a slow push on 'disiplina', black and white on 'Dati wala akong follower', the search bar typing, the checklist ticking, the numbers landing, and the follow card at the end.",
+ "style": "editorial_card",
+ "grade": "natural_clean",
+ "pacing": {
+  "silence_threshold": 0.25,
+  "remove_fillers": true
+ },
+ "zoom": {
+  "enabled": true,
+  "amount": 1.15
+ },
+ "captions": {
+  "enabled": true,
+  "size_scale": 1.0,
+  "position": null,
+  "highlight_words": [
+   "sikreto",
+   "disiplina",
+   "Dati",
+   "Ngayon",
+   "search",
+   "screenshot",
+   "checklist",
+   "followers",
+   "I-follow"
+  ]
+ },
+ "cuts": [],
+ "zooms": [
+  {
+   "start": 0.3,
+   "end": 2.6,
+   "amount": 1.12
+  },
+  {
+   "start": 5.0,
+   "end": 6.4,
+   "amount": 1.18
+  },
+  {
+   "start": 13.3,
+   "end": 15.0,
+   "amount": 1.1
+  },
+  {
+   "start": 19.7,
+   "end": 22.0,
+   "amount": 1.15
+  }
+ ],
+ "grades": [
+  {
+   "start": 6.4,
+   "end": 8.4,
+   "grade": "black_and_white"
+  }
+ ],
+ "effects": [
+  {
+   "effect": "flash",
+   "at": 3.0,
+   "duration": 0.2,
+   "intensity": 0.4,
+   "on_cut": false,
+   "reason": "the countdown starts on 'Tatlo'"
+  },
+  {
+   "effect": "whip",
+   "at": 10.0,
+   "duration": 0.3,
+   "intensity": 0.5,
+   "on_cut": true,
+   "reason": "the search scene comes in"
+  }
+ ],
+ "tracked_effects": [],
+ "photos": [],
+ "notes": [
+  "The magazine cover opens on the hook 'tatlong sikreto ng viral na video'.",
+  "Black and white from 'Dati' until 'Ngayon' (the before / after turn).",
+  "The checklist ticks 'Mag-post', 'sagutin ang comments', 'i-check ang analytics' as they are said.",
+  "The number cards land on 'zero', 'isang libong followers' and 'tatlumpung araw'.",
+  "The profile card closes on 'I-follow mo ako'."
+ ],
+ "ai_clips": [],
+ "voiceovers": []
+}

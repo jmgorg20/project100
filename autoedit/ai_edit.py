@@ -487,7 +487,11 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         if cancel is not None and cancel.is_set():
             raise Cancelled("Cancelled.")
 
+    from . import steplog
+    steplog.start(cfg, reporter, f"ai-edit {Path(video).name}")
+    finished = False
     try:
+        steplog.phase("transcript", limit=0)            # transcribing reports its own progress
         reporter.stage("transcript", "Listening to your video")
         if transcript:
             from .vocabulary import fix_words
@@ -506,6 +510,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                        text=" ".join(w.text for w in words)[:4000])
         check_cancel()
 
+        # the AI request has its own limits; building the edit (silences of a long video) can take minutes
+        steplog.phase("AI plan (request, checks, building the edit)", limit=300)
         reporter.stage("plan", "Planning the edit")
         built = {}
 
@@ -559,6 +565,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                 extra["track"] = tracking["track"]
                 project = build(result.plan)
             check_cancel()
+        steplog.phase("AI pictures / clips / voice-over", limit=0)
         generation = None
         if result.plan.get("ai_clips") or result.plan.get("voiceovers"):
             if plan is not None and render:
@@ -578,6 +585,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                                           "meta": generation["meta"]})
             generation["passes"] = passes
             check_cancel()
+        steplog.phase("format", limit=0 if format_id != fmt.DEFAULT_FORMAT else None)
         format_notes = []
         if format_id != fmt.DEFAULT_FORMAT:
             reporter.stage("format", f"Making it a {spec['name']}")
@@ -586,6 +594,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
             reporter.event("format", format=format_id, name=spec["name"], reason=format_reason,
                            notes=format_notes)
             check_cancel()
+        steplog.phase("graphics: start")
         graphics_result = None
         style = director.resolve_style(cfg, instruction, graphics)
         if style and graphics in (None, "auto") and (spec.get("graphics") or {}).get("style"):
@@ -600,7 +609,9 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                            fallback=graphics_result["fallback"], reason=graphics_result["reason"],
                            notes=graphics_result["notes"])
             check_cancel()
+        steplog.phase("preset: music and sound effects", limit=120)
         preset_notes = pre.finish(project, look, cfg) if look else []
+        steplog.phase("sending the edit to the app (cuts, zooms, captions, photos)")
         project["meta"].update({"format": format_id})
         if look:
             project["meta"]["preset"] = look["id"]
@@ -613,6 +624,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                                    "photos": "Placing photos"}[stage])
             reporter.event("project", stage=stage, project=view)
 
+        steplog.phase("summary and saving the project")
         # the plan as it was built (a preset's own rules, e.g. no plain photo pop-ups, applied), so
         # photos it dropped are not reported as "skipped"
         summary = describe(project, pre.pin_plan(look, result.plan) if look else result.plan, result, duration,
@@ -653,6 +665,7 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         check_cancel()
 
         rendered = None
+        steplog.phase("render (drawing the graphics, the video)", limit=0)
         if render:
             o = cfg["output"]
             rendered = render_project(
@@ -661,10 +674,14 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
                 export={"crf": o["crf"], "encoder_speed": o["encoder_speed"],
                         "audio_bitrate": o["audio_bitrate"]},
                 reporter=reporter, cancel=cancel)
-    except BaseException:
+        finished = True
+    except BaseException as exc:
+        steplog.log(f"stopped: {type(exc).__name__}: {exc}")
         if not cfg.get("keep_work_files"):
             shutil.rmtree(job_dir, ignore_errors=True)
         raise
+    finally:
+        steplog.finish(finished)
     if not cfg.get("keep_work_files"):
         shutil.rmtree(job_dir, ignore_errors=True)
     print(f"Done in {(time.time() - started) / 60:.1f} min")

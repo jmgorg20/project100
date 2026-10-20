@@ -37,6 +37,7 @@ from collections import Counter
 from . import cues as cues_mod
 from . import director, graphics, zones
 from .director import Ctx, important, locate, norm, shown, snap, strip_marks
+from . import steplog
 from .errors import Cancelled
 from .llm import LLMError, RequestLog, ask_json, estimate_tokens
 
@@ -1713,7 +1714,9 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     removed = director.clear_director_clips(project) + clear_own(project)
     if reporter:
         reporter.stage("graphics", "Planning the editorial scenes")
+    steplog.phase("graphics: finding the face (its own time limit)", limit=0)
     director.face_for(project, video, cfg, cache, reporter, cancel)
+    steplog.phase("graphics: scenes, what is said, your files")
     ctx = Ctx(project, cfg, STYLE, instruction, fixed=director.fixed_graphics(project),
               face=zones.FaceMap(project, zones.TALKING_HEAD_FACE))
     empty = {"project": project, "count": 0, "style": STYLE, "fallback": False, "reason": "", "cost": None,
@@ -1731,6 +1734,7 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     used_images = Counter()
     cue_items, cue_effects, cue_notes, made = cue_elements(ctx, found, scenes, assets, used_images, handle)
     fixed_scenes = cue_scenes(ctx, made, scenes)
+    steplog.phase("graphics: AI scene plan (the AI's own time limits)")
     choices, usage, used_model, attempts, cached = {}, {"input_tokens": 0, "output_tokens": 0}, model, [], False
     fallback, reason = False, ""
     open_scenes = len(scenes) - len(fixed_scenes)
@@ -1748,6 +1752,7 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
         elif attempts:
             ctx.note(f"The AI scene plan was used for {len(choices)} of {open_scenes} scenes; the others were "
                      f"planned by the rules ({attempts[-1]['problems'][0]}).")
+    steplog.phase("graphics: building the cards, looks and layout")
     chosen = choose_beats(ctx, scenes, assets, captions_on, choices, kept=fixed_scenes)
     clips, placed, effects, pips = build(ctx, project, scenes, chosen, assets, captions_on, extra=cue_items,
                                          used_images=used_images)

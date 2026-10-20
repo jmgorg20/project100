@@ -113,10 +113,12 @@ def ask_json(provider, model, system, prompt, schema, max_tokens=8000, effort="m
         log.step(f"{step}: {provider} {model} try {attempt}/{retries + 1}: request {size} characters "
                  f"(~{estimate_tokens(' ' * size)} tokens), up to {max_tokens} answer tokens, {timeout:g} s limit")
         started = time.monotonic()
+        from . import steplog
         try:
-            text, usage, used = _with_deadline(
-                lambda: _ask(provider, model, system, prompt, schema, max_tokens, effort, timeout, options),
-                timeout, cancel, step)
+            with steplog.waiting(f"the AI ({step}, try {attempt})"):
+                text, usage, used = _with_deadline(
+                    lambda: _ask(provider, model, system, prompt, schema, max_tokens, effort, timeout, options),
+                    timeout, cancel, step)
         except LLMError as exc:
             seconds = time.monotonic() - started
             log.step(f"{step}: status {exc.status or '-'} after {seconds:.1f} s: {exc}"
@@ -138,7 +140,8 @@ def ask_json(provider, model, system, prompt, schema, max_tokens=8000, effort="m
             log.step(f"{step}: {msg}")
             if notify:
                 notify(msg)
-            _sleep(wait, cancel, step)
+            with steplog.waiting("the rate-limit wait"):
+                _sleep(wait, cancel, step)
             continue
         seconds = time.monotonic() - started
         log.step(f"{step}: status 200 after {seconds:.1f} s, {usage['input_tokens']} in / "

@@ -390,7 +390,8 @@ def test_ai_edit_end_to_end(talk, cfg, monkeypatch):
     assert any("Not done: No music" in d for d in summary["details"])
     saved = json.loads(Path(result["plan"]).read_text(encoding="utf-8"))
     assert saved["plan"] == photo_plan(cfg) and saved["instruction"] == "fast, show the logo"
-    assert not (tmp / "work").exists() or not any((tmp / "work").iterdir())
+    # temporary job folders are removed; only the logs stay (work/logs/edit.log, engine-stack.log)
+    assert not (tmp / "work").exists() or all(p.name == "logs" for p in (tmp / "work").iterdir())
 
 
 def test_auto_off_then_accepted_plan_and_cached_transcript(talk, cfg, monkeypatch):
