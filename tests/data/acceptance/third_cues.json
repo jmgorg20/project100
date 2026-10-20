@@ -1,0 +1,11 @@
+[
+ {"id": "hook", "said": "Bago ka mag-post panoorin mo ito", "expect": "title", "want": ["consistency", "mag-post", "panoorin"]},
+ {"id": "keyword", "said": "Ang sikreto CONSISTENCY", "expect": "title", "want": ["consistency"]},
+ {"id": "timeline", "said": "Ang routine ko araw-araw", "expect": "timeline", "want": ["gising", "kape", "edit"], "count": 3, "late": 4.0, "templates": ["timeline-card"]},
+ {"id": "before_after", "said": "Dati puyat ako gabi-gabi", "expect": "bw", "want": []},
+ {"id": "strike", "said": "Dati puyat ako gabi-gabi", "expect": "strikethrough", "want": ["puyat", "tulog"], "count": 2, "late": 3.0, "templates": ["strike-text"]},
+ {"id": "phone", "said": "Tingnan ninyo ang results ko sa phone", "expect": "phone", "want": ["search_results.png"], "templates": ["phone-mockup"]},
+ {"id": "platforms", "said": "Nasa TikTok at Facebook ako", "expect": "logo cards", "want": ["tiktok", "facebook"], "count": 2, "late": 3.0},
+ {"id": "comment", "said": "Comment mo ang salitang GUIDE", "expect": "chat comment", "want": ["guide"], "templates": ["chat-cards"]},
+ {"id": "recap", "said": "Kaya tandaan plano routine at pahinga", "expect": "mosaic", "want": ["consistency", "routine", "tiktok"], "count": 2, "late": 3.0, "templates": ["tile-mosaic"]}
+]

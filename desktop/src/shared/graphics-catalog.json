@@ -380,6 +380,81 @@
   },
   {
    "version": 1,
+   "tl": "Mga mensahe",
+   "category": "card",
+   "moods": [
+    "playful",
+    "tech",
+    "calm",
+    "emotion",
+    "hype"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "items",
+     "type": "list",
+     "required": true
+    },
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "image",
+     "type": "image",
+     "required": false
+    }
+   ],
+   "duration": 3.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "upper",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.2
+   },
+   "box": {
+    "w": 860,
+    "h": 200
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "items",
+    "image",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 80,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "@yourhandle",
+    "items": [
+     "Comment mo ang salitang GUIDE"
+    ]
+   },
+   "id": "chat-cards",
+   "name": "Chat messages"
+  },
+  {
+   "version": 1,
    "tl": "Checklist",
    "category": "data",
    "moods": [
@@ -1608,6 +1683,66 @@
   },
   {
    "version": 1,
+   "tl": "Label",
+   "category": "pill",
+   "moods": [
+    "calm",
+    "tech",
+    "playful",
+    "money",
+    "hype",
+    "serious"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 2.6,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.3
+   },
+   "box": {
+    "w": 520,
+    "h": 90
+   },
+   "pad": 40,
+   "fields": [
+    "text",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 32,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#ffffff",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "ang resulta ko"
+   },
+   "id": "label-pill",
+   "name": "Label pill"
+  },
+  {
+   "version": 1,
    "tl": "Item sa listahan",
    "category": "data",
    "moods": [
@@ -1808,6 +1943,85 @@
    },
    "id": "lower-third-pill",
    "name": "Lower-third pill"
+  },
+  {
+   "version": 1,
+   "tl": "Pabalat ng magasin",
+   "category": "text",
+   "moods": [
+    "luxury",
+    "hype",
+    "serious",
+    "news",
+    "emotion"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "items",
+     "type": "list",
+     "required": false
+    }
+   ],
+   "duration": 3.4,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.42
+   },
+   "box": {
+    "w": 840,
+    "h": 1080
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "text2",
+    "items",
+    "number",
+    "color",
+    "accent",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": false,
+   "words": false,
+   "maxChars": 18,
+   "minFont": 28,
+   "numRange": null,
+   "covers": true,
+   "defaults": {
+    "color": "#f4efe6",
+    "accent": "#c8553d",
+    "number": 1
+   },
+   "sample": {
+    "text": "SIKRETO",
+    "text2": "Tatlong sikreto ng viral na video",
+    "items": [
+     "Disiplina",
+     "Paano kumita online",
+     "30 araw"
+    ],
+    "number": 1
+   },
+   "id": "magazine-cover",
+   "name": "Magazine cover"
   },
   {
    "version": 1,
@@ -3677,6 +3891,71 @@
   },
   {
    "version": 1,
+   "tl": "Binurang salita",
+   "category": "text",
+   "moods": [
+    "serious",
+    "emotion",
+    "hype",
+    "luxury",
+    "calm"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "text2",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "duration": 3,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "upper",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.2
+   },
+   "box": {
+    "w": 900,
+    "h": 420
+   },
+   "pad": 70,
+   "fields": [
+    "text",
+    "text2",
+    "color",
+    "accent",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": false,
+   "words": true,
+   "maxChars": 48,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "color": "#ffffff",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "wala akong follower",
+    "text2": "ito na ako"
+   },
+   "id": "strike-text",
+   "name": "Struck-out words"
+  },
+  {
+   "version": 1,
    "tl": "Subtitle card (cream)",
    "category": "text",
    "moods": [
@@ -3793,6 +4072,144 @@
    },
    "id": "thin-spaced",
    "name": "Thin spaced"
+  },
+  {
+   "version": 1,
+   "tl": "Mosaic ng salita",
+   "category": "card",
+   "moods": [
+    "hype",
+    "playful",
+    "luxury",
+    "tech",
+    "money"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "items",
+     "type": "list",
+     "required": true
+    }
+   ],
+   "duration": 3.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "any",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.47
+   },
+   "box": {
+    "w": 864,
+    "h": 1044
+   },
+   "pad": 30,
+   "fields": [
+    "items",
+    "color",
+    "accent",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 32,
+   "minFont": 28,
+   "numRange": null,
+   "covers": true,
+   "defaults": {
+    "color": "#ffffff",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "items": [
+     "Disiplina",
+     "Paano kumita online",
+     "TikTok",
+     "30 araw",
+     "Hook",
+     "Kwento",
+     "Call to action",
+     "1,000 followers"
+    ]
+   },
+   "id": "tile-mosaic",
+   "name": "Mosaic of word tiles"
+  },
+  {
+   "version": 1,
+   "tl": "Timeline card",
+   "category": "card",
+   "moods": [
+    "tech",
+    "calm",
+    "serious",
+    "playful",
+    "hype"
+   ],
+   "styles": [
+    "premium_editorial"
+   ],
+   "inputs": [
+    {
+     "key": "text",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "items",
+     "type": "list",
+     "required": false
+    }
+   ],
+   "duration": 3.2,
+   "minDuration": 0.8,
+   "maxDuration": 8,
+   "zone": "upper",
+   "anchor": {
+    "x": 0.5,
+    "y": 0.22
+   },
+   "box": {
+    "w": 880,
+    "h": 420
+   },
+   "pad": 60,
+   "fields": [
+    "text",
+    "items",
+    "color",
+    "accent",
+    "bg",
+    "size",
+    "intensity",
+    "cues"
+   ],
+   "bg": true,
+   "words": false,
+   "maxChars": 30,
+   "minFont": 28,
+   "numRange": null,
+   "covers": false,
+   "defaults": {
+    "bg": "#efe6d8",
+    "color": "#17140f",
+    "accent": "#c8553d"
+   },
+   "sample": {
+    "text": "Araw-araw",
+    "items": [
+     "hook",
+     "kwento",
+     "call to action"
+    ]
+   },
+   "id": "timeline-card",
+   "name": "Timeline card"
   },
   {
    "version": 1,

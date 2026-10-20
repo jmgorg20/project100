@@ -9,6 +9,11 @@
   src: url("../../../assets/fonts/Inter-Bold.otf") format("opentype");
 }
 @font-face {
+  font-family: "Playfair Display";
+  font-weight: 400 900;
+  src: url("../../../assets/fonts/PlayfairDisplay.ttf") format("truetype");
+}
+@font-face {
   font-family: "Inter";
   font-weight: 900;
   src: url("../../../assets/fonts/Inter-Black.otf") format("opentype");

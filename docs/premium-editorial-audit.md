@@ -160,6 +160,10 @@ words, brands, numbers or names. "Seen at" gives the second(s) where the referen
 | 29 | Vertical 9:16 framing | all | ALREADY WORKING | test |
 | 30 | Speech-synchronized graphics | all | ALREADY WORKING (cue engine: each graphic starts on its word) | acceptance: 12 of 12 cues |
 
+**Later milestones:** from M3 on, each milestone writes its own status file in `docs/audit/`
+(`m3.md`, `m4.md`, ...) and this table is not edited again, so milestone PRs never conflict here.
+`python scripts/audit_index.py` prints all milestones side by side (this M2 column first).
+
 **Still NOT VERIFIED:**
 - real Taglish speech: the acceptance run uses a word-timestamp fixture
 - your base video: it was not attached; a 29.8 s stand-in made with FFmpeg is used

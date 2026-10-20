@@ -71,13 +71,22 @@ BEATS = {
     "screenshot": ("screenshot-collage", "cover", "image", "your screenshots, matched to what is said"),
     "platforms": ("app-tile", "card", "", "an app tile for each platform named (your logo files, else the name)"),
     "stats": ("stat-cards", "card", "", "the numbers said, each with what it counts"),
+    "magazine": ("magazine-cover", "cover", "", "the opening as a magazine cover: the hook word and what is coming"),
+    "recap": ("tile-mosaic", "cover", "", "a mosaic of word tiles: what was said, summed up"),
+    "timeline": ("timeline-card", "card", "", "an editing timeline card for a routine / schedule"),
+    "comment": ("chat-cards", "card", "", "a comment card typing the line said (a comment / DM call)"),
 }
-CUE_ONLY = {"before_after", "screenshot", "platforms", "stats"}
+CUE_ONLY = {"before_after", "screenshot", "platforms", "stats", "magazine", "recap", "timeline", "comment"}
 BIG_CARDS = {"countdown-timer", "editorial-checklist", "storyboard-doc", "search-bar", "stat-cards", "kinetic-words",
-             "editorial-headline"}
+             "editorial-headline", "magazine-cover", "tile-mosaic", "timeline-card", "chat-cards", "strike-text",
+             "phone-mockup"}
 CUE_BEAT = {"countdown": "countdown", "keyword": "kinetic", "before_after": "before_after", "search": "search",
             "screenshot": "screenshot", "checklist": "checklist", "platforms": "platforms", "handle": "profile",
-            "storyboard": "storyboard", "stats": "stats", "follow": "profile"}
+            "storyboard": "storyboard", "stats": "stats", "follow": "profile", "recap": "recap",
+            "timeline": "timeline", "comment": "comment", "magazine": "magazine"}
+TIME_WORDS = {"dati", "noon", "before", "ngayon", "now", "pero", "but", "today", "at", "and"}
+MAGAZINE_MIN = 5                   # spoken cues that made a graphic before the opening becomes a cover (it
+                                   # promises what is coming, so only when there is plenty)
 COVER_SHARE = 0.4                  # at most this share of the scenes are big picture beats
 ONCE = {"profile", "logo", "countdown", "palette", "storyboard"}
 BW_GAP = 12.0
@@ -794,6 +803,14 @@ def element(ctx, scene, beat, assets, choice, used_images, captions_on):
             (assets.videos[scene.index % len(assets.videos)] if assets.videos else pick_images(assets, 1, used_images)[0])
         start = snap(sw[scene.i0]["start"] if scene.index else scene.start, ctx.fps)
         pips.append({"media": clip_id, "start": start, "end": scene.end})
+        if kw is not None:
+            # a label under the floating picture: the words it goes with
+            idx = phrase_around(ctx, scene, kw, max_words=4, max_chars=30)
+            it = {**base(idx[0]), "template": "label-pill",
+                  "text": " ".join(shown(sw[i]) for i in idx).strip(" .,!?:;"),
+                  "prefer": ((PIP_BOX["x"] + PIP_BOX["width"] / 2) / 1080,
+                             (PIP_BOX["y"] + PIP_BOX["height"] + 60) / 1920),
+                  "start": snap(max(start + 0.4, sw[idx[0]]["start"]), ctx.fps), "importance": 0.7}
     elif beat == "camera":
         start = snap(scene.start, ctx.fps)
         effects.append({"type": "zoom", "start": start, "end": scene.end, "amount": 1.12, "from": 1.0,
@@ -834,6 +851,7 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
     = the cues that made something (a cue with nothing to show leaves its scene to the beats)."""
     sw = ctx.words
     items, effects, notes, used = [], [], [], []
+    heads = []                     # one line per card (for a recap and the cover)
     hold = 0.9
     profile_photo = assets.avatar
     for cue in found:
@@ -858,6 +876,17 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
         elif cue.kind == "before_after":
             after_i = cue.items[0][0]
             effects.append({"type": "look", "start": sw[cue.i0]["start"] - 0.1, "end": sw[after_i]["start"] + 0.1})
+            before = [k for k in range(cue.i0, after_i) if norm_word(sw[k]) not in TIME_WORDS]
+            end_after = next((k for k in range(after_i, len(sw)) if k > after_i and
+                              (ends_sentence(sw[k]) or k - after_i >= 7)), min(len(sw) - 1, after_i + 6))
+            after = [k for k in range(after_i, end_after + 1) if norm_word(sw[k]) not in TIME_WORDS]
+            if before and after:
+                it = cue_item(ctx, cue, "strike-text", beat, cue.i0, sw[end_after]["end"] + 1.0, s,
+                              text=director.shorten(" ".join(shown(sw[k]) for k in before), 48),
+                              text2=director.shorten(" ".join(shown(sw[k]) for k in after), 40))
+                it["cues"] = rel(ctx, [before[-1], after_i], it["start"])          # struck; then "ngayon"
+                it["zone"] = "upper"
+                items.append(it)
         elif cue.kind == "search":
             q0 = next(i for i in range(cue.i0, cue.i1 + 1) if strip_marks(sw[i]["text"]).strip(".,!?:") and
                       " ".join(shown(sw[k]) for k in range(i, cue.i1 + 1)).startswith(cue.text.split()[0]))
@@ -873,6 +902,13 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
                 continue
             for m in pics:
                 used_images[m] += 1
+            if getattr(cue, "phone", False):
+                # "sa phone / app ko": the first screenshot inside a floating phone
+                it = cue_item(ctx, cue, "phone-mockup", "phone", cue.number if cue.number is not None else cue.i0,
+                              last_end + hold + 0.6, s, image=pics[0], text="")
+                it["zone"] = "center"
+                items.append(it)
+                continue
             it = cue_item(ctx, cue, "screenshot-collage", beat, cue.number if cue.number is not None else cue.i0,
                           last_end + hold + 0.6, s, images=pics, text="")
             it["cues"] = rel(ctx, [cue.number if cue.number is not None else cue.i0] * len(pics), it["start"])
@@ -923,6 +959,34 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
                           list=[t for _k, t in cue.items])
             it["cues"] = rel(ctx, [k for k, _t in cue.items], it["start"])
             items.append(it)
+        elif cue.kind == "recap":
+            # what was said, summed up: a tile for each thing shown so far (else the sentence's words)
+            # what the cards showed comes in at once, then each item said here on its word
+            spoken_items = [t for _k, t in cue.items]
+            earlier = [t for t in dict.fromkeys(heads) if t and t not in spoken_items][:max(0, 8 - len(spoken_items))]
+            tiles = earlier + spoken_items
+            if len(tiles) < 3:
+                tiles = [shown(sw[k]) for k in range(cue.i0, cue.i1 + 1)
+                         if norm_word(sw[k]) not in cues_mod.STOP_ITEM | cues_mod.RECAP][:8]
+            if len(tiles) >= 2:
+                it = cue_item(ctx, cue, "tile-mosaic", beat, cue.i0, last_end + hold + 0.6, s, list=tiles)
+                spoken = [round(max(0.0, sw[k]["start"] - snap(sw[cue.i0]["start"], ctx.fps)), 3)
+                          for k, t in cue.items if t in tiles]
+                it["cues"] = [round(0.1 + 0.1 * k, 3) for k in range(len(tiles) - len(spoken))] + spoken
+                it["zone"] = "center"
+                items.append(it)
+        elif cue.kind == "timeline":
+            it = cue_item(ctx, cue, "timeline-card", beat, cue.i0, last_end + hold + 0.6, s,
+                          text=cue.text[:1].upper() + cue.text[1:], list=[t for _k, t in cue.items])
+            items.append(it)
+        elif cue.kind == "comment":
+            who = handle or assets.handle or assets.name or ""
+            it = cue_item(ctx, cue, "chat-cards", beat, cue.i0, last_end + hold + 0.8, s, text=who,
+                          list=[director.shorten(cue.text, 80)], **({"image": profile_photo} if profile_photo else {}))
+            it["cues"] = [0.15]
+            items.append(it)
+        if len(items) > made_items:
+            heads.append(head_of(items[-1]))
         if len(items) + len(effects) > made and cue not in used:
             used.append(cue)
             cue.used_beat = items[-1]["beat"] if len(items) > made_items else beat
@@ -932,7 +996,75 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
         nxt = next((o for o in order[k + 1:] if o["i0"] != it["i0"] and o["cue"] != it["cue"]), None)
         if nxt is not None and it["end"] > nxt["start"] - 0.08:
             it["end"] = snap(max(it["start"] + 1.2, nxt["start"] - 0.08), ctx.fps)
+    cover = magazine_cover(ctx, found, used, order, heads, scenes)
+    if cover is not None:
+        items.insert(0, cover[0])
+        used.insert(0, cover[1])
     return items, effects, notes, used
+
+
+def ends_sentence(w):
+    return strip_marks(w["text"]).rstrip().endswith((".", "!", "?"))
+
+
+def norm_word(w):
+    return cues_mod.norm(w["text"])
+
+
+def head_of(it):
+    """One short line for a card: its title or query, else its first item."""
+    text = strip_marks(it.get("text2") if it["template"] == "strike-text" else it.get("text") or "").replace("*", "")
+    return text.strip() or next(iter(it.get("list") or []), "")
+
+
+def magazine_cover(ctx, found, used, order, heads, scenes):
+    """The opening as a magazine cover when the video has enough to show: the hook word as the
+    masthead, the first sentence as the kicker, three things that come later as cover lines. Only
+    when the first spoken card leaves it room. Returns (item, its pseudo cue) or None."""
+    sw = ctx.words
+    if len(used) < MAGAZINE_MIN or not sw:
+        return None
+    first = order[0]["start"] if order else ctx.duration
+    end_i = next((k for k in range(len(sw)) if ends_sentence(sw[k])), None)
+    # the first sentence that says something (a "Teka lang!" is not the hook)
+    i0 = 0
+    if end_i is not None and end_i < 3 and end_i + 1 < len(sw):
+        i0 = end_i + 1
+        end_i = next((k for k in range(i0, len(sw)) if ends_sentence(sw[k])), len(sw) - 1)
+    end_i = end_i if end_i is not None else min(len(sw) - 1, 6)
+    hook = [k for k in range(i0, end_i + 1)]
+    start = snap(sw[hook[0]]["start"], ctx.fps)                  # on the hook's first word
+    if first - start < 1.2:
+        return None
+    # the masthead: what a "number + thing" hook counts ("Tatlong SIKRETO..."), else a word said as a
+    # title in or just after the hook, else the hook's strongest word
+    counted = next((hook[n + 1] for n, k in enumerate(hook[:-1]) if cues_mod.number_word(sw[k]["text"]) is not None
+                    and len(norm_word(sw[hook[n + 1]])) > 3 and norm_word(sw[hook[n + 1]]) not in cues_mod.STOP_ITEM),
+                   None)
+    keyword = shown(sw[counted]) if counted is not None else \
+        next((c.text for c in found if c.kind == "keyword" and sw[c.i0]["start"] < sw[end_i]["end"] + 4), None)
+    if keyword is None:
+        cands = [k for k in hook if len(norm_word(sw[k])) > 3 and norm_word(sw[k]) not in cues_mod.STOP_ITEM
+                 and cues_mod.number_word(sw[k]["text"]) is None]
+        if not cands:
+            return None
+        keyword = shown(sw[max(cands, key=lambda k: (len(norm_word(sw[k])) >= 6, sw[k]["end"] - sw[k]["start"]))])
+    lines = [t for t in dict.fromkeys(heads) if t and t.lower() != keyword.lower()][:3]
+    cue = cues_mod.Cue("magazine", hook[0], hook[-1], text=keyword, priority=10)
+    cue.used_beat = "magazine"
+    # the cover holds the opening scene(s) the hook is said in, never into a spoken card
+    scene = scene_of(scenes, sw[end_i]["start"])
+    first = min(first, max(scene.end, start + 2.6) + 0.08)
+    it = cue_item(ctx, cue, "magazine-cover", "magazine", hook[0], first - 0.08, scene,
+                  text=keyword.upper(), text2=director.shorten(" ".join(shown(sw[k]) for k in hook), 60),
+                  list=lines, number=1)
+    it["end"] = snap(min(it["end"], first - 0.08), ctx.fps)
+    it["start"] = start
+    it["cues"] = [round(max(0.0, sw[hook[0]]["start"] - start), 3)] + \
+        [round(max(0.0, sw[hook[0]]["start"] - start) + 0.5 + 0.35 * k, 3) for k in range(len(lines))]
+    it["zone"] = "center"
+    it["reason"] = "the opening: a magazine cover of what is coming"
+    return it, cue
 
 
 def cue_scenes(ctx, found, scenes):
@@ -1091,7 +1223,7 @@ def build_params(it, meta, dctx):
     if "text2" in fields:
         p["text2"] = (it.get("text2") or "")[:60]     # empty, never the template's sample ("@yourhandle")
     if "items" in fields and it.get("list"):
-        p["items"] = [x[:40] for x in it["list"]][:5]
+        p["items"] = [x[:40] for x in it["list"]][:8 if meta["id"] == "tile-mosaic" else 5]
     if "number" in fields and it.get("number") is not None:
         p["number"] = it["number"]
     if "image" in fields and it.get("image"):
@@ -1150,8 +1282,11 @@ def build(ctx, project, scenes, chosen, assets, captions_on, extra=(), used_imag
     timed = list(extra)
     for it in sorted(items, key=lambda x: x["start"]):
         nxt = next((t for t in starts if t > it["start"] + EPS), None)
-        if time_item(ctx, it, by_index[it["scene"]], nxt):
+        inside = any(x["start"] - EPS <= it["start"] < x["end"] - EPS for x in extra)   # a spoken card is on
+        if not inside and time_item(ctx, it, by_index[it["scene"]], nxt):
             timed.append(it)
+        elif it["template"] == "label-pill":
+            continue                    # the PiP stays, without its label
         else:
             chosen_for(scenes, chosen, it["scene"])["beat"] = "camera"
             effects += element(ctx, by_index[it["scene"]], "camera", assets, {}, used_images, captions_on)[1]
@@ -1162,6 +1297,8 @@ def build(ctx, project, scenes, chosen, assets, captions_on, extra=(), used_imag
             if it.get("cue"):
                 ctx.note(f"The {it['cue']} graphic at {director.mmss(it['start'])} was left out: no free space "
                          "that keeps the face and captions clear.")
+                continue
+            if it["template"] == "label-pill":
                 continue
             chosen_for(scenes, chosen, it["scene"])["beat"] = "camera"
             effects += element(ctx, by_index[it["scene"]], "camera", assets, {}, used_images, captions_on)[1]
