@@ -489,7 +489,7 @@ def add_fx(graph, current, project, fps):
             elif effect == "bw":
                 # the colour drains to black and white over the first 35%, stays, and comes
                 # back over the last 35% (a B&W transition on a cut)
-                ramp = max(d * 0.35, 1 / fps)
+                ramp = max(min(float(clip["ramp"]), d / 2) if clip.get("ramp") is not None else d * 0.35, 1 / fps)
                 held = f"min(1,max(0,min((t-{t0:.4f})/{ramp:.4f},({t0 + d:.4f}-t)/{ramp:.4f})))"
                 graph.add(f"[{current}]eq=saturation='1-{min(1.0, 0.4 + 0.6 * i):g}*{held}':"
                           f"eval=frame:{on}[{out}]")

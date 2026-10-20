@@ -151,7 +151,7 @@ into graphics, each starting on the exact word. The rules are in `autoedit/cues.
 |---|---|
 | "Tatlo… dalawa… isa!", "5, 4, 3, 2, 1" | a countdown showing each number on its word |
 | "Una: DISIPLINA", a word in CAPS | a big title with that exact word, with a punch-in |
-| "Dati … Ngayon …" (before / now) | black and white, dimmed, vignetted, then colour again on "ngayon"; the past words struck out and the new ones landing big on "ngayon" |
+| "Dati … Ngayon …" (before / now) | black and white (grey within 0.3 s of "dati" and held for the whole past, not a short flash), dimmed, vignetted, then colour again right on "ngayon"; the past words struck out and the new ones landing big on "ngayon" |
 | "sa search bar, hinanap ko: X", "i-type ninyo: X" | a search bar typing X while you say it |
 | "tingnan ninyo ang screenshot / resulta / graph" | your screenshots floating in, the one whose file name matches first |
 | "checklist / gamit / steps: a, b at c" | a checklist that ticks each item as you say it |
@@ -164,6 +164,7 @@ into graphics, each starting on the exact word. The rules are in `autoedit/cues.
 | "Comment mo ang salitang GUIDE", "I-DM mo ako" | a comment card with your handle and photo, typing the line you said |
 | "Kaya tandaan: …", "Sa madaling salita …", "In short …" | a mosaic of word tiles: what you just listed, then what the earlier cards showed |
 | "tingnan ninyo ang results ko **sa phone / app**" | your matching screenshot inside a floating phone |
+| (anything: the rhythm) | never more than 4 s with nothing changing on screen: where nothing else happens, a camera move (a slow push or a punch-in, alternating) lands on a spoken word, and the summary says how many |
 | an opening with plenty coming (5 or more spoken cards) | the first scene as a magazine cover: the first title word as the masthead, your first sentence under it, three later cards as cover lines |
 | a floating picture-in-picture (a beat, when you gave clips or photos) | a small label under it with the words it goes with |
 

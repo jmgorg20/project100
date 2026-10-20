@@ -903,7 +903,9 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
                             "amount": 1.12, "ease": 0.2, "smooth": True, "anchor_y": 0.4})
         elif cue.kind == "before_after":
             after_i = cue.items[0][0]
-            effects.append({"type": "look", "start": sw[cue.i0]["start"] - 0.1, "end": sw[after_i]["start"] + 0.1})
+            # the whole past in black and white (it was ~1 s on the real run): grey from just before
+            # "dati", held, colour back right on "ngayon"
+            effects.append({"type": "look", "start": sw[cue.i0]["start"] - 0.25, "end": sw[after_i]["start"] + 0.3})
             before = [k for k in range(cue.i0, after_i) if norm_word(sw[k]) not in TIME_WORDS]
             # the "ngayon" sentence as the cue engine found it (with or without punctuation)
             end_after = min(len(sw) - 1, after_i + max(0, len(cue.items[0][1].split()) - 1), after_i + 6)
@@ -1191,7 +1193,7 @@ def add_effect_clips(project, ctx, ids, items, effects, pips, scenes):
             start, end = snap(max(0.0, e["start"]), fps), snap(e["end"], fps)
             d = round(end - start, 4)
             put(trans, {"id": next(ids), "type": "fx", "effect": "bw", "start": start, "duration": d,
-                        "intensity": 1.0, "label": "Before: black and white"})
+                        "intensity": 1.0, "ramp": 0.3, "label": "Before: black and white"})
             put(look, {"id": next(ids), "type": "dim", "start": start, "duration": d, "amount": 0.3, "blur": 0,
                        "fade": 0.2, "label": "Before: dimmed"})
             put(vig, {"id": next(ids), "type": "vignette", "start": start, "duration": d, "strength": 0.85,
@@ -1212,6 +1214,57 @@ def add_effect_clips(project, ctx, ids, items, effects, pips, scenes):
     for t in (look, vig, cam, trans, pipt):
         t["clips"].sort(key=lambda c: c["start"])
     project["tracks"] = [t for t in project["tracks"] if not str(t["id"]).startswith("pe-") or t["clips"]]
+
+
+MAX_GAP = 4.0              # never longer than this without something changing on screen
+
+
+def visible_changes(project):
+    """The times something visibly changes: a graphic or an effect starts or ends, a cut, the
+    speaker moving lower or back."""
+    times = set()
+    for t in project["tracks"]:
+        if t.get("hidden"):
+            continue
+        for c in t["clips"]:
+            if t["kind"] in ("graphics", "effect", "overlay") or (t["kind"] == "video" and c is not t["clips"][0]):
+                times.add(round(c["start"], 3))
+            if t["kind"] in ("graphics", "overlay") or c.get("type") == "layout":
+                times.add(round(c["start"] + c["duration"], 3))
+    return sorted(times)
+
+
+def keep_the_rhythm(project, ctx, ids, window=None):
+    """A camera move (a slow push or a punch-in, alternating) wherever more than MAX_GAP seconds
+    pass with nothing changing, on a spoken word (only inside `window` (start, end) when given: a
+    regenerated scene). Returns how many were added."""
+    cam = own_track(project, "pe-camera", "effect", "Editorial camera")
+    words = [w["start"] for w in ctx.words]
+    if not words:
+        return 0
+    added, flip = 0, False
+    for _ in range(40):
+        times = [t for t in visible_changes(project) if t <= ctx.duration]
+        marks = sorted(set([words[0]] + times + [ctx.duration]))
+        gap = next(((a, b) for a, b in zip(marks, marks[1:]) if b - a > MAX_GAP and a < words[-1]), None)
+        if gap is None:
+            break
+        a, b = gap
+        at = next((w for w in words if a + 2.0 <= w <= a + 3.5), None) or min(a + 3.0, b - 0.5)
+        at = snap(at, ctx.fps)
+        if window and not (window[0] - EPS <= at < window[1] - EPS):
+            break
+        d = round(min(1.6, max(0.8, b - at - 0.1)), 4)
+        clip = {"id": next(ids), "type": "zoom", "start": at, "duration": d, "anchor_y": 0.4,
+                "label": "Camera move (keeps the rhythm)"}
+        clip.update({"amount": 1.12, "ease": 0.0, "smooth": False} if flip else {"amount": 1.08, "ease": 0.6, "smooth": True})
+        if not free_on(cam, at, at + d):
+            cam["clips"] = [c for c in cam["clips"] if not (c["start"] < at + d and c["start"] + c["duration"] > at)]
+        cam["clips"].append(clip)
+        cam["clips"].sort(key=lambda c: c["start"])
+        added += 1
+        flip = not flip
+    return added
 
 
 def bw_transitions(ctx, scenes, chosen):
@@ -1480,6 +1533,9 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
                               if all(abs(b["start"] - lk["start"]) > 3 for lk in looks)]
     director.lay_out(project, clips)
     add_effect_clips(project, ctx, director.next_ids(project, "pe"), placed, effects, pips, scenes)
+    moves = keep_the_rhythm(project, ctx, director.next_ids(project, "per"))
+    if moves:
+        ctx.note(f"Added {moves} camera move(s) so something changes every 2-4 seconds.")
     rows = plan_rows(ctx, scenes, chosen)
     meta = project.setdefault("meta", {})
     meta["editorial"] = {"scenes": rows}
@@ -1620,6 +1676,9 @@ def regenerate_scene(project, scene_index, cfg, instruction="", cache=None, canc
     before_ids = {c["id"] for t in project["tracks"] for c in t["clips"]}
     director.lay_out(project, clips)
     add_effect_clips(project, ctx, director.next_ids(project, "pe"), placed, effects, pips, scenes)
+    moves = keep_the_rhythm(project, ctx, director.next_ids(project, "per"), window=(scene.start, scene.end))
+    if moves:
+        ctx.note(f"Added {moves} camera move(s) so something changes every 2-4 seconds.")
     rows = plan_rows(ctx, scenes, chosen)
     old_rows = {r["index"]: r for r in project["meta"]["editorial"]["scenes"]}
     for r in rows:
