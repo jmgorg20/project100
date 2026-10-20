@@ -122,8 +122,13 @@ editorial:                    # PREMIUM EDITORIAL VIRAL: YOUR name / handle / br
   handle: ""                  # Your photo: a picture named avatar/profile; your logo: one named logo.
   brand: ""
 
-sfx:                          # your own sound effects (none are included)
-  enabled: false
+sfx:                          # sound effects
+  auto: auto                  # auto: sounds synced to the graphics (presets that use them, e.g. PREMIUM
+                              # EDITORIAL VIRAL), made on your PC by FFmpeg; off: none
+  auto_volume: 0.35           # how loud (0-1); they are a little quieter still while you speak
+  # your own sounds win: put whoosh.wav, pop.wav, tick.wav, type.wav, shutter.wav, rise.wav,
+  # impact.wav... in assets/sfx
+  enabled: false              # (the plain edit command) your own pop / whoosh files below
   volume: 0.4
   pop: assets/sfx/pop.wav     # plays when an overlay pops in
   whoosh: assets/sfx/whoosh.wav   # plays on zoom cuts

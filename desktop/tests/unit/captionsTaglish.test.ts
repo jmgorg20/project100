@@ -59,6 +59,19 @@ describe("fix the words before the edit", () => {
   });
 });
 
+describe("sound effects setting", () => {
+  it("is auto by default; off and a volume reach the engine", () => {
+    const d = defaultSettings("win32", "C:/engine");
+    expect(d.soundEffects).toBe("auto");
+    expect(cleanSettings({ soundEffects: "loud", soundEffectsVolume: 7 }, d)).toMatchObject({ soundEffects: "auto", soundEffectsVolume: 0.35 });
+    const job = newJob("j3", { video: "C:/v.mp4", photos: [], instruction: "", provider: "groq", auto: true, mode: "new" });
+    expect(jobArgs(job as Job, d, { instructionFile: "i.txt", output: "o.mp4" })).not.toContain("--sfx");
+    const args = jobArgs(job as Job, { ...d, soundEffects: "off", soundEffectsVolume: 0.6 }, { instructionFile: "i.txt", output: "o.mp4" }).join(" ");
+    expect(args).toContain("--sfx off");
+    expect(args).toContain("--sfx-volume 0.6");
+  });
+});
+
 describe("caption style setting", () => {
   it("is the preset's by default and is passed to the engine when you pick one", () => {
     const d = defaultSettings("win32", "C:/engine");

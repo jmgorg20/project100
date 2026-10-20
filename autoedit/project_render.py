@@ -1001,6 +1001,21 @@ def add_audio_tracks(graph, project, media, base_dir, fps, dialog):
                       f"ratio={2 + 18 * ducking:g}:attack=15:release=350:makeup=1[ducked]")
             dialog, music = "speechout", "ducked"
         post.append(music)
+    sfx_ducking = float(audio.get("sfx_ducking", 0))
+    if sfx_parts and sfx_ducking > 0:
+        # sound effects a little quieter while you speak (they sit under the voice): about 5 dB at
+        # 0.5 for a normal voice, never buried (a strong ratio took ~19 dB off and hid them)
+        ins = "".join(f"[{p}]" for p in sfx_parts)
+        if len(sfx_parts) > 1:
+            graph.add(f"{ins}amix=inputs={len(sfx_parts)}:duration=longest:normalize=0[sfxmix]")
+            sfx = "sfxmix"
+        else:
+            sfx = sfx_parts[0]
+        graph.add(f"[{dialog}]asplit=2[sfxspeech][sfxkey]",
+                  f"[{sfx}][sfxkey]sidechaincompress=threshold=0.02:ratio={1 + 0.6 * sfx_ducking:g}:"
+                  f"attack=10:release=250:makeup=1[sfxducked]")
+        dialog = "sfxspeech"
+        sfx_parts = ["sfxducked"]
     post += sfx_parts
     if post:
         ins = f"[{dialog}]" + "".join(f"[{p}]" for p in post)

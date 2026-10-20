@@ -104,6 +104,16 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
             ))}
           </select>
         </div>
+        <div className="field">
+          <label htmlFor="sound-effects">Sound effects · Mga sound effect</label>
+          <select id="sound-effects" value={draft.soundEffects ?? "auto"} onChange={(e) => set("soundEffects", e.target.value as Settings["soundEffects"])} data-testid="sound-effects">
+            <option value="auto">Auto: whoosh, pop, typing, ticks, shutter, rise / impact, synced to the graphics (made on your PC)</option>
+            <option value="off">Off</option>
+          </select>
+          <label htmlFor="sound-effects-volume">Volume: {Math.round((draft.soundEffectsVolume ?? 0.35) * 100)}%</label>
+          <input id="sound-effects-volume" type="range" min={0} max={100} step={5} value={Math.round((draft.soundEffectsVolume ?? 0.35) * 100)}
+            onChange={(e) => set("soundEffectsVolume", Number(e.target.value) / 100)} disabled={draft.soundEffects === "off"} data-testid="sound-effects-volume" />
+        </div>
         <label className="row">
           <input type="checkbox" checked={draft.fixCaptionsFirst} onChange={(e) => set("fixCaptionsFirst", e.target.checked)} data-testid="fix-captions-first" />
           <span>Let me fix the words before the AI edit · Ayusin muna ang mga salita</span>

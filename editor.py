@@ -109,6 +109,9 @@ def build_parser():
     ai.add_argument("--photos", nargs="*", default=[], help="photos the AI may pop in")
     ai.add_argument("--caption-punctuation", choices=["remove", "keep"],
                     help="captions without , . ! ? ; : and quotes (remove, the default) or as said (keep)")
+    ai.add_argument("--sfx", choices=["auto", "off"], help="sound effects synced to the graphics (auto, the "
+                    "default, for presets that use them) or none (off)")
+    ai.add_argument("--sfx-volume", type=float, help="how loud the sound effects are, 0-1 (default 0.35)")
     ai.add_argument("--caption-style", help="caption style (a name from `python editor.py styles`, e.g. "
                     "editorial_card); wins over the preset's and the AI's choice")
     ai.add_argument("--provider", choices=["groq", "anthropic"], help="AI provider")
@@ -804,6 +807,10 @@ def print_qc(report):
 def caption_punctuation(cfg, args):
     if getattr(args, "caption_punctuation", None):
         cfg["captions"]["punctuation"] = args.caption_punctuation
+    if getattr(args, "sfx", None):
+        cfg["sfx"]["auto"] = args.sfx
+    if getattr(args, "sfx_volume", None) is not None:
+        cfg["sfx"]["auto_volume"] = max(0.0, min(1.0, args.sfx_volume))
     if getattr(args, "caption_style", None):
         from autoedit.styles import get_style
         cfg["captions"]["force_style"] = get_style(args.caption_style).name     # checked here

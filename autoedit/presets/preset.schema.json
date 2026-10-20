@@ -87,8 +87,15 @@
       "type": "boolean"
     },
     "sfx": {
-      "type": "boolean",
-      "description": "whoosh / pop on emphasised graphics (made on your PC)"
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "const": "auto"
+        }
+      ],
+      "description": "true: a whoosh / pop on emphasised graphics; \"auto\": sounds synced to every graphic and effect (whoosh, pop, typing, ticks, shutter, rise / impact); all made on your PC"
     },
     "music": {
       "oneOf": [

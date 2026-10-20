@@ -132,6 +132,8 @@ One FFmpeg command, in this order:
    - If `settings.audio.normalize` is on, the speech is evened out to `loudness` LUFS.
    - The `music` tracks are mixed and, with `ducking`, compressed whenever the speech is
      louder than a whisper (`sidechaincompress`, keyed by the speech).
+   - With `sfx_ducking` (0-1), the `sfx` tracks are made a little quieter while you speak
+     (about 5 dB at 0.5; `sidechaincompress`, keyed by the speech).
    - Then the music and `sfx` are mixed in at their own volume, and a limiter stops clipping.
 6. Export size (1080x1920, 720x1280 or 540x960), H.264 + AAC, 48 kHz.
 

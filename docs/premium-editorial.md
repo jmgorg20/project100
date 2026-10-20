@@ -198,6 +198,31 @@ as "skipped" any more (that was the "search result.png skipped twice" line of th
 the AI had planned two plain pop-ups for it, which this preset replaces with its floating
 screenshot).
 
+## Sound effects · Mga sound effect
+
+The preset adds quiet sound effects on the graphics and effects of your edit (`sfx: auto`):
+
+| what happens on screen | sound |
+|---|---|
+| a card comes in | whoosh (a word or title popping in: a soft pop) |
+| a big card goes | a shorter, quieter whoosh out |
+| the search bar types | a typing click per letter, while it types |
+| a checklist item ticks, a countdown number, a number card | tick |
+| a screenshot or phone card | camera shutter |
+| the black-and-white "before" | a rise into it, a soft impact when the colour comes back |
+
+- **Made on your PC by FFmpeg** (`autoedit/sfx_synth.py`): nobody else's sounds, so they are safe
+  to post. **Your own sounds win:** put `whoosh.wav`, `tick.mp3`, `shutter.ogg`... in
+  `assets/sfx` (the names in the table: `pop`, `soft_pop`, `ding`, `whoosh`, `whoosh_out`, `tick`,
+  `type`, `shutter`, `rise`, `impact`).
+- **Under your voice:** quiet (`sfx: auto_volume`, 0.35), about 5 dB quieter still while you speak
+  (`settings.audio.sfx_ducking`), never two within 80 ms, at most 8 a second.
+- **Setting:** app *Settings -> Sound effects: Auto / Off* and a volume slider; `config.yaml`
+  `sfx: auto: auto | off`; command line `--sfx off`, `--sfx-volume 0.5`.
+
+Measured on the real export (`docs/acceptance/realclip/g/levels.md`): all 35 sounds are in the
+exported audio on their moments, peaks -16 to -29 dB, under a voice of about -6.5 dB.
+
 ## Changing one scene · Pagbago ng isang eksena
 
 - **Storyboard (app or `python editor.py storyboard-edit my.project.json --scene N`):**
@@ -267,5 +292,7 @@ scene).
 - the real desktop app on your PC (the app was tested as a browser build with a stand-in engine)
 - a real AI model's scene plans (a stand-in AI was used)
 - how "premium" it looks to a viewer
+- how the sound effects sound: their levels and timing were measured in the exported audio, but
+  nobody listened to them here
 
 These are sensible starting points; check the storyboard before you render.

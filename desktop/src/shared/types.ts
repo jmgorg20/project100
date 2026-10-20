@@ -461,6 +461,9 @@ export interface Settings {
   captionPunctuation: "remove" | "keep";
   /** "preset" = the preset's (or the AI's) caption style; else a caption style name (editorial_card...). */
   captionStyle?: string;
+  /** Sound effects synced to the graphics: "auto" (default) or "off"; volume 0-1. */
+  soundEffects?: "auto" | "off";
+  soundEffectsVolume?: number;
   /** Show the transcript to fix its words before the AI edit (Ayusin muna ang captions). */
   fixCaptionsFirst: boolean;
 }

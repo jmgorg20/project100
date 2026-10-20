@@ -235,7 +235,15 @@ def finish(project, preset, cfg):
     note = add_music(project, preset, cfg)
     if note:
         notes.append(note)
-    if preset.get("sfx"):
+    if preset.get("sfx") == "auto":
+        from . import sfx_auto
+        n = sfx_auto.add(project, cfg)
+        if n:
+            notes.append(f"Sound effects: {n}, synced to the graphics (whoosh, pop, typing, ticks, shutter, "
+                         "rise / impact; made on your PC, quiet under your voice).")
+        elif str(((cfg or {}).get("sfx") or {}).get("auto", "auto")).lower() == "off":
+            notes.append("Sound effects: off (Settings).")
+    elif preset.get("sfx"):
         n = add_emphasis_sounds(project, cfg)
         if n:
             notes.append(f"{n} whoosh/pop sound(s) on the emphasised graphics.")
