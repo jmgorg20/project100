@@ -479,8 +479,9 @@ def op_items(ctx, step):
             add_sfx(ctx, sfx, at)
 
 
-def add_sfx(ctx, name, at):
-    """A short synthesised sound (pop, ding, whoosh) on the sound-effects track."""
+def add_sfx(ctx, name, at, volume=0.6):
+    """A short synthesised sound (pop, ding, whoosh...; yours from assets/sfx when there is one) on
+    the sound-effects track."""
     from .sfx_synth import sound_file
     path = sound_file(name)
     mid = ctx.media_id(path)
@@ -492,7 +493,7 @@ def add_sfx(ctx, name, at):
     if any(not (c["start"] >= at + d or c["start"] + c["duration"] <= at) for c in track["clips"]):
         track = ctx.track(ctx.new_id("sfx-"), "audio", "Sound effects 2", role="sfx", after_kind="audio")
     track["clips"].append({"id": ctx.new_id("fs"), "type": "audio", "media": mid, "start": round(at, 4),
-                           "duration": round(d, 4), "in": 0.0, "out": round(d, 4), "volume": 0.6})
+                           "duration": round(d, 4), "in": 0.0, "out": round(d, 4), "volume": volume})
     track["clips"].sort(key=lambda c: c["start"])
 
 

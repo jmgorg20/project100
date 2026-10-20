@@ -213,7 +213,7 @@ def run_cli(out, video, cfg, instruction, photos, preset, words_file):
 
 
 def run(out, video=None, words_file=DATA / "base_words.json", cues_file=DATA / "base_cues.json", preset=None,
-        real=False, seconds=29.8, instruction="", cli=False, spaced=False):
+        real=False, seconds=29.8, instruction="", cli=False, spaced=False, sfx="auto"):
     from autoedit import ai_edit
     from autoedit.config import load_config
     from autoedit.words import load_transcript
@@ -237,6 +237,7 @@ def run(out, video=None, words_file=DATA / "base_words.json", cues_file=DATA / "
     cfg["work_folder"] = str(out / "work")
     cfg["ai"]["cache_folder"] = str(out / "cache")
     cfg["output"]["encoder_speed"] = "ultrafast"
+    cfg.setdefault("sfx", {})["auto"] = sfx
     if cli:
         # exactly what the desktop app runs ("Edit with AI"): editor.py ai-edit, its own options
         result = run_cli(out, video, cfg, instruction, photos, preset, None if real else words_file)
@@ -299,10 +300,11 @@ def main():
     ap.add_argument("--cli", action="store_true", help="run editor.py ai-edit as the desktop app does")
     ap.add_argument("--spaced-names", action="store_true", help="name the test pictures like the real run's "
                     "(\"search result.png\", \"TikTok logo.png\"...)")
+    ap.add_argument("--sfx", choices=["auto", "off"], default="auto", help="automatic sound effects")
     a = ap.parse_args()
     instruction = Path(a.instruction_file).read_text(encoding="utf-8") if a.instruction_file else a.instruction
     r = run(a.out, a.video, a.words, a.cues, a.preset, a.real_transcription, instruction=instruction, cli=a.cli,
-            spaced=a.spaced_names)
+            spaced=a.spaced_names, sfx=a.sfx)
     print(markdown(r))
     sys.exit(0 if r["failed"] == 0 else 1)
 

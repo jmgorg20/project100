@@ -107,6 +107,8 @@ DEFAULTS = {
         "max_minutes": 30,
     },
     "sfx": {
+        "auto": "auto",
+        "auto_volume": 0.35,
         "enabled": False,
         "volume": 0.4,
         "pop": "assets/sfx/pop.wav",

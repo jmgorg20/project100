@@ -13,7 +13,7 @@
   "grade": "natural_clean",
   "pacing": "fast",
   "zoom": true,
-  "sfx": false,
+  "sfx": "auto",
   "music": {
     "mood": "upbeat",
     "volume": 0.1

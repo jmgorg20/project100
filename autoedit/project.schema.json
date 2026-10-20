@@ -140,6 +140,12 @@
               "minimum": 0,
               "maximum": 1,
               "description": "Reduce steady background noise (fan, hiss) in the speech: 0 = off, 1 = strongest."
+            },
+            "sfx_ducking": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Make the sound effects a little quieter while someone speaks: 0 = off, 1 = strongest."
             }
           }
         },
