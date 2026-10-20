@@ -141,6 +141,9 @@ DEFAULTS = {
         "anthropic_model": "claude-opus-5-5",
         "anthropic_effort": "medium",
         "max_tokens": 8000,
+        "timeout": 90,
+        "retries": 2,
+        "groq_tpm": 8000,
         "cache_folder": "work/cache",
         "prices": {   # US$; see config.yaml (Groq prices not checked against groq.com)
             "whisper-large-v3": {"per_audio_hour": 0.111, "min_seconds": 10},

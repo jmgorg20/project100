@@ -38,10 +38,10 @@ from . import cues as cues_mod
 from . import director, graphics, zones
 from .director import Ctx, important, locate, norm, shown, snap, strip_marks
 from .errors import Cancelled
-from .llm import LLMError, ask_json
+from .llm import LLMError, RequestLog, ask_json, estimate_tokens
 
 STYLE = "premium_editorial"
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 MAX_ATTEMPTS = 2
 SCENE_MIN, SCENE_MAX = 1.6, 4.2
 LIST_MAX = 8.0
@@ -554,10 +554,18 @@ as said). Never invent words.
 - Output the JSON object only."""
 
 
-def build_prompt(ctx, scenes, assets, captions_on, problems=None, fixed=None):
+SCENE_WORDS = 40          # a scene's words sent to the AI (a 2-4 s scene has fewer)
+INSTRUCTION_CHARS = 600
+
+
+def build_prompt(ctx, scenes, assets, captions_on, problems=None, fixed=None, only=None):
+    """The scene-plan request, kept compact (Groq's free tier counts tokens per minute): only the
+    beats the creator's files allow, only the scenes still to plan (`only`; the ones already set by
+    what is said are listed by their beat), each scene's words, a short instruction."""
+    only = set(s.index for s in scenes) - set(fixed or {}) if only is None else set(only)
     lines = ["BEATS:"]
     for b, (template, kind, need, about) in BEATS.items():
-        if (b == "subtitle" and captions_on) or b in CUE_ONLY:
+        if (b == "subtitle" and captions_on) or b in CUE_ONLY or not assets.satisfies(need):
             continue
         lines.append(f"- {b} ({kind}{', needs ' + need if need else ''}): {about}")
     lines.append("")
@@ -571,13 +579,19 @@ def build_prompt(ctx, scenes, assets, captions_on, problems=None, fixed=None):
     if not (assets.images or assets.videos or assets.logo):
         lines.append("- none (no picture beats, no pip, no logo)")
     lines.append("")
-    lines.append("SCENES:")
+    set_by_words = [f"{i} {fixed[i]}" for i in sorted(fixed or {})]
+    if set_by_words:
+        lines.append("ALREADY SET BY WHAT IS SAID (do not plan these; avoid repeating their beat next to "
+                     "them): " + ", ".join(set_by_words))
+    lines.append("SCENES TO PLAN (plan exactly these):")
     for s in scenes:
-        note = f"  (already set by what is said: {fixed[s.index]})" if s.index in (fixed or {}) else ""
-        lines.append(f"{s.index} [{s.start:.2f}-{s.end:.2f}s]: {scene_text(ctx, s)}{note}")
+        if s.index in only:
+            words = scene_text(ctx, s).split()
+            text = " ".join(words[:SCENE_WORDS]) + (" ..." if len(words) > SCENE_WORDS else "")
+            lines.append(f"{s.index} [{s.start:.1f}-{s.end:.1f}s]: {text}")
     if ctx.instruction.strip():
         lines.append("")
-        lines.append("CREATOR'S INSTRUCTIONS: " + ctx.instruction.strip()[:1500])
+        lines.append("CREATOR'S INSTRUCTIONS: " + ctx.instruction.strip()[:INSTRUCTION_CHARS])
     if problems:
         lines.append("")
         lines.append("YOUR PREVIOUS ANSWER HAD THESE PROBLEMS:\n" + problems)
@@ -608,8 +622,43 @@ def check_choice(ctx, scene, choice, assets):
     return problems
 
 
-def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=None, cancel=None, fixed=None):
-    """{scene index: choice} from the AI (checked; one retry), plus usage / notes."""
+GROQ_TPM = 8000          # Groq's free-tier tokens per minute for the default model (ai: groq_tpm)
+ANSWER_BASE = 1200       # answer tokens: room for the model's reasoning ...
+ANSWER_PER_SCENE = 160   # ... and per scene planned
+
+
+def answer_tokens(ai, n):
+    return min(int(ai.get("max_tokens", 8000)), ANSWER_BASE + ANSWER_PER_SCENE * n)
+
+
+def plan_chunks(ctx, scenes, assets, captions_on, fixed, provider, ai):
+    """The scenes to plan, in groups whose request (words + room for the answer) fits the
+    provider's tokens-per-minute budget: one request when it fits, several when it does not."""
+    todo = [s for s in scenes if s.index not in (fixed or {})]
+    if provider != "groq" or not todo:
+        return [todo] if todo else []
+    budget = int(float(ai.get("groq_tpm", GROQ_TPM)) * 0.85)
+    fixed_cost = estimate_tokens(SYSTEM_PROMPT + json.dumps(plan_schema(), separators=(",", ":")))
+
+    def cost(group):
+        return fixed_cost + estimate_tokens(build_prompt(ctx, scenes, assets, captions_on, None, fixed,
+                                                         {s.index for s in group})) + answer_tokens(ai, len(group))
+    chunks, current = [], []
+    for s in todo:
+        if current and cost(current + [s]) > budget:
+            chunks.append(current)
+            current = []
+        current.append(s)
+    chunks.append(current)
+    return chunks
+
+
+def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=None, cancel=None, fixed=None,
+                    reporter=None):
+    """{scene index: choice} from the AI (checked; one retry for a bad answer), plus usage / notes.
+    Only the scenes not already set by what is said are asked for, in as few requests as fit the
+    free tier's per-minute limit; a slow, rate-limited or failing AI never holds the edit up (see
+    llm.ask_json): what was not planned by the AI is planned by the rules."""
     ai = ctx.cfg.get("ai") or {}
     key = None
     if cache is not None:
@@ -622,32 +671,64 @@ def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=Non
             return ({ch["scene"]: ch for ch in hit["choices"]}, {"input_tokens": 0, "output_tokens": 0},
                     hit.get("model"), [], True)
     usage = {"input_tokens": 0, "output_tokens": 0}
-    attempts, problems_text, used_model = [], None, model
+    attempts, used_model = [], model
     by_index = {s.index: s for s in scenes}
     best = {}
-    for attempt in range(1, MAX_ATTEMPTS + 1):
-        if cancel is not None and cancel.is_set():
-            raise Cancelled("Cancelled while planning the editorial scenes.")
-        try:
-            text, used, used_model = ask_json(provider, model, SYSTEM_PROMPT,
-                                              build_prompt(ctx, scenes, assets, captions_on, problems_text, fixed),
-                                              plan_schema(), max_tokens=int(ai.get("max_tokens", 8000)),
-                                              effort=ai.get("anthropic_effort", "medium"))
-        except LLMError as exc:
-            attempts.append({"attempt": attempt, "problems": [f"the AI could not be asked: {exc}"]})
-            break
-        usage = {k: usage[k] + used[k] for k in usage}
-        choices, problems = salvage(ctx, text, by_index, assets, fixed)
-        if len(choices) > len(best):
-            best = choices
-        if not problems:
-            if cache is not None:
-                cache.put("editorial", key, {"choices": list(choices.values()), "model": used_model})
-            return choices, usage, used_model, attempts, False
-        attempts.append({"attempt": attempt, "problems": problems[:20], "kept": len(choices)})
-        problems_text = "\n".join(f"- {p}" for p in problems[:20])
+    log = RequestLog(ctx.cfg)
+
+    def notify(message):
+        if reporter:
+            reporter.stage("graphics", f"Planning the editorial scenes - {message}")
+    options = {"reasoning_effort": "low"} if provider == "groq" and "gpt-oss" in str(model) else None
+    queue = plan_chunks(ctx, scenes, assets, captions_on, fixed, provider, ai)
+    if len(queue) > 1:
+        log.step(f"editorial plan: {sum(len(c) for c in queue)} scenes in {len(queue)} requests (per-minute limit)")
+        notify(f"asking in {len(queue)} parts to stay inside the free per-minute limit")
+    complete = True
+    while queue:
+        group = queue.pop(0)
+        only = {s.index for s in group}
+        part = f"editorial plan (scenes {min(only)}-{max(only)})"
+        problems_text = None
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            if cancel is not None and cancel.is_set():
+                raise Cancelled("Cancelled while planning the editorial scenes.")
+            prompt = build_prompt(ctx, scenes, assets, captions_on, problems_text, fixed, only)
+            try:
+                text, used, used_model = ask_json(provider, model, SYSTEM_PROMPT, prompt, plan_schema(),
+                                                  max_tokens=answer_tokens(ai, len(group)),
+                                                  effort=ai.get("anthropic_effort", "medium"), cancel=cancel,
+                                                  notify=notify, cfg=ctx.cfg, step=part, options=options)
+            except LLMError as exc:
+                if exc.status == 400 and options and "reasoning" in str(exc):
+                    options = None                      # this model takes no reasoning_effort
+                    continue
+                if exc.limit and len(group) > 1:
+                    # still too large for the per-minute limit: ask for each half on its own
+                    half = len(group) // 2
+                    queue[:0] = [group[:half], group[half:]]
+                    log.step(f"{part}: too large ({exc.requested} of {exc.limit} tokens): split in two")
+                    break
+                attempts.append({"attempt": attempt, "problems": [f"the AI could not be asked: {exc}"]})
+                complete = False
+                queue = []                              # no more waiting: the rules plan the rest
+                break
+            usage = {k: usage[k] + used[k] for k in usage}
+            choices, problems = salvage(ctx, text, {i: by_index[i] for i in only}, assets, fixed)
+            if len(choices) > len(best.get(part, {})):
+                best[part] = choices
+            if not problems:
+                break
+            attempts.append({"attempt": attempt, "problems": problems[:20], "kept": len(choices)})
+            problems_text = "\n".join(f"- {p}" for p in problems[:20])
+            complete = False if attempt == MAX_ATTEMPTS else complete
+    merged = {}
+    for part_choices in best.values():
+        merged.update(part_choices)
+    if complete and cache is not None and merged:
+        cache.put("editorial", key, {"choices": list(merged.values()), "model": used_model})
     # what checked out is used, scene by scene; the rest is planned by the rules
-    return best, usage, used_model, attempts, False
+    return merged, usage, used_model, attempts, False
 
 
 SCENE_SCHEMA = None
@@ -673,11 +754,11 @@ def salvage(ctx, text, by_index, assets, fixed):
         if errors:
             problems.append(f"scene {ch.get('scene', '?') if isinstance(ch, dict) else '?'}: {errors[0]}")
             continue
-        if ch["scene"] not in by_index:
-            problems.append(f"scene {ch['scene']} does not exist")
-            continue
         if ch["scene"] in (fixed or {}):
             continue                        # what is said already decides this scene
+        if ch["scene"] not in by_index:
+            problems.append(f"scene {ch['scene']} is not one of the scenes to plan")
+            continue
         found = check_choice(ctx, by_index[ch["scene"]], ch, assets)
         soft = [p for p in found if "is not said" in p]
         hard = [p for p in found if p not in soft]
@@ -1652,15 +1733,18 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     fixed_scenes = cue_scenes(ctx, made, scenes)
     choices, usage, used_model, attempts, cached = {}, {"input_tokens": 0, "output_tokens": 0}, model, [], False
     fallback, reason = False, ""
-    if use_ai and provider:
+    open_scenes = len(scenes) - len(fixed_scenes)
+    if use_ai and provider and not open_scenes:
+        ctx.note(f"All {len(scenes)} scenes are set by what you say, so no AI scene plan was needed.")
+    elif use_ai and provider:
         choices, usage, used_model, attempts, cached = request_choices(ctx, scenes, assets, captions_on, provider,
-                                                                       model, cache, cancel, fixed_scenes)
-        open_scenes = len(scenes) - len(fixed_scenes)
+                                                                       model, cache, cancel, fixed_scenes, reporter)
         if not choices and attempts:
             fallback = True
             first = attempts[-1]["problems"][0] if attempts[-1]["problems"] else "no answer"
             reason = (f"The AI scene plan could not be used ({first}) - the scenes were planned by the "
-                      "editorial rules instead; what you say still sets its graphics.")
+                      "editorial rules instead; what you say still sets its graphics. "
+                      f"Log: {RequestLog(cfg).path}")
         elif attempts:
             ctx.note(f"The AI scene plan was used for {len(choices)} of {open_scenes} scenes; the others were "
                      f"planned by the rules ({attempts[-1]['problems'][0]}).")

@@ -151,7 +151,7 @@ def ask_format(instruction, usable, cfg, provider, model):
     for _attempt in range(2):
         try:
             text, _usage, _m = ask_json(provider, model, "You choose the video format for a short vertical "
-                                        "video.", request, schema, max_tokens=400)
+                                        "video.", request, schema, max_tokens=400, cfg=cfg, step="format choice")
             data = json.loads(text)
             if data.get("format") in usable:
                 return data["format"], f"the AI picked it: {str(data.get('reason', ''))[:120]}"

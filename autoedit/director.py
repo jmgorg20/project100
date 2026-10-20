@@ -1005,7 +1005,8 @@ def request_plan(ctx, provider, model, cache=None, cancel=None, only=None, check
         try:
             text, used, used_model = ask_json(provider, model, SYSTEM_PROMPT, build_prompt(ctx, problems_text, only),
                                               schema, max_tokens=int(ai.get("max_tokens", 8000)),
-                                              effort=ai.get("anthropic_effort", "medium"))
+                                              effort=ai.get("anthropic_effort", "medium"), cancel=cancel,
+                                              cfg=ctx.cfg, step="graphics plan")
         except LLMError as exc:
             reason = f"The AI could not be asked for graphics ({exc}) - simple rule-based graphics instead."
             return fallback_result(ctx, reason, attempts, usage, used_model)

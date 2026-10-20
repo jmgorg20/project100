@@ -204,7 +204,7 @@ def request_plan(cfg, provider, model, instruction, words, duration, photo_names
         try:
             text, used, used_model = ask_json(provider, model, SYSTEM_PROMPT, request, schema,
                                               max_tokens=int(ai.get("max_tokens", 8000)),
-                                              effort=effort)
+                                              effort=effort, cancel=cancel, cfg=cfg, step="AI plan")
         except LLMError as exc:
             reason = f"The AI could not be asked ({exc}) - this is the preset edit instead."
             return PlanResult(baseline, fallback=True, reason=reason, attempts=attempts,

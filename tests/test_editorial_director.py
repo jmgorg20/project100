@@ -230,7 +230,7 @@ def test_ai_choices_are_used_when_they_check_out(shots, monkeypatch):
     assert r["scenes"][0]["beat"] == "kinetic"
     first = graphics_of(r["project"])[0]
     assert first["template"] == "kinetic-words" and "*premium*" in first["params"]["text"]
-    assert "SCENES:" in calls[0]["prompt"] and "shot0" in calls[0]["prompt"]
+    assert "SCENES TO PLAN" in calls[0]["prompt"] and "shot0" in calls[0]["prompt"]
 
 
 def test_bad_ai_choices_are_retried_then_the_good_scenes_are_kept(shots, monkeypatch):
