@@ -28,6 +28,7 @@ function statusText(job: Job | undefined, history: VideoHistory | undefined): [s
   if (job?.status === "running") return [job.stageLabel ? `${job.stageLabel}…` : "Starting…", ""];
   if (job?.status === "review") return ["Ready to review", "review"];
   if (job?.status === "failed") return ["Did not finish", "failed"];
+  if (job?.status === "interrupted") return ["Interrupted: press Retry", "failed"];
   if (job?.status === "cancelled") return ["Cancelled", ""];
   const version = history ? currentVersion(history) : null;
   if (version) return [version.summary?.fallback ? "Done (preset edit)" : "Done", "done"];
@@ -71,10 +72,18 @@ export function App() {
   const [fixing, setFixing] = useState<{ video: string; file: string; words: TranscriptWord[]; text: string; rest: string[] } | null>(null);
   const [fixNote, setFixNote] = useState("");
   const instructionRef = useRef<HTMLTextAreaElement>(null);
+  const [jobLogFile, setJobLogFile] = useState("");
+  const addVideosRef = useRef<(paths: string[]) => Promise<void>>(async () => {});
 
   useEffect(() => {
     api.getSettings().then(setSettings);
-    api.listJobs().then((list) => setJobs(Object.fromEntries(list.map((j) => [j.id, j]))));
+    api.listJobs().then((list) => {
+      setJobs(Object.fromEntries(list.map((j) => [j.id, j])));
+      // a video whose edit an earlier session left unfinished comes back in the list (with Retry)
+      const left = [...new Set(list.filter((j) => j.status === "interrupted").map((j) => j.video))];
+      if (left.length) void addVideosRef.current(left);
+    });
+    api.jobLogFile?.().then(setJobLogFile).catch(() => {});
     const offJob = api.onJobChanged((job) => setJobs((prev) => ({ ...prev, [job.id]: job })));
     const offHistory = api.onHistoryChanged((h) => setHistories((prev) => ({ ...prev, [h.video]: h })));
     // Hardware is detected on start; if that or anything else fails, the app works without it.
@@ -108,6 +117,8 @@ export function App() {
       setHistories((prev) => ({ ...prev, [p]: h }));
     }
   }, []);
+
+  addVideosRef.current = addVideos;
 
   const jobList = useMemo(() => Object.values(jobs).sort((a, b) => a.createdAt - b.createdAt), [jobs]);
   const latestJob = useCallback((video: string) => [...jobList].reverse().find((j) => j.video === video && j.status !== "dismissed"), [jobList]);
@@ -248,7 +259,18 @@ export function App() {
                     {job && (job.status === "running" || job.status === "queued") ? (
                       <button className="btn small ghost" onClick={(e) => { e.stopPropagation(); api.cancelJob(job.id); }} aria-label={`Cancel ${base(video)}`}>Cancel</button>
                     ) : (
-                      <button className="btn small ghost" onClick={(e) => { e.stopPropagation(); setVideos((v) => v.filter((x) => x !== video)); if (selected === video) setSelected(null); }} aria-label={`Remove ${base(video)} from the list`}>✕</button>
+                      <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
+                        {job?.status === "interrupted" && (
+                          <button className="btn small" onClick={(e) => { e.stopPropagation(); void api.retryJob(job.id); }} aria-label={`Retry ${base(video)}`} data-testid="retry-video">Retry</button>
+                        )}
+                        <button className="btn small ghost" onClick={(e) => {
+                          e.stopPropagation();
+                          // a stale job is cleared too (a plan waiting for review is left as it is)
+                          if (job && ["interrupted", "failed", "cancelled"].includes(job.status)) void api.dismissJob(job.id);
+                          setVideos((v) => v.filter((x) => x !== video));
+                          if (selected === video) setSelected(null);
+                        }} aria-label={`Remove ${base(video)} from the list`}>✕</button>
+                      </div>
                     )}
                   </div>
                 );
@@ -423,6 +445,18 @@ export function App() {
             <ul className="muted small job-warnings" data-testid="job-warnings" style={{ overflowWrap: "anywhere", userSelect: "text" }}>
               {selectedJob!.warnings!.map((w, i) => <li key={i}>⚠ {w}</li>)}
             </ul>
+          )}
+
+          {selectedJob?.status === "interrupted" && (
+            <div className="card" role="alert" data-testid="job-interrupted">
+              <h3>This edit did not finish</h3>
+              <p className="muted" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", userSelect: "text" }}>
+                {selectedJob.interruptedReason}
+                {selectedJob.stagesDone.length ? ` Last step: ${selectedJob.stageLabel ?? selectedJob.stagesDone.at(-1)}.` : ""}
+              </p>
+              {jobLogFile && <p className="muted small" style={{ overflowWrap: "anywhere", userSelect: "text" }}>Job log: {jobLogFile}</p>}
+              <button className="btn small primary" onClick={() => void api.retryJob(selectedJob.id)} data-testid="retry-job">Retry</button>
+            </div>
           )}
 
           {selectedJob?.status === "failed" && (

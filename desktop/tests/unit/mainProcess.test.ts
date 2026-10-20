@@ -71,6 +71,13 @@ synthetic.make_video(d / "talk.mp4"); synthetic.make_transcript(d / "talk.json")
   seeded = path.join(repo, "work", "cache", "transcripts", `${digest}-groq-whisper-large-v3-tl-taglish1.json`);
   fs.mkdirSync(path.dirname(seeded), { recursive: true });
   fs.copyFileSync(path.join(tmp, "talk.json"), seeded);
+  // An earlier session closed while an edit was "running" (the real Windows state): its saved jobs.
+  const userData = path.join(tmp, "userData");
+  fs.mkdirSync(userData, { recursive: true });
+  fs.writeFileSync(path.join(userData, "jobs.json"), JSON.stringify({ version: 1, jobs: [{
+    id: "stale1", video: "C:/Videos/test 2.mp4", photos: [], instruction: "premium", provider: "groq", auto: true, mode: "new",
+    status: "running", stage: "graphics", stageLabel: "Planning the editorial scenes", stagesDone: ["transcribe", "plan"],
+    log: [], createdAt: 1 }] }));
   await import("../../src/main/main");
   await new Promise((r) => setTimeout(r, 0));
 }, 60_000);
@@ -84,7 +91,7 @@ const lastJob = (): Job => [...sent].reverse().find(([c]) => c === "job:changed"
 describe("main process with the real engine", () => {
   it("registers every channel the window uses", () => {
     for (const channel of ["settings:get", "settings:set", "keys:status", "keys:set", "keys:clear", "dialog:videos", "dialog:photos",
-      "jobs:add", "jobs:list", "jobs:cancel", "jobs:dismiss", "plan:apply", "history:get", "history:undo", "history:redo",
+      "jobs:add", "jobs:list", "jobs:cancel", "jobs:dismiss", "jobs:retry", "jobs:logFile", "plan:apply", "history:get", "history:undo", "history:redo",
       "engine:estimate", "engine:frame", "engine:check", "gen:status", "gen:setWangp", "gen:setTier", "gen:benchmark",
       "gen:compare", "gen:cancel", "app:openPath", "app:showInFolder", "project:open", "project:save", "dialog:project",
       "dialog:media", "dialog:exportPath", "media:info", "media:peaks", "media:thumbs", "export:start", "export:cancel",
@@ -92,6 +99,21 @@ describe("main process with the real engine", () => {
       "track:status", "track:start", "track:cancel", "track:models"]) {
       expect(handlers.has(channel), channel).toBe(true);
     }
+  });
+
+  it("after a restart, a job left running is interrupted (Retry, logged), and Edit with AI is free again", async () => {
+    const jobs = (await call("jobs:list")) as Job[];
+    const stale = jobs.find((j) => j.id === "stale1")!;
+    expect(stale.status).toBe("interrupted");
+    expect(stale.interruptedReason).toContain('closed or restarted while "Planning the editorial scenes"');
+    expect(jobs.some((j) => j.status === "running" || j.status === "queued")).toBe(false);
+    const logFile = (await call("jobs:logFile")) as string;
+    expect(fs.readFileSync(logFile, "utf-8")).toMatch(/stale1 "test 2\.mp4": running -> interrupted/);
+    // the ✕ clears it; nothing was running, so nothing has to stop
+    await call("jobs:dismiss", "stale1");
+    expect(((await call("jobs:list")) as Job[]).find((j) => j.id === "stale1")!.status).toBe("dismissed");
+    const saved = JSON.parse(fs.readFileSync(path.join(tmp, "userData", "jobs.json"), "utf-8")).jobs as Job[];
+    expect(saved.find((j) => j.id === "stale1")!.status).toBe("dismissed");
   });
 
   it("starts with Auto mode on and the repository as the engine", async () => {

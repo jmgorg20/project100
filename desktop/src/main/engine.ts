@@ -30,6 +30,21 @@ export interface RunResult {
 export interface RunHandle {
   done: Promise<RunResult>;
   cancel(): void;
+  /** Is the engine process still there? (false once it exited, or if it never started) */
+  alive?(): boolean;
+  /** When the engine last wrote anything (ms since 1970). */
+  lastActivity?(): number;
+}
+
+/** Does a process with this id exist? (signal 0 only asks; works on Windows too) */
+export function pidAlive(pid: number | undefined): boolean {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 export function parseLine(line: string): EngineEvent | null {
@@ -69,8 +84,9 @@ export function runEngine(config: EngineConfig, args: string[], onEvent: (e: Eng
     });
   } catch (error) {
     const message = `Could not start Python ("${config.python}"): ${(error as Error).message}`;
-    return { done: Promise.resolve({ code: null, cancelled: false, startError: message }), cancel() {} };
+    return { done: Promise.resolve({ code: null, cancelled: false, startError: message }), cancel() {}, alive: () => false, lastActivity: () => Date.now() };
   }
+  let lastActivity = Date.now();
 
   const done = new Promise<RunResult>((resolve) => {
     let startError: string | undefined;
@@ -82,12 +98,14 @@ export function runEngine(config: EngineConfig, args: string[], onEvent: (e: Eng
     });
     if (child.stdout) {
       readline.createInterface({ input: child.stdout }).on("line", (line) => {
+        lastActivity = Date.now();
         const event = parseLine(line);
         if (event) onEvent(event);
       });
     }
     if (child.stderr) {
       readline.createInterface({ input: child.stderr }).on("line", (line) => {
+        lastActivity = Date.now();
         if (line.trim()) onEvent({ type: "log", message: line, stream: "stderr" });
       });
     }
@@ -118,6 +136,8 @@ export function runEngine(config: EngineConfig, args: string[], onEvent: (e: Eng
 
   return {
     done,
+    alive: () => child.exitCode === null && child.signalCode === null && pidAlive(child.pid),
+    lastActivity: () => lastActivity,
     cancel() {
       if (cancelled || child.exitCode !== null) return;
       cancelled = true;

@@ -150,6 +150,10 @@ export interface AppApi {
   listJobs(): Promise<Job[]>;
   cancelJob(id: string): Promise<void>;
   dismissJob(id: string): Promise<void>;
+  /** Edit an interrupted (or failed / cancelled) video again: a new job with the same request. */
+  retryJob(id: string): Promise<Job[]>;
+  /** The job log (every change of a job's status). */
+  jobLogFile(): Promise<string>;
   /** Render a reviewed plan (Auto mode off): only the accepted changes, no AI call. */
   applyPlan(jobId: string, plan: Plan): Promise<Job[]>;
   history(video: string): Promise<VideoHistory>;

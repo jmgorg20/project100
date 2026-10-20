@@ -3,7 +3,7 @@
 // same events in the same order, so the window can be tested without Electron or API keys.
 import type { AppApi, BrollFound, BrollRequest, BrollUpdate, EstimateResult, ExportUpdate, LibraryFile, TrackStatus, TrackUpdate } from "../../shared/api";
 import { addVersion, emptyHistory, redo, undo } from "../../shared/history";
-import { applyEvent, finishJob, newJob, versionFromJob } from "../../shared/jobs";
+import { applyEvent, finishJob, newJob, requestOf, restoreJobs, versionFromJob } from "../../shared/jobs";
 import type {
   CompareResult, EngineEvent, TrackData, GenStatus, GenTaskUpdate, Job, JobRequest, KeysStatus, Media, Plan, Project, Settings, Summary, Track, VideoHistory,
 } from "../../shared/types";
@@ -279,6 +279,12 @@ export function createMockApi(): AppApi {
       return enqueue(requests);
     },
     listJobs: async () => {
+      if (params.get("scenario") === "stale" && !jobs.size) {
+        // a job an earlier session left "running" (the app was closed under it), as the app restores it
+        const request: JobRequest = { video: "C:/Videos/test 2.mp4", photos: [], instruction: "premium", provider: "groq", auto: true, mode: "new" };
+        const left = { ...newJob("stale1", request), status: "running" as const, stage: "graphics", stageLabel: "Planning the editorial scenes" };
+        restoreJobs([left]).forEach((j) => jobs.set(j.id, j));
+      }
       if (params.get("scenario") === "parity" && !jobs.size) {
         // A project shown in the live preview, to compare with frames the engine rendered.
         const project = await fetch("/fixtures/parity.project.json").then((r) => r.json());
@@ -293,8 +299,16 @@ export function createMockApi(): AppApi {
     },
     dismissJob: async (id) => {
       const job = jobs.get(id);
-      if (job?.status === "review") update({ ...job, status: "dismissed" });
+      if (job && !["queued", "running", "dismissed"].includes(job.status)) update({ ...job, status: "dismissed" });
     },
+    retryJob: async (id) => {
+      const job = jobs.get(id);
+      if (!job || job.status === "queued" || job.status === "running") return [];
+      update({ ...job, status: "dismissed" });
+      (window as unknown as { retried: string[] }).retried = [...((window as unknown as { retried?: string[] }).retried ?? []), id];
+      return enqueue([requestOf(job)]);
+    },
+    jobLogFile: async () => "C:\\AutoEdit\\work\\logs\\jobs.log",
     applyPlan: async (jobId, plan) => {
       const job = jobs.get(jobId)!;
       update({ ...job, status: "dismissed" });
