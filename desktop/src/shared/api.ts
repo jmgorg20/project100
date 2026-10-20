@@ -1,7 +1,7 @@
 // What the window can ask the main process (exposed as window.api by the preload script).
 import type { TranscriptWord } from "./captionEdit";
 import type {
-  BrollMeta, BrollStyle, ContentType, Cost, GenStatus, GenTaskUpdate, Job, JobRequest, KeyName, KeysStatus, Media, Plan, Project, Provider,
+  BrollMeta, BrollStyle, ContentType, Cost, FaceFinderRepair, GenStatus, GenTaskUpdate, Job, JobRequest, KeyName, KeysStatus, Media, Plan, Project, Provider,
   Settings, VideoHistory,
 } from "./types";
 
@@ -196,6 +196,8 @@ export interface AppApi {
   listLibrary(kind: "music" | "sfx" | "broll"): Promise<{ folder: string; files: LibraryFile[]; error?: string }>;
   // ---- tracked effects (follow hands / face)
   trackStatus(): Promise<TrackStatus | { error: string }>;
+  /** Settings -> Repair face finder: reinstall the built-in face finder and test it. */
+  repairFaceFinder(): Promise<FaceFinderRepair>;
   /** Find the points in the project's main video and save them in the project file. */
   startTrack(projectPath: string): Promise<string>;
   cancelTrack(taskId: string): Promise<void>;

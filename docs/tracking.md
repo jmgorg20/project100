@@ -91,6 +91,31 @@ from its start and ends when it ends. Use only clips you have the right to use.
 - Not supported: a split-screen / picture-in-picture layout (those clips have no effect), and
   stills or gaps on the main track.
 
+## The built-in face finder · Ang panghanap ng mukha
+
+Without MediaPipe, the AI edit still keeps its graphics off your face with a light face finder
+(OpenCV, installed by itself the first time). It can never stop the edit:
+
+- **Its own process, a hard time limit:** it runs as a separate program (`autoedit/face_worker.py`)
+  and is stopped, with everything it started, after `tracking: face_timeout` seconds (60). On a
+  timeout, a crash or any error the edit goes on with the **safe zones** (the speaker moves lower
+  while a card is up, cards stay off where a face usually is) and the job shows a warning with the
+  reason and the log's path.
+- **Nothing can wait for an answer:** it gets no input, its output goes to files (not pipes), pip
+  runs with no prompts and a time limit, and the frames come from FFmpeg (OpenCV's own video reader
+  on Windows can hang on some MP4 files).
+- **Checked after installing:** a self-test (in its own process) loads OpenCV and runs the detector
+  on a tiny frame. If that fails it says why in plain words: a missing DLL / the Microsoft Visual
+  C++ runtime, OpenCV and numpy not matching, a protobuf conflict, a 32-bit or too old Python. What
+  it installed is removed again and it stays off (no time lost on the next edits) until you repair it.
+- **The log:** every step, with the time, in `work/logs/face-finder.log` (FFmpeg's messages in
+  `face-finder-ffmpeg.log`).
+- **Settings → Face finder: Auto / Off.** Off never starts it; graphics use the safe zones. Command
+  line: `ai-edit --face-finder off`; config: `tracking: face_finder: off`.
+- **Settings → Repair face finder** (or `python editor.py face-finder repair`): reinstalls OpenCV
+  for the engine's Python, runs the self-test, and switches it back on when it works.
+  `python editor.py face-finder status` says whether it is on, working or switched off, and why.
+
 ## Troubleshooting · Mga problema
 
 | Problem | What to do |
@@ -116,6 +141,14 @@ Saved tracks are reused (`work\cache\tracks`), so running the same video again d
 again.
 
 ## What was and was not verified
+
+**The built-in face finder (this PC: Linux):** a simulated hang is stopped at the limit and the edit
+finishes (60.3 s at the real 60 s limit on the user's clip; the app's own command, `editor.py ai-edit`,
+rendered with all 11 cues); a simulated crash and a failed self-test fall back at once; the self-test
+failure removes and switches it off; repair switches it back on; the reasons for a DLL, numpy,
+protobuf, missing module and Windows crash codes are worded from the error. **NOT VERIFIED: Windows**
+(the real hang was on Windows; the fix has not been run there yet).
+
 
 **Verified (automatically, on Linux):**
 - Following a point (gaps, smoothing, fading out, gliding back, cuts), with synthetic tracks. The

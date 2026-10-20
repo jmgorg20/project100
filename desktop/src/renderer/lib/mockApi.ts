@@ -25,7 +25,7 @@ export function createMockApi(): AppApi {
   const speed = Number(params.get("speed") ?? "1");
   let settings: Settings = {
     pythonPath: "python", engineDir: "C:/AutoEditor", outputDir: "C:/AutoEditor/output", provider: "groq",
-    groqModel: "openai/gpt-oss-120b", anthropicModel: "claude-opus-5-5", transcribeWith: "groq", captionPunctuation: "remove", captionStyle: "preset", soundEffects: "auto", soundEffectsVolume: 0.35, fixCaptionsFirst: false, autoMode: true,
+    groqModel: "openai/gpt-oss-120b", anthropicModel: "claude-opus-5-5", transcribeWith: "groq", captionPunctuation: "remove", captionStyle: "preset", soundEffects: "auto", soundEffectsVolume: 0.35, faceFinder: "auto", fixCaptionsFirst: false, autoMode: true,
     consentAccepted: params.has("consent"), musicFolder: params.has("music") ? "C:/Users/me/Music" : "", sfxFolder: "",
     brollFolder: params.has("broll") ? "C:/Users/me/B-roll" : "", useStock: true,
   };
@@ -54,6 +54,7 @@ export function createMockApi(): AppApi {
     brollRequests: BrollRequest[];
     trackStarts: string[];
     trackDownloads: string[][];
+    faceRepairs?: number;
     graphicsRegenerated: { clip: string; ai: boolean }[];
     scenesRegenerated: { scene: string; ai: boolean }[];
   };
@@ -356,6 +357,11 @@ export function createMockApi(): AppApi {
       w.shownInFolder.push(target);
     },
     trackStatus: async () => trackStatus(),
+    repairFaceFinder: async () => {
+      w.faceRepairs = (w.faceRepairs ?? 0) + 1;
+      await wait(200 / speed);
+      return { ok: true, cv2: "4.14.0", log: "C:\\AutoEdit\\work\\logs\\face-finder.log" };
+    },
     downloadTrackModels: async (kinds) => {
       w.trackDownloads.push([...kinds]);
       await wait(300 / speed);

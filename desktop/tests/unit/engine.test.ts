@@ -51,6 +51,22 @@ describe("engine runner", () => {
     expect(events.at(-1)).toEqual({ type: "cancelled", got: "cancel" });
   });
 
+  it("finishes when the engine exits even if a process it started keeps its output open", async () => {
+    // the real Windows hang: the engine was gone, but the job waited for its output to close
+    const leaver = script(
+      "import subprocess, sys, json\n" +
+      "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n" +
+      "print(json.dumps({'type': 'result', 'left': p.pid}), flush=True)\n");
+    const events: EngineEvent[] = [];
+    const started = Date.now();
+    const result = await runEngine({ python, engineDir: repo, script: leaver, exitGraceMs: 500 }, [], (e) => events.push(e)).done;
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(result.code).toBe(0);
+    const left = (events.find((e) => e.type === "result") as unknown as { left: number }).left;
+    expect(events.some((e) => e.type === "log" && /output stayed open/.test(e.message))).toBe(true);
+    try { process.kill(left); } catch { /* already gone */ }
+  });
+
   it("kills the process if it ignores cancel", async () => {
     const stubborn = script("import time, json\nprint(json.dumps({'type': 'stage', 'stage': 's', 'label': 'x'}), flush=True)\ntime.sleep(60)\n");
     let handle!: ReturnType<typeof runEngine>;

@@ -80,6 +80,8 @@ DEFAULTS = {
         "face_model": "",
         "pose_model": "",
         "auto_install": True,
+        "face_finder": "auto",
+        "face_timeout": 60,
         "fps": 30,
         "min_confidence": 0.5,
         "swap_hands": False,

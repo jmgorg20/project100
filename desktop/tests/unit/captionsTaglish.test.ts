@@ -72,6 +72,17 @@ describe("sound effects setting", () => {
   });
 });
 
+describe("face finder setting", () => {
+  it("is auto by default; off reaches the engine", () => {
+    const d = defaultSettings("win32", "C:/engine");
+    expect(d.faceFinder).toBe("auto");
+    expect(cleanSettings({ faceFinder: "maybe" } as never, d).faceFinder).toBe("auto");
+    const job = newJob("j4", { video: "C:/v.mp4", photos: [], instruction: "", provider: "groq", auto: true, mode: "new" });
+    expect(jobArgs(job as Job, d, { instructionFile: "i.txt", output: "o.mp4" })).not.toContain("--face-finder");
+    expect(jobArgs(job as Job, { ...d, faceFinder: "off" }, { instructionFile: "i.txt", output: "o.mp4" }).join(" ")).toContain("--face-finder off");
+  });
+});
+
 describe("caption style setting", () => {
   it("is the preset's by default and is passed to the engine when you pick one", () => {
     const d = defaultSettings("win32", "C:/engine");

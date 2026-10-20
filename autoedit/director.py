@@ -1153,13 +1153,20 @@ def face_without_mediapipe(project, media_id, video, cfg, cache=None, reporter=N
         data = cache.get("tracks", key)
     if data is None:
         try:
-            if reporter:
-                reporter.stage("tracking", "Finding your face so graphics keep off it")
             data = face_detect.detect_face_track(video, cfg, reporter, cancel).to_json(["face"])
         except Cancelled:
             raise
-        except EditorError as exc:
-            project.setdefault("meta", {})["face_problem"] = str(exc)
+        except Exception as exc:                 # never stops the edit: safe zones instead
+            why = str(exc) if isinstance(exc, EditorError) else f"the face finder failed ({exc})"
+            project.setdefault("meta", {})["face_problem"] = why
+            if reporter and face_detect.settings_of(cfg)["mode"] != "off":
+                emit = getattr(reporter, "emit", None)
+                message = f"Face finder not used: {why.rstrip('.')}. Cards keep to the safe zones instead."
+                if emit:
+                    emit(type="warning", stage="tracking", message=message,
+                         path=str(face_detect.FinderLog(cfg).path))
+                else:
+                    reporter.log(message)
             return False
         if cache is not None:
             cache.put("tracks", key, data)
@@ -1182,8 +1189,9 @@ def face_for(project, video, cfg, cache=None, reporter=None, cancel=None):
     if video is None:
         return False
     from . import tracking as trk
-    st = trk.status(cfg)
-    if not st["face"]:
+    # MediaPipe only when it is installed and has its face model; it is not imported just to ask
+    # (an import in this process could stop the edit)
+    if not trk.face_ready(cfg):
         return face_without_mediapipe(project, media_id, video, cfg, cache, reporter, cancel)
     key = None
     track = None

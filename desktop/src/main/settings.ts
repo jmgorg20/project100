@@ -22,6 +22,7 @@ export function defaultSettings(platform: string, engineDir: string): Settings {
     captionStyle: "preset",
     soundEffects: "auto",
     soundEffectsVolume: 0.35,
+    faceFinder: "auto",
     fixCaptionsFirst: false,
   };
 }
@@ -39,6 +40,7 @@ export function cleanSettings(value: unknown, defaults: Settings): Settings {
   if (out.captionPunctuation !== "remove" && out.captionPunctuation !== "keep") out.captionPunctuation = defaults.captionPunctuation;
   if (typeof out.captionStyle !== "string" || !/^[a-z0-9_]+$/.test(out.captionStyle)) out.captionStyle = "preset";
   if (out.soundEffects !== "auto" && out.soundEffects !== "off") out.soundEffects = "auto";
+  if (out.faceFinder !== "auto" && out.faceFinder !== "off") out.faceFinder = "auto";
   if (typeof out.soundEffectsVolume !== "number" || !(out.soundEffectsVolume >= 0 && out.soundEffectsVolume <= 1)) out.soundEffectsVolume = 0.35;
   return out;
 }

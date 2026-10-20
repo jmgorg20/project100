@@ -15,6 +15,8 @@ export interface EngineConfig {
   /** The script to run; defaults to editor.py in engineDir (tests use a stand-in). */
   script?: string;
   graceMs?: number;
+  /** After the engine exits, how long to wait for its output to close before finishing anyway. */
+  exitGraceMs?: number;
   spawn?: (cmd: string, args: string[], opts: SpawnOptions) => ChildProcess;
 }
 
@@ -92,7 +94,26 @@ export function runEngine(config: EngineConfig, args: string[], onEvent: (e: Eng
     child.stdin?.on("error", () => {
       // The engine may exit before we write to it; nothing to do.
     });
-    child.on("close", (code) => resolve({ code, cancelled, startError }));
+    let finished = false;
+    const finish = (code: number | null) => {
+      if (finished) return;
+      finished = true;
+      resolve({ code, cancelled, startError });
+    };
+    child.on("close", (code) => finish(code));
+    // "close" waits until the engine's output pipes are closed. A process the engine started can
+    // keep them open after the engine itself has exited, and the job would then wait for ever: so
+    // once the engine has exited, the job ends shortly after even if the pipes stay open.
+    child.on("exit", (code) => {
+      const timer = setTimeout(() => {
+        if (finished) return;
+        onEvent({ type: "log", message: "The engine exited but its output stayed open; finishing anyway.", stream: "stderr" });
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        finish(code);
+      }, config.exitGraceMs ?? 3_000);
+      child.on("close", () => clearTimeout(timer));
+    });
   });
 
   return {
