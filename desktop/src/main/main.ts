@@ -10,6 +10,7 @@ import type { ContentType, EngineEvent, FaceFinderRepair, Job, JobRequest, Plan,
 import { runEngine, type EngineConfig, type RunHandle } from "./engine";
 import { startGraphicsService, type GraphicsService } from "./graphics";
 import { HistoryStore } from "./historyStore";
+import { JobLog, JobStore } from "./jobStore";
 import { freeOutputPath, jobArgs, modelFor } from "./jobArgs";
 import { KeyStore } from "./keys";
 import { JobQueue } from "./queue";
@@ -53,6 +54,29 @@ function engineConfig(): EngineConfig {
     env.AUTOEDIT_GRAPHICS_TOKEN = graphicsService.token;
   }
   return { python: settings.pythonPath, engineDir: settings.engineDir, env, graceMs: ENGINE_STOP_GRACE_MS };
+}
+
+/** The job log (every change of a job's status): next to the engine's logs, work/logs/jobs.log. */
+let jobLog: JobLog | null = null;
+function jobLogFile(): string {
+  const work = path.join(settings.engineDir, "work", "logs");
+  try {
+    fs.mkdirSync(work, { recursive: true });
+    fs.accessSync(work, fs.constants.W_OK);
+    return path.join(work, "jobs.log");
+  } catch {
+    return path.join(dataDir(), "logs", "jobs.log");
+  }
+}
+
+/** When the engine last wrote to one of its logs (work/logs): the watchdog counts that as activity. */
+function engineLogActivity(): number {
+  try {
+    const dir = path.join(settings.engineDir, "work", "logs");
+    return Math.max(0, ...fs.readdirSync(dir).map((f) => fs.statSync(path.join(dir, f)).mtimeMs));
+  } catch {
+    return 0;
+  }
 }
 
 function send(channel: string, payload: unknown): void {
@@ -279,6 +303,8 @@ function registerIpc(): void {
   ipcMain.handle("jobs:list", () => queue.jobs);
   ipcMain.handle("jobs:cancel", (_e, id: string) => queue.cancel(id));
   ipcMain.handle("jobs:dismiss", (_e, id: string) => queue.dismiss(id));
+  ipcMain.handle("jobs:retry", (_e, id: string) => queue.retry(id));
+  ipcMain.handle("jobs:logFile", () => jobLog?.file ?? "");
   ipcMain.handle("plan:apply", (_e, jobId: string, plan: Plan) => {
     const job = queue.get(jobId);
     if (!job) throw new Error("That edit is no longer in the list.");
@@ -553,14 +579,21 @@ app.whenReady().then(() => {
   settings = loadSettings(settingsFile(), defaultSettings(process.platform, defaultEngineDir()));
   keys = new KeyStore(path.join(dataDir(), "keys.json"), safeStorage);
   history = new HistoryStore(path.join(dataDir(), "history.json"));
+  const store = new JobStore(path.join(dataDir(), "jobs.json"));
+  const previous = store.load();               // read before the queue saves anything
+  jobLog = new JobLog(jobLogFile());
   queue = new JobQueue({
     run: runJob,
+    store,
+    onTransition: (job, from, to, why) => jobLog?.write(job, from, to, why),
+    logActivity: engineLogActivity,
     onChange: (job) => send("job:changed", job),
     onFinished: (job) => {
       const version = versionFromJob(job);
       if (version) send("history:changed", history.add(job.video, version));
     },
   });
+  queue.restore(previous);
   registerIpc();
   startGraphicsService()
     .then((service) => (graphicsService = service))
@@ -570,6 +603,21 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+// One copy of the app at a time: opening it again shows the window that is already there (two
+// copies would share, and fight over, the same jobs and settings).
+const singleLock = typeof app.requestSingleInstanceLock === "function" ? app.requestSingleInstanceLock() : true;
+if (!singleLock) {
+  app.quit();
+} else if (typeof app.on === "function") {
+  app.on("second-instance", () => {
+    if (!window || window.isDestroyed()) createWindow();
+    else {
+      if (window.isMinimized?.()) window.restore();
+      window.focus?.();
+    }
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
@@ -581,7 +629,8 @@ app.on("before-quit", (event) => {
   if (quitting || !queue) return;
   quitting = true;
   event.preventDefault();
-  queue.cancelAll();
+  queue.cancelAll();             // a job whose engine is already gone ends at once
+  queue.stop();
   genTasks.forEach((handle) => handle.cancel());
   exportTasks.forEach((handle) => handle.cancel());
   void graphicsService?.close();

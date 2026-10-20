@@ -345,7 +345,8 @@ export type EngineEvent =
   | { type: "cancelled" };
 
 export type JobMode = "new" | "followup" | "apply";
-export type JobStatus = "queued" | "running" | "review" | "done" | "failed" | "cancelled" | "dismissed";
+/** "interrupted": the app was closed or restarted while it ran, or its engine stopped without a word (stalled). */
+export type JobStatus = "queued" | "running" | "review" | "done" | "failed" | "cancelled" | "dismissed" | "interrupted";
 
 export interface JobRequest {
   video: string;
@@ -419,6 +420,10 @@ export interface Job extends JobRequest {
   error?: string;
   log: string[];
   createdAt: number;
+  /** Why it was interrupted (and where the job log is). */
+  interruptedReason?: string;
+  /** When the engine last said anything (ms since 1970): the watchdog's clock. */
+  lastActivity?: number;
 }
 
 export interface Version {

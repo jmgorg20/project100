@@ -61,6 +61,24 @@ AI edit, or in the editor's top bar) shows the edit as scenes. The scene logic i
 
 There is no installer yet (that is Phase 4).
 
+## When an edit does not finish · Kapag hindi natapos ang edit
+
+An edit can never stay "running" with nothing behind it:
+
+- **After a restart:** the queue is saved (`jobs.json` in the app's data folder). An edit that was
+  running or waiting when the app closed comes back as **Interrupted** with **Retry**, its video
+  back in the list, and **Edit with AI** works again for it.
+- **Cancel always clears it:** when its engine is already gone, at once; when the engine does not
+  stop, after the grace period.
+- **✕** clears an interrupted, failed or cancelled edit (a plan waiting for your review is left as
+  it is).
+- **Watchdog:** a running edit whose engine process is gone, with nothing written (engine output or
+  `work\logs`) for 30 s, is shown as stalled (Interrupted, with Retry), and the next edit starts.
+- **Job log:** every change of an edit's status (queued, running, done, failed, cancelled,
+  interrupted, dismissed), with the time and the step it was at, in `work\logs\jobs.log`. The
+  path is shown on an interrupted edit.
+- **One copy of the app:** opening it again brings up the window that is already open.
+
 ## Tests
 
 ```

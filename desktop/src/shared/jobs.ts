@@ -74,6 +74,31 @@ export function finishJob(job: Job, exitCode: number | null, cancelled: boolean,
   return { ...next, status: "done" };
 }
 
+/** A job that can no longer finish: the app restarted under it, or its engine is gone (stalled). */
+export function interruptJob(job: Job, reason: string): Job {
+  const next: Job = { ...job, status: "interrupted", interruptedReason: reason, stage: undefined, percent: undefined };
+  if (job.stage && !job.stagesDone.includes(job.stage)) next.stagesDone = [...job.stagesDone, job.stage];
+  return next;
+}
+
+/** The request a job was made from (Retry makes a new job from it). */
+export function requestOf(job: Job): JobRequest {
+  const { video, photos, instruction, provider, auto, mode, planFile, maxGenMinutes, maxAiClips, graphics, preset, format,
+    formatInputs, items, offsets, transcriptFile } = job;
+  return { video, photos, instruction, provider, auto, mode, planFile, maxGenMinutes, maxAiClips, graphics, preset, format,
+    formatInputs, items, offsets, transcriptFile };
+}
+
+/** Jobs saved by an earlier session: whatever was waiting or running can no longer finish, so it
+ * comes back interrupted (with Retry); interrupted ones stay; finished ones are not brought back. */
+export function restoreJobs(jobs: Job[]): Job[] {
+  return jobs.filter((job) => ["running", "queued", "interrupted"].includes(job.status)).map((job) => {
+    if (job.status === "interrupted") return job;
+    const where = job.status === "running" ? `while "${job.stageLabel ?? "starting"}"` : "before it started";
+    return interruptJob(job, `The app was closed or restarted ${where}. Nothing is running for it now: press Retry to edit it again.`);
+  });
+}
+
 /** The history entry for a finished, rendered job (or null if there is nothing to keep). */
 export function versionFromJob(job: Job, now = Date.now()): Version | null {
   if (job.status !== "done" || !job.output || !job.projectFile || !job.planFileOut) return null;
