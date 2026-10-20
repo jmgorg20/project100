@@ -18,6 +18,7 @@ DEFAULTS = {
         "provider": "groq",
         "groq_model": "whisper-large-v3",
         "taglish_hint": True,
+        "taglish_fix": True,
         "local_model": "medium",
         "local_device": "auto",
         "vocabulary_file": "vocabulary.json",

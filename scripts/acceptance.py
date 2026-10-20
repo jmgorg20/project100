@@ -177,8 +177,37 @@ def cue_frames(video, rows, folder):
 
 # ---------------------------------------------------------------- the run
 
+def run_cli(out, video, cfg, instruction, photos, preset, words_file):
+    """Run `editor.py ai-edit` as the desktop app does (same options; the transcript file stands
+    in for Whisper when given). Returns {"project", "output", "fallback", "reason", "details"}."""
+    import yaml
+    conf = out / "config.yaml"
+    conf.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    (out / "instruction.txt").write_text(instruction, encoding="utf-8")
+    cmd = [sys.executable, str(ROOT / "editor.py"), "--json", "--config", str(conf), "ai-edit", str(video),
+           "--output", str(out / "edit.mp4"), "--provider", cfg["ai"].get("provider", "groq"),
+           "--transcribe-with", "groq", "--caption-punctuation", "remove",
+           "--instruction-file", str(out / "instruction.txt"), "--no-stock", "--format", "auto"]
+    if preset:
+        cmd += ["--preset", preset]
+    if words_file:
+        cmd += ["--transcript", str(words_file)]
+    if photos:
+        cmd += ["--photos", *[str(p) for p in photos]]
+    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
+    (out / "cli.log").write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr, encoding="utf-8")
+    if proc.returncode != 0:
+        raise SystemExit(f"editor.py ai-edit failed ({proc.returncode}); see {out / 'cli.log'}")
+    events = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+    result = next((e for e in reversed(events) if e.get("type") == "result"), {})
+    summary = next((e for e in reversed(events) if e.get("type") == "summary"), {})
+    return {"project": result.get("project") or str(out / "edit.project.json"),
+            "output": result.get("output") or str(out / "edit.mp4"), "fallback": result.get("fallback"),
+            "reason": summary.get("headline", ""), "details": summary.get("details", [])}
+
+
 def run(out, video=None, words_file=DATA / "base_words.json", cues_file=DATA / "base_cues.json", preset=None,
-        real=False, seconds=29.8, instruction=""):
+        real=False, seconds=29.8, instruction="", cli=False):
     from autoedit import ai_edit
     from autoedit.config import load_config
     from autoedit.words import load_transcript
@@ -202,8 +231,13 @@ def run(out, video=None, words_file=DATA / "base_words.json", cues_file=DATA / "
     cfg["work_folder"] = str(out / "work")
     cfg["ai"]["cache_folder"] = str(out / "cache")
     cfg["output"]["encoder_speed"] = "ultrafast"
-    result = ai_edit.ai_edit_video(video, cfg, instruction, [str(p) for p in photos], render=True,
-                                   output=out / "edit.mp4", preset=preset)
+    if cli:
+        # exactly what the desktop app runs ("Edit with AI"): editor.py ai-edit, its own options
+        result = run_cli(out, video, cfg, instruction, photos, preset, None if real else words_file)
+        heard = heard if real else f"the word-timestamp file {Path(words_file).name}, given with --transcript"
+    else:
+        result = ai_edit.ai_edit_video(video, cfg, instruction, [str(p) for p in photos], render=True,
+                                       output=out / "edit.mp4", preset=preset)
     project = json.loads(Path(result["project"]).read_text(encoding="utf-8"))
     cues = json.loads(Path(cues_file).read_text(encoding="utf-8"))
     rows = check_cues(project, cues)
@@ -224,7 +258,8 @@ def run(out, video=None, words_file=DATA / "base_words.json", cues_file=DATA / "
               "graphics": len(graphics), "effects": len(effects), "passed": sum(r["ok"] for r in rows),
               "failed": sum(not r["ok"] for r in rows), "cues": rows, "output": result["output"],
               "sheets": [str(s) for s in sheets], "cue_frames": [str(f) for f in frames],
-              "fallback": result.get("fallback"), "reason": result.get("reason", "")}
+              "fallback": result.get("fallback"), "reason": result.get("reason", ""),
+              "details": result.get("details") or (result.get("summary") or {}).get("details", [])}
     (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     (out / "report.md").write_text(markdown(report), encoding="utf-8")
     return report
@@ -240,6 +275,8 @@ def markdown(r):
         res = "PASS" if c["ok"] else f"**FAILURE** ({c.get('why', '')})"
         when = f" @ {c['time']}s" if c.get("time") is not None else ""
         lines.append(f"| {c['id']} | {c['said']}{when} | {c['expect']} {c.get('want') or ''} | {res} | {shows} |")
+    if r.get("details"):
+        lines += ["", "What the AI did (as the app shows it):", ""] + [f"- {d}" for d in r["details"]]
     return "\n".join(lines) + "\n"
 
 
@@ -251,9 +288,12 @@ def main():
     ap.add_argument("--cues", default=str(DATA / "base_cues.json"))
     ap.add_argument("--preset")
     ap.add_argument("--instruction", default="")
+    ap.add_argument("--instruction-file")
     ap.add_argument("--real-transcription", action="store_true")
+    ap.add_argument("--cli", action="store_true", help="run editor.py ai-edit as the desktop app does")
     a = ap.parse_args()
-    r = run(a.out, a.video, a.words, a.cues, a.preset, a.real_transcription, instruction=a.instruction)
+    instruction = Path(a.instruction_file).read_text(encoding="utf-8") if a.instruction_file else a.instruction
+    r = run(a.out, a.video, a.words, a.cues, a.preset, a.real_transcription, instruction=instruction, cli=a.cli)
     print(markdown(r))
     sys.exit(0 if r["failed"] == 0 else 1)
 

@@ -1,0 +1,11 @@
+[
+ {"id": "hook", "said": "tatlong sikreto ng viral na video", "expect": "title", "want": ["sikreto", "viral"]},
+ {"id": "count", "said": "Tatlo dalawa isa", "expect": "countdown", "want": ["3"], "templates": ["countdown-timer"]},
+ {"id": "keyword", "said": "Una disiplina", "expect": "title", "want": ["disiplina"], "templates": ["kinetic-words", "editorial-headline", "magazine-cover"]},
+ {"id": "before_after", "said": "Dati wala akong follower", "expect": "bw", "want": []},
+ {"id": "search", "said": "Sa search bar hinanap ko paano kumita online", "expect": "search bar", "want": ["paano kumita online"], "templates": ["search-bar"]},
+ {"id": "screenshot", "said": "Ito ang screenshot ng resulta ko", "expect": "floating screenshot", "want": ["search_results.png"]},
+ {"id": "checklist", "said": "Ito ang checklist ko sa phone", "expect": "checklist", "want": ["mag-post", "sagutin ang comments", "i-check ang analytics"], "count": 3, "late": 5.0, "templates": ["editorial-checklist"]},
+ {"id": "stats", "said": "Mula zero hanggang isang libong followers", "expect": "numbers", "want": ["0", "1000", "30"], "count": 3, "late": 4.0},
+ {"id": "follow", "said": "I-follow mo ako", "expect": "follow card", "want": ["follow", "profile_photo.png"], "late": 1.5}
+]

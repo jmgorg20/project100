@@ -51,7 +51,7 @@ def number_word(tok):
     if t in UNITS and UNITS[t] is not None:
         return UNITS[t]
     for stem, v in TENS.items():
-        if t in (stem, stem + "ng", stem + "'t") or t.startswith(stem + "'t-"):
+        if t in (stem, stem + "ng", stem[:-1] + "ong", stem + "'t") or t.startswith(stem + "'t-"):
             return v
     if t.startswith("labing") or t.startswith("labin"):
         rest = t.split("-", 1)[-1] if "-" in t else t[6:]
@@ -118,12 +118,30 @@ class Cue:
                 "text": self.text, "items": [t for _i, t in self.items], "number": self.number}
 
 
+GLUE = {"sa", "ng", "ang", "na", "at", "and", "mga", "the", "of", "to", "kung", "para", "si", "ni"}
+
+
+def punctuated(words):
+    """True when the transcript has sentence punctuation (Groq's word timestamps have none)."""
+    ends = sum(1 for w in words if re.search(r"[.?!…]$", strip_marks(w["text"]).strip("\"'")))
+    return ends * 25 >= len(words)
+
+
 def sentence_spans(words):
-    """[(first, last)] word indices of each sentence (ended by . ? ! or a long pause)."""
+    """[(first, last)] word indices of each sentence: ended by . ? ! or a long pause. Without
+    punctuation (real Whisper word timestamps): also by a short pause before a capital letter, or
+    a clear pause - never right after a word that needs what follows ("sa", "ng", "ang"...)."""
     out, start = [], 0
+    plain = not punctuated(words)
     for i, w in enumerate(words):
-        nxt = words[i + 1]["start"] if i + 1 < len(words) else None
-        if nxt is None or re.search(r"[.?!…]$", strip_marks(w["text"]).strip("\"'")) or nxt - w["end"] > 0.9:
+        nxt = words[i + 1] if i + 1 < len(words) else None
+        gap = nxt["start"] - w["end"] if nxt else None
+        end = nxt is None or re.search(r"[.?!…]$", strip_marks(w["text"]).strip("\"'")) or gap > 0.9
+        if not end and plain and norm(w["text"]) not in GLUE:
+            first = strip_marks(nxt["text"]).lstrip("\"'(")
+            capital = first[:1].isupper() and not first.isupper() and norm(nxt["text"]) not in PLATFORMS
+            end = (capital and gap >= 0.1) or gap >= 0.35
+        if end:
             out.append((start, i))
             start = i + 1
     return out
@@ -161,19 +179,57 @@ def split_items(words, lo, hi):
     return items
 
 
+VERB_PREFIXES = ("mag-", "i-", "ipa-", "maki-", "pag-", "mang-", "ma-")
+EN_VERBS = {"post", "check", "reply", "answer", "edit", "upload", "film", "shoot", "write", "read", "plan",
+            "share", "follow", "comment", "like", "save", "open", "add", "make", "use", "try", "start", "go"}
+
+
+def starts_item(word):
+    """A word that starts a spoken list item: a Tagalog verb form (mag-post, i-check, sagutin,
+    gawin) or an English verb."""
+    t = norm(word["text"])
+    return t.startswith(VERB_PREFIXES) or t in EN_VERBS or (len(t) >= 5 and t.endswith(("in", "hin")) and
+                                                              t not in ("online", "admin", "begin"))
+
+
+def split_spoken(words, lo, hi):
+    """List items said without commas: a new item at each verb form or clear pause."""
+    groups, cur = [], []
+    for i in range(lo, hi + 1):
+        if cur and (starts_item(words[i]) or words[i]["start"] - words[i - 1]["end"] >= 0.3):
+            groups.append(cur)
+            cur = []
+        cur.append(i)
+    if cur:
+        groups.append(cur)
+    items = [(g[0], phrase(words, g)[:40]) for g in groups if g]
+    return items if all(len(t.split()) <= 5 for _k, t in items) else []
+
+
 # ---------------------------------------------------------------- the rules
+
+def near_number(words, i):
+    """read_number, or for a word one letter off a number word ("Tatyo") its number, when the
+    next word is a number too (a countdown said out loud)."""
+    r = read_number(words, i)
+    if r is not None or i + 1 >= len(words) or read_number(words, i + 1) is None:
+        return r
+    from .taglish import NUMBERS, best_match
+    fix = best_match(norm(words[i]["text"]), NUMBERS)
+    return (number_word(fix), i) if fix else None
+
 
 def find_countdown(words):
     out, i = [], 0
     while i < len(words):
-        r = read_number(words, i)
+        r = near_number(words, i)
         if r is None:
             i += 1
             continue
         seq = [(i, r[0])]
         j = r[1] + 1
         while j < len(words):
-            nxt = read_number(words, j)
+            nxt = near_number(words, j)
             if nxt is None or nxt[0] != seq[-1][1] - 1 or words[j]["start"] - words[seq[-1][0]]["end"] > 1.6:
                 break
             seq.append((j, nxt[0]))
@@ -200,6 +256,11 @@ def find_keywords(words, spans):
                     out.append(Cue("keyword", k, head[-1], text=phrase(words, head), priority=8))
                 break
         else:
+            # "Una disiplina" (no colon, no caps: real Whisper words) - a list marker, then 1-2 words
+            if toks[0] in LIST_MARKERS - {"number", "huli"} and 1 <= b - a <= 2 and \
+                    all(len(t) >= 3 and t not in STOP_ITEM for t in toks[1:]):
+                out.append(Cue("keyword", a, b, text=phrase(words, range(a + 1, b + 1)).upper(), priority=8))
+                continue
             caps = [k for k in range(a, b + 1) if len(shown(words[k])) >= 4 and shown(words[k]).isupper()
                     and not shown(words[k]).isdigit()]
             if caps:
@@ -260,7 +321,8 @@ def find_screenshots(words, spans):
 
 def find_lists(words, spans):
     out = []
-    for a, b in spans:
+    plain = not punctuated(words)
+    for n, (a, b) in enumerate(spans):
         toks = [norm(words[k]["text"]) for k in range(a, b + 1)]
         colon = next((k for k in range(a, b) if ends_with(words[k], ":")), None)
         head = {t for t in toks[:max(1, (colon - a + 1) if colon is not None else len(toks))]}
@@ -269,8 +331,18 @@ def find_lists(words, spans):
             continue
         lo = colon + 1 if colon is not None else a + next(k for k, t in enumerate(toks) if t in PLAN_HEADS | LIST_HEADS) + 1
         items = split_items(words, lo, b)
+        head_end = None
+        if len(items) < 2 and plain and n + 1 < len(spans) and \
+                words[spans[n + 1][0]]["start"] - words[b]["end"] <= 1.5:
+            # "Ito ang checklist ko sa phone" / "Mag-post sagutin ang comments i-check ang analytics"
+            a2, b2 = spans[n + 1]
+            nxt = split_items(words, a2, b2)
+            if len(nxt) < 2:
+                nxt = split_spoken(words, a2, b2)
+            if len(nxt) >= 2:
+                items, head_end, b = nxt, b, b2
         if len(items) >= 2 and all(len(t.split()) <= 5 for _i, t in items):
-            head_idx = list(range(a, lo))
+            head_idx = list(range(a, lo if head_end is None else head_end + 1))
             while head_idx and norm(words[head_idx[0]]["text"]) in STOP_ITEM | {"ito", "eto", "heto", "here", "is",
                                                                                  "this", "ang", "mga"}:
                 head_idx = head_idx[1:]

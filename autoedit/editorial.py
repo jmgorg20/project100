@@ -877,8 +877,8 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
             after_i = cue.items[0][0]
             effects.append({"type": "look", "start": sw[cue.i0]["start"] - 0.1, "end": sw[after_i]["start"] + 0.1})
             before = [k for k in range(cue.i0, after_i) if norm_word(sw[k]) not in TIME_WORDS]
-            end_after = next((k for k in range(after_i, len(sw)) if k > after_i and
-                              (ends_sentence(sw[k]) or k - after_i >= 7)), min(len(sw) - 1, after_i + 6))
+            # the "ngayon" sentence as the cue engine found it (with or without punctuation)
+            end_after = min(len(sw) - 1, after_i + max(0, len(cue.items[0][1].split()) - 1), after_i + 6)
             after = [k for k in range(after_i, end_after + 1) if norm_word(sw[k]) not in TIME_WORDS]
             if before and after:
                 it = cue_item(ctx, cue, "strike-text", beat, cue.i0, sw[end_after]["end"] + 1.0, s,
@@ -938,6 +938,10 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
         elif cue.kind in ("handle", "follow"):
             who = cue.text if cue.kind == "handle" else (handle or assets.handle)
             title = assets.name or who
+            if not title and profile_photo:
+                # no name / handle set, but your photo: the card shows the words you said with it
+                title = " ".join(shown(sw[k]) for k in range(cue.i0, cue.i1 + 1))[:30]
+                who = ""
             if not title:
                 it = cue_item(ctx, cue, "kinetic-words", "kinetic", cue.i0, last_end + 1.0, s,
                               text=" ".join(shown(sw[k]) for k in range(cue.i0, cue.i1 + 1)))
@@ -948,7 +952,7 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
                 continue
             press = cue.number if cue.kind == "follow" else cue.i1
             it = cue_item(ctx, cue, "profile-card", beat, cue.i0, last_end + hold + 0.8, s, text=title,
-                          text2=who if assets.name else "", **({"image": profile_photo} if profile_photo else {}))
+                          text2=who if (assets.name and who) else "", **({"image": profile_photo} if profile_photo else {}))
             it["cues"] = rel(ctx, [press], it["start"])
             it["cues"] = [round(it["cues"][0] + (0.25 if cue.kind == "follow" else 0.9), 3)]
             if cue.kind == "handle":
@@ -1003,8 +1007,8 @@ def cue_elements(ctx, found, scenes, assets, used_images, handle=None):
     return items, effects, notes, used
 
 
-def ends_sentence(w):
-    return strip_marks(w["text"]).rstrip().endswith((".", "!", "?"))
+OPENERS = {"teka", "lang", "wait", "uy", "hoy", "guys", "okay", "ok", "so", "alam", "niyo", "nyo", "ba"}
+
 
 
 def norm_word(w):
@@ -1025,13 +1029,12 @@ def magazine_cover(ctx, found, used, order, heads, scenes):
     if len(used) < MAGAZINE_MIN or not sw:
         return None
     first = order[0]["start"] if order else ctx.duration
-    end_i = next((k for k in range(len(sw)) if ends_sentence(sw[k])), None)
-    # the first sentence that says something (a "Teka lang!" is not the hook)
-    i0 = 0
-    if end_i is not None and end_i < 3 and end_i + 1 < len(sw):
-        i0 = end_i + 1
-        end_i = next((k for k in range(i0, len(sw)) if ends_sentence(sw[k])), len(sw) - 1)
-    end_i = end_i if end_i is not None else min(len(sw) - 1, 6)
+    # the first sentence that says something (a "Teka lang!" is not the hook), punctuated or not
+    def says(a, b):
+        return [k for k in range(a, b + 1) if shown(sw[k]) and norm_word(sw[k]) not in OPENERS]
+    spans = cues_mod.sentence_spans(sw)
+    i0, end_i = next(((a, b) for a, b in spans if len(says(a, b)) >= 3), spans[0])
+    i0 = (says(i0, end_i) or [i0])[0]
     hook = [k for k in range(i0, end_i + 1)]
     start = snap(sw[hook[0]]["start"], ctx.fps)                  # on the hook's first word
     if first - start < 1.2:
