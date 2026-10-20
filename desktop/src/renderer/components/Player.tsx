@@ -8,7 +8,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import type { Clip, Media, Project, Word } from "../../shared/types";
 import {
   CANVAS, audioClipsAt, captionAt, captionPlacement, clipGain, clipSourceTime, cropBox, displayText, duration, fxAt, fxStyle, gradeCss,
-  gradeLookAt, overlaysAt, popOpacity, popScale, segmentAt, segments, sourceTime, zoomAt, type CaptionFrame,
+  gradeLookAt, layoutScaleAt, overlaysAt, popOpacity, popScale, segmentAt, segments, sourceTime, zoomAt, type CaptionFrame,
 } from "../lib/timeline";
 import { TrackFxLayer } from "./TrackFxLayer";
 import { GraphicsLayer, WipeLayer } from "./GraphicsLayer";
@@ -366,6 +366,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const fxProject = withProjectAttachments(project);
   const zoom = fxProject ? zoomAt(fxProject, time) : { amount: 1, anchorY: 0.4 };
   const look = project ? gradeLookAt(project, time) : { grade: "none", intensity: 1 };
+  // "speaker lower": the picture shrinks towards the bottom while a card takes the top
+  const speaker = fxProject ? layoutScaleAt(fxProject, time) : 1;
+  const lower = speaker < 0.999 ? `translateY(${((1 - zoom.anchorY) * CANVAS.height * (1 - speaker)).toFixed(1)}px) scale(${speaker.toFixed(4)})` : "";
   const fx = fxProject ? fxStyle(fxAt(fxProject, time), CANVAS.width, CANVAS.height) : { transform: "", filter: "", overlay: null };
   const gradeFilter = gradeCss(look.grade, look.intensity);
   const grade = [gradeFilter === "none" ? "" : gradeFilter, fx.filter].filter(Boolean).join(" ") || "none";
@@ -385,7 +388,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               <div
                 className="picture"
                 style={{
-                  transform: [zoom.amount > 1 ? `scale(${zoom.amount})` : "", fx.transform].filter(Boolean).join(" ") || undefined,
+                  transform: [lower, zoom.amount > 1 ? `scale(${zoom.amount})` : "", fx.transform].filter(Boolean).join(" ") || undefined,
                   transformOrigin: `50% ${zoom.anchorY * 100}%`,
                   filter: grade,
                 }}

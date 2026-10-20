@@ -15,6 +15,10 @@ SAFE = (40, 150, 1040, 1460)
 FACE_MARGIN = 20                      # keep graphics this far (px) from the face
 CAPTION_MARGIN = 18
 DEFAULT_FACE = (320, 380, 760, 920)  # a speaker in the upper middle (no tracking available)
+# the editorial planner's assumption when the face could not be found (it moves the speaker lower
+# under its cards, so it can afford the full size): measured on a real 9:16 talking-head video,
+# the head with a cap spans x 230-830, y 250-830
+TALKING_HEAD_FACE = (200, 220, 880, 1020)
 
 # How tall a caption block is for each zone (px): up to two lines of the usual sizes.
 CAPTION_HEIGHT = 230
@@ -112,10 +116,10 @@ class FaceMap:
     reframing and zooms; without them a typical talking-head position is assumed, and `known`
     is False so callers can say so."""
 
-    def __init__(self, project):
+    def __init__(self, project, default=None):
         from .tracking import Prepared, Track
         self.known = False
-        self.default = DEFAULT_FACE
+        self.default = default or DEFAULT_FACE
         self.prepared = {}
         tracking = project.get("tracking") or {}
         for media_id, data in tracking.items():
@@ -125,11 +129,24 @@ class FaceMap:
                                            track)
         self.known = bool(self.prepared)
         self.fmap, self.fps = _main_map(project) if self.known else (None, project["settings"]["fps"])
+        self.project = project
+
+    def moved(self, rect, f):
+        """`rect` where it is while a "speaker_low" layout has moved the speaker down."""
+        from .project_render import layout_scale_at
+        z = layout_scale_at(self.project, f / self.fps)
+        if rect is None or z >= 0.999:
+            return rect
+        return (W / 2 + (rect[0] - W / 2) * z, H - (H - rect[1]) * z,
+                W / 2 + (rect[2] - W / 2) * z, H - (H - rect[3]) * z)
 
     def rect_at_frame(self, f):
         """The face rectangle at timeline frame f, or None if it is not found there."""
         if not self.known:
-            return self.default
+            return self.moved(self.default, f)
+        return self.moved(self._rect_at_frame(f), f)
+
+    def _rect_at_frame(self, f):
         info = self.fmap.info(f)
         if info is None or info.media["id"] not in self.prepared:
             return None
@@ -145,8 +162,6 @@ class FaceMap:
 
     def rect(self, t0, t1, step=0.12):
         """The face region over t0..t1 (the union of where it is, sampled every `step` s)."""
-        if not self.known:
-            return self.default
         rects = []
         n = max(1, int(math.ceil((t1 - t0) / step)))
         for k in range(n + 1):

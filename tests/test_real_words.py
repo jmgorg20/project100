@@ -102,7 +102,7 @@ def test_the_app_entry_point_makes_every_spoken_card(tmp_path):
     project = json.loads(out.with_suffix(".project.json").read_text(encoding="utf-8"))
     templates = {c["template"] for t in project["tracks"] if t["kind"] == "graphics" for c in t["clips"]}
     assert {"countdown-timer", "kinetic-words", "search-bar", "editorial-checklist", "stat-cards",
-            "profile-card"} <= templates, templates
+            "profile-card"} <= templates, (templates, [d for d in json.dumps(proc.stdout).split("\\n") if "Graphics:" in d][:12])
     events = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
     details = next(e for e in events if e.get("type") == "summary")["details"]
     assert any("'Tatyo' -> 'Tatlo'" in d for d in details)

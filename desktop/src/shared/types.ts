@@ -60,7 +60,7 @@ export interface TrackData {
 
 export interface Clip {
   id: string;
-  type: "video" | "image" | "zoom" | "grade" | "caption" | "audio" | "fx" | "trackfx" | "graphic" | "wipe";
+  type: "video" | "image" | "zoom" | "grade" | "caption" | "audio" | "fx" | "trackfx" | "graphic" | "wipe" | "dim" | "vignette" | "layout";
   start: number;
   duration: number;
   media?: string;

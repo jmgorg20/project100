@@ -477,7 +477,22 @@
                               "$ref": "#/$defs/vignetteClip"
                             },
                             "else": {
-                              "$ref": "#/$defs/zoomClip"
+                              "if": {
+                                "properties": {
+                                  "type": {
+                                    "const": "layout"
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ]
+                              },
+                              "then": {
+                                "$ref": "#/$defs/layoutClip"
+                              },
+                              "else": {
+                                "$ref": "#/$defs/zoomClip"
+                              }
                             }
                           }
                         }
@@ -1970,6 +1985,64 @@
         "locked": {
           "type": "boolean",
           "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
+        }
+      }
+    },
+    "layoutClip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "duration",
+        "mode"
+      ],
+      "description": "A dark vignette: the edges of the picture darken, drawing the eye to the middle.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "type": {
+          "const": "layout"
+        },
+        "fade": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Seconds to move down and back up (default 0.35)."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
+        },
+        "mode": {
+          "enum": [
+            "speaker_low"
+          ],
+          "description": "speaker_low: the speaker eases down into the lower part of the frame (over a blurred, darker copy of the shot) so a card can take the top, never the face."
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.4,
+          "maximum": 1,
+          "description": "How big the speaker's picture is while moved down (default 0.62)."
+        },
+        "stay": {
+          "type": "boolean",
+          "description": "Stay lower at the end (the video ends while the card is up): no move back up."
         }
       }
     }
