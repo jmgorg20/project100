@@ -131,7 +131,8 @@ def test_the_look_effects_go_with_the_scenes(shots):
     pero = next(w for w in director.timeline_words(p) if w["text"] == "Pero")
     assert len(bw) == 1 and bw[0]["effect"] == "bw" and bw[0]["start"] < pero["start"] < bw[0]["start"] + 0.7
     zooms = track(p, "pe-camera")["clips"]
-    assert zooms and all(z["smooth"] for z in zooms)
+    # the scenes' camera moves are smooth; the rhythm keeper may add a punch-in between them
+    assert zooms and all(z["smooth"] or "rhythm" in z.get("label", "") for z in zooms)
     assert validate_project(p) == []
 
 

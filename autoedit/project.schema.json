@@ -1338,6 +1338,12 @@
         "locked": {
           "type": "boolean",
           "description": "A locked clip cannot be moved, changed or deleted until unlocked (the AI does not touch it either). The storyboard's \"Lock scene\" sets it."
+        },
+        "ramp": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "bw: seconds to drain the colour and to bring it back (default: 35% of the clip each way)."
         }
       }
     },
