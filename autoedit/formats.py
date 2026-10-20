@@ -99,7 +99,7 @@ def keyword_scores(instruction):
     text = " " + re.sub(r"\s+", " ", str(instruction or "").lower()) + " "
     scores = {}
     for fid, spec in all_formats().items():
-        hits = [k for k in spec["keywords"] if k.lower() in text]
+        hits = [k for k in spec["keywords"] if re.search(r"(?<![\w-])" + re.escape(k.lower()) + r"(?![\w-])", text)]
         if hits:
             scores[fid] = max(len(k) for k in hits) + 10 * len(hits)
     return scores

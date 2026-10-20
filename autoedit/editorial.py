@@ -598,6 +598,7 @@ def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=Non
     usage = {"input_tokens": 0, "output_tokens": 0}
     attempts, problems_text, used_model = [], None, model
     by_index = {s.index: s for s in scenes}
+    best = {}
     for attempt in range(1, MAX_ATTEMPTS + 1):
         if cancel is not None and cancel.is_set():
             raise Cancelled("Cancelled while planning the editorial scenes.")
@@ -607,35 +608,62 @@ def request_choices(ctx, scenes, assets, captions_on, provider, model, cache=Non
                                               plan_schema(), max_tokens=int(ai.get("max_tokens", 8000)),
                                               effort=ai.get("anthropic_effort", "medium"))
         except LLMError as exc:
-            return {}, usage, used_model, attempts + [{"attempt": attempt, "problems": [str(exc)]}], False
+            attempts.append({"attempt": attempt, "problems": [f"the AI could not be asked: {exc}"]})
+            break
         usage = {k: usage[k] + used[k] for k in usage}
-        try:
-            plan = json.loads(text) if text.strip() else None
-        except ValueError:
-            plan = None
-        problems = []
-        if not isinstance(plan, dict) or not isinstance(plan.get("scenes"), list):
-            problems.append("the answer is not a JSON object with a scenes list")
-        else:
-            import jsonschema
-            v = jsonschema.Draft202012Validator(plan_schema())
-            problems += [f"{e.json_path}: {e.message}" for e in v.iter_errors(plan)][:10]
-            if not problems:
-                for ch in plan["scenes"]:
-                    if ch["scene"] not in by_index:
-                        problems.append(f"scene {ch['scene']} does not exist")
-                        continue
-                    if ch["scene"] in (fixed or {}):
-                        continue                    # what is said already decides this scene
-                    problems += check_choice(ctx, by_index[ch["scene"]], ch, assets)
+        choices, problems = salvage(ctx, text, by_index, assets, fixed)
+        if len(choices) > len(best):
+            best = choices
         if not problems:
-            choices = {ch["scene"]: ch for ch in plan["scenes"]}
             if cache is not None:
-                cache.put("editorial", key, {"choices": plan["scenes"], "model": used_model})
+                cache.put("editorial", key, {"choices": list(choices.values()), "model": used_model})
             return choices, usage, used_model, attempts, False
-        attempts.append({"attempt": attempt, "problems": problems[:20]})
+        attempts.append({"attempt": attempt, "problems": problems[:20], "kept": len(choices)})
         problems_text = "\n".join(f"- {p}" for p in problems[:20])
-    return {}, usage, used_model, attempts, False
+    # what checked out is used, scene by scene; the rest is planned by the rules
+    return best, usage, used_model, attempts, False
+
+
+SCENE_SCHEMA = None
+
+
+def salvage(ctx, text, by_index, assets, fixed):
+    """({scene index: usable choice}, [problems]) from the AI's answer. A scene whose choice is
+    broken is dropped (the rules plan it); words / keyword / items that are not said are dropped
+    from a choice that is otherwise fine. Any problem is reported (for the retry and the summary)."""
+    import jsonschema
+    global SCENE_SCHEMA
+    if SCENE_SCHEMA is None:
+        SCENE_SCHEMA = jsonschema.Draft202012Validator(plan_schema()["properties"]["scenes"]["items"])
+    try:
+        plan = json.loads(text) if text.strip() else None
+    except ValueError as exc:
+        return {}, [f"the answer is not JSON ({exc})"]
+    if not isinstance(plan, dict) or not isinstance(plan.get("scenes"), list):
+        return {}, ["the answer is not a JSON object with a scenes list"]
+    choices, problems = {}, []
+    for ch in plan["scenes"]:
+        errors = [e.message for e in SCENE_SCHEMA.iter_errors(ch)] if isinstance(ch, dict) else ["not an object"]
+        if errors:
+            problems.append(f"scene {ch.get('scene', '?') if isinstance(ch, dict) else '?'}: {errors[0]}")
+            continue
+        if ch["scene"] not in by_index:
+            problems.append(f"scene {ch['scene']} does not exist")
+            continue
+        if ch["scene"] in (fixed or {}):
+            continue                        # what is said already decides this scene
+        found = check_choice(ctx, by_index[ch["scene"]], ch, assets)
+        soft = [p for p in found if "is not said" in p]
+        hard = [p for p in found if p not in soft]
+        problems += found
+        if hard:
+            continue
+        if soft:
+            ch = {k: v for k, v in ch.items() if k not in ("words", "keyword", "items")}
+            if BEATS[ch["beat"]][2] == "items":
+                continue                    # a list beat without its spoken items
+        choices[ch["scene"]] = ch
+    return choices, problems
 
 
 # ---------------------------------------------------------------- one scene's elements
@@ -1379,11 +1407,15 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     if use_ai and provider:
         choices, usage, used_model, attempts, cached = request_choices(ctx, scenes, assets, captions_on, provider,
                                                                        model, cache, cancel, fixed_scenes)
-        if not choices:
+        open_scenes = len(scenes) - len(fixed_scenes)
+        if not choices and attempts:
             fallback = True
-            first = attempts[0]["problems"][0] if attempts and attempts[0]["problems"] else "no answer"
+            first = attempts[-1]["problems"][0] if attempts[-1]["problems"] else "no answer"
             reason = (f"The AI scene plan could not be used ({first}) - the scenes were planned by the "
                       "editorial rules instead; what you say still sets its graphics.")
+        elif attempts:
+            ctx.note(f"The AI scene plan was used for {len(choices)} of {open_scenes} scenes; the others were "
+                     f"planned by the rules ({attempts[-1]['problems'][0]}).")
     chosen = choose_beats(ctx, scenes, assets, captions_on, choices, kept=fixed_scenes)
     clips, placed, effects, pips = build(ctx, project, scenes, chosen, assets, captions_on, extra=cue_items,
                                          used_images=used_images)
@@ -1403,6 +1435,9 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     cost = plan_cost(ai.get("prices") or {}, used_model, usage["input_tokens"], usage["output_tokens"]) \
         if (used_model and usage["input_tokens"]) else (0.0 if cached else None)
     notes = list(ctx.notes) + [n for n in cue_notes if n not in ctx.notes]
+    made = [(it["cue"], it["start"], it.get("spoken") or it.get("text") or "") for it in placed if it.get("cue")]
+    made += [("before_after", e["start"], "") for e in cue_effects if e["type"] == "look"]
+    notes = requested_lines(instruction, made) + notes
     if not (assets.images or assets.videos or assets.logo):
         notes.append("No screenshots, photos or clips of yours were given, so the picture beats "
                      "(collage, montage, phone, PiP...) were left out. Add your own files to use them.")
@@ -1413,6 +1448,52 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
             "reason": reason, "cost": cost, "usage": usage, "model": used_model, "plan": placed, "wipe": None,
             "removed": removed, "summary": f"{len(scenes)} scenes", "attempts": attempts, "cached": cached,
             "scenes": rows}
+
+
+# what an instruction can ask for -> (cue kinds that make it, a name, what to say to get it)
+REQUESTS = [
+    ("countdown", re.compile(r"count ?down|bilang pababa", re.I), {"countdown"},
+     "say the numbers down, e.g. \"Tatlo, dalawa, isa!\""),
+    ("big word title", re.compile(r"big word|malaking (word|salita)|word card|title|kinetic", re.I), {"keyword", "magazine"},
+     "say \"Una: DISIPLINA\" (a word after Una / Pangalawa)"),
+    ("search bar", re.compile(r"search ?bar|search", re.I), {"search"},
+     "say \"sa search bar, hinanap ko ...\""),
+    ("screenshot", re.compile(r"screenshot|resulta", re.I), {"screenshot"},
+     "say \"tingnan ninyo ang screenshot / resulta ko\" with a picture whose name matches"),
+    ("checklist", re.compile(r"check ?list|listahan", re.I), {"checklist"},
+     "say \"checklist ko: a, b, c\""),
+    ("logo cards", re.compile(r"logos?\b", re.I), {"platforms"},
+     "name the apps (\"Nasa TikTok, Facebook at YouTube ako\")"),
+    ("profile card", re.compile(r"profile", re.I), {"handle", "follow"},
+     "say your @handle or \"i-follow mo ako\""),
+    ("storyboard card", re.compile(r"storyboard", re.I), {"storyboard"},
+     "say \"Storyboard ko: hook, kwento, call to action\""),
+    ("number cards", re.compile(r"stats?\b|number cards?|numbers", re.I), {"stats"},
+     "say two numbers with what they count (\"mula zero hanggang isang libong followers\")"),
+    ("black and white", re.compile(r"black.and.white|b ?& ?w|itim at puti", re.I), {"before_after"},
+     "say \"Dati ...\" then \"Ngayon ...\""),
+]
+
+
+def requested_lines(instruction, made):
+    """One line per kind of card the instruction asks for: where it was made, or why not.
+    `made`: [(cue kind, start, words)]."""
+    lines = []
+    for name, pattern, kinds, how in REQUESTS:
+        if not pattern.search(instruction or ""):
+            continue
+        hits, seen = [], set()
+        for k, t, w in sorted(made, key=lambda m: (m[1], not m[2])):
+            if k in kinds and round(t) not in seen:
+                seen.add(round(t))
+                hits.append((t, w))
+        if hits:
+            where = ", ".join(director.mmss(t) + (f" (\"{w[:40]}\")" if w else "") for t, w in hits[:3])
+            lines.append(f"You asked for {name}: made at {where}.")
+        else:
+            lines.append(f"You asked for {name}: nothing in what you said asks for it, so none was "
+                         f"made (to get one, {how}).")
+    return lines
 
 
 def remove_scene_elements(project, scene):
