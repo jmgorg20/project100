@@ -106,7 +106,7 @@ STYLES = [
                  font="heavy", size=82, outline=6, mode="pop", keyword_color=YELLOW,
                  words_per_line=3),
     CaptionStyle(14, "editorial_card", "Serif ink words on a cream card, each word appearing as it is said",
-                 font="bold", family="Playfair Display", size=60, color="#17140F", mode="reveal",
+                 font="bold", family="Playfair Display", size=68, color="#17140F", mode="reveal",
                  keyword_color="#C8553D", outline=0, shadow=0, card="#F4EFE6", card_radius=18,
                  box_padding=22, words_per_line=4, max_lines=2),
 ]

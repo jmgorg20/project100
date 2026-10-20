@@ -25,7 +25,7 @@ export function createMockApi(): AppApi {
   const speed = Number(params.get("speed") ?? "1");
   let settings: Settings = {
     pythonPath: "python", engineDir: "C:/AutoEditor", outputDir: "C:/AutoEditor/output", provider: "groq",
-    groqModel: "openai/gpt-oss-120b", anthropicModel: "claude-opus-5-5", transcribeWith: "groq", captionPunctuation: "remove", fixCaptionsFirst: false, autoMode: true,
+    groqModel: "openai/gpt-oss-120b", anthropicModel: "claude-opus-5-5", transcribeWith: "groq", captionPunctuation: "remove", captionStyle: "preset", fixCaptionsFirst: false, autoMode: true,
     consentAccepted: params.has("consent"), musicFolder: params.has("music") ? "C:/Users/me/Music" : "", sfxFolder: "",
     brollFolder: params.has("broll") ? "C:/Users/me/B-roll" : "", useStock: true,
   };

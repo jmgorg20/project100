@@ -1,5 +1,7 @@
 """Turn timed words into an ASS subtitle file (drawn onto the video by FFmpeg/libass)."""
 
+import re
+
 from .styles import CaptionStyle
 from .textmeasure import TextMeasurer, find_font_file
 
@@ -95,31 +97,137 @@ def max_chars_per_line(style):
     return max(6, int(SAFE_WIDTH / (style.size * width_per_char)))
 
 
+GLUE = {"sa", "ng", "ang", "na", "at", "and", "mga", "the", "of", "to", "kung", "para", "si", "ni", "a", "an",
+        "in", "on", "for", "with", "nang", "ay", "yung"}
+
+
+# number words that lead into what they count ("isang libong followers"): never split after them
+LINKED = {"isang", "dalawang", "tatlong", "limang", "pitong", "walong", "sampung", "libong", "daang",
+          "milyong", "isa't", "ilang"}
+
+
+def _norm(text):
+    return re.sub(r"[^\w'-]", "", text.lower())
+
+
+def _glue(word):
+    t = _norm(word.text)
+    return t in GLUE or t in LINKED
+
+
+def sentence_breaks(words):
+    """Indexes i where a new caption sentence starts before words[i]: at . ? ! or a long pause; for
+    words without punctuation (real Whisper word timestamps) also at a short pause before a capital
+    letter or a clear pause - never right after "sa", "ng", "ang"... (the next word belongs to it)."""
+    ends = sum(1 for w in words if re.search(r"[.?!…]$", w.text.strip("\"'")))
+    plain = ends * 25 < len(words)
+    out = set()
+    for i in range(1, len(words)):
+        prev, w = words[i - 1], words[i]
+        gap = w.start - prev.end
+        if gap > NEW_GROUP_PAUSE or prev.text.rstrip()[-1:] in ".?!":
+            out.add(i)
+        elif plain and _norm(prev.text) not in GLUE:
+            first = w.text.lstrip("\"'(")
+            if (first[:1].isupper() and not first.isupper() and gap >= 0.1) or gap >= 0.35:
+                out.add(i)
+    return out
+
+
+def _fits(line, style, limit):
+    return len(line) <= style.words_per_line and len(" ".join(display_text(w, style) for w in line)) <= limit
+
+
+def _splits(n, parts):
+    """Every way to cut n words into `parts` non-empty lines (as lists of lengths)."""
+    if parts == 1:
+        yield [n]
+        return
+    for first in range(1, n - parts + 2):
+        for rest in _splits(n - first, parts - 1):
+            yield [first] + rest
+
+
+def _lines_of(group, style, limit):
+    """The lines of one caption: as few as fit; the cut with no line ending on "ang" / "isang"...
+    and the most even lengths."""
+    for n in range(1, style.max_lines + 1):
+        best = None
+        for sizes in _splits(len(group), n):
+            lines, k = [], 0
+            for size in sizes:
+                lines.append(group[k:k + size])
+                k += size
+            if not all(_fits(line, style, limit) for line in lines):
+                continue
+            cost = sum(20 for line in lines[:-1] if _glue(line[-1])) + (max(sizes) - min(sizes))
+            if best is None or cost < best[0]:
+                best = (cost, lines)
+        if best:
+            return best[1], best[0]
+    return None
+
+
 def chunk_words(words, style):
-    """Group words into caption groups. Each group is a list of lines; each line a list of words."""
+    """Group words into caption groups. Each group is a list of lines; each line a list of words.
+    A caption never mixes two sentences; a sentence is split into as few, evenly filled captions
+    as fit (no lone last word: "... i-check ang" / "analytics"); lines are balanced and never end on
+    "ang", "sa", "ng"..."""
     limit = max_chars_per_line(style)
-    groups, lines = [], [[]]
-    prev = None
-    for word in words:
-        line = lines[-1]
-        text = " ".join(display_text(w, style) for w in line + [word])
-        start_new_group = prev is not None and (
-            word.start - prev.end > NEW_GROUP_PAUSE or prev.text.rstrip()[-1:] in ".?!"
-        )
-        if start_new_group and lines[0]:
-            groups.append(lines)
-            lines = [[]]
-        elif line and (len(line) >= style.words_per_line or len(text) > limit):
-            if len(lines) < style.max_lines:
-                lines.append([])
-            else:
-                groups.append(lines)
-                lines = [[]]
-        lines[-1].append(word)
-        prev = word
-    if lines[0]:
-        groups.append(lines)
+    breaks = sentence_breaks(words)
+    sentences, cur = [], []
+    for i, w in enumerate(words):
+        if i in breaks and cur:
+            sentences.append(cur)
+            cur = []
+        cur.append(w)
+    if cur:
+        sentences.append(cur)
+    groups = []
+    for sent in sentences:
+        groups += _split_sentence(sent, style, limit)
     return groups
+
+
+def _split_sentence(sent, style, limit):
+    """The captions of one sentence: as few as fit, then the split points with the lowest cost
+    (none ending on a glue word, no word alone, lengths as even as possible), trying every split."""
+    n = len(sent)
+    span = style.words_per_line * style.max_lines
+    fits = {}
+
+    def lines(j, i):
+        if (j, i) not in fits:
+            fits[(j, i)] = _lines_of(sent[j:i], style, limit) if i - j <= span else None    # (lines, cost)
+        return fits[(j, i)]
+
+    found = None
+    for k in range(1, n + 1):
+        if found is not None and k > found[0] + 1:
+            break                                  # one caption more than needed, at most
+        target = n / k
+        best = {0: (0.0, [])}
+        for _step in range(k):
+            nxt = {}
+            for j, (cost, acc) in best.items():
+                for i in range(j + 1, n + 1):
+                    got = lines(j, i)
+                    if got is None:
+                        continue
+                    laid, line_cost = got
+                    c = cost + (i - j - target) ** 2 + line_cost
+                    if i < n and _glue(sent[i - 1]):
+                        c += 20
+                    if i - j == 1 and n > 1:
+                        c += 8
+                    if i not in nxt or c < nxt[i][0]:
+                        nxt[i] = (c, acc + [laid])
+            best = nxt
+        if n in best:
+            total = best[n][0] + 15 * k
+            if found is None or total < found[1]:
+                found = (k if found is None else found[0], total, best[n][1])
+    return found[2] if found else [[[w]] for w in sent]
 
 
 def word_tags(word, index, active, style, box_layer=False):

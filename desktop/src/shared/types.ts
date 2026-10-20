@@ -459,6 +459,8 @@ export interface Settings {
   useStock: boolean;
   /** New edits: captions without , . ! ? ; : and quotes ("remove") or as said ("keep"). */
   captionPunctuation: "remove" | "keep";
+  /** "preset" = the preset's (or the AI's) caption style; else a caption style name (editorial_card...). */
+  captionStyle?: string;
   /** Show the transcript to fix its words before the AI edit (Ayusin muna ang captions). */
   fixCaptionsFirst: boolean;
 }

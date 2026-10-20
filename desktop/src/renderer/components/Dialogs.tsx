@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { EngineCheck } from "../../shared/api";
 import type { KeyName, KeysStatus, Provider, Settings } from "../../shared/types";
 import { api } from "../lib/api";
+import engineData from "../../shared/engine-data.json";
 
 export function Dialog({ title, onClose, wide, children }: { title: string; onClose?: () => void; wide?: boolean; children: React.ReactNode }) {
   useEffect(() => {
@@ -92,6 +93,15 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
           <select id="caption-punctuation" value={draft.captionPunctuation} onChange={(e) => set("captionPunctuation", e.target.value as Settings["captionPunctuation"])}>
             <option value="remove">Remove (no , . ! ? ; : on screen; i-check and 3,600 stay)</option>
             <option value="keep">Keep (as transcribed)</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="caption-style">Caption style · Istilo ng caption</label>
+          <select id="caption-style" value={draft.captionStyle ?? "preset"} onChange={(e) => set("captionStyle", e.target.value)} data-testid="caption-style">
+            <option value="preset">The preset&apos;s style (PREMIUM EDITORIAL VIRAL: cream serif card)</option>
+            {(engineData.styles as { name: string; description: string }[]).map((s) => (
+              <option key={s.name} value={s.name}>{s.name.replace(/_/g, " ")}: {s.description}</option>
+            ))}
           </select>
         </div>
         <label className="row">
