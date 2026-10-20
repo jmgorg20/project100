@@ -1,0 +1,306 @@
+{
+ "language": "tl",
+ "source": "timed from the captions of the user's Windows export (sad_ai_3_export.mp4); words exactly as Groq Whisper gave them on screen: no punctuation, 'Tatyo', 'tatlumpong'",
+ "words": [
+  {
+   "word": "Teka",
+   "start": 0.3,
+   "end": 0.538
+  },
+  {
+   "word": "lang",
+   "start": 0.598,
+   "end": 0.836
+  },
+  {
+   "word": "tatlong",
+   "start": 0.896,
+   "end": 1.25
+  },
+  {
+   "word": "sikreto",
+   "start": 1.31,
+   "end": 1.664
+  },
+  {
+   "word": "ng",
+   "start": 1.724,
+   "end": 1.885
+  },
+  {
+   "word": "viral",
+   "start": 1.945,
+   "end": 2.222
+  },
+  {
+   "word": "na",
+   "start": 2.282,
+   "end": 2.443
+  },
+  {
+   "word": "video",
+   "start": 2.503,
+   "end": 2.78
+  },
+  {
+   "word": "Tatyo",
+   "start": 3.02,
+   "end": 3.618
+  },
+  {
+   "word": "dalawa",
+   "start": 3.678,
+   "end": 4.359
+  },
+  {
+   "word": "isa",
+   "start": 4.419,
+   "end": 4.85
+  },
+  {
+   "word": "Una",
+   "start": 5.02,
+   "end": 5.406
+  },
+  {
+   "word": "disiplina",
+   "start": 5.466,
+   "end": 6.3
+  },
+  {
+   "word": "Dati",
+   "start": 6.42,
+   "end": 6.765
+  },
+  {
+   "word": "wala",
+   "start": 6.825,
+   "end": 7.17
+  },
+  {
+   "word": "akong",
+   "start": 7.23,
+   "end": 7.631
+  },
+  {
+   "word": "follower",
+   "start": 7.691,
+   "end": 8.26
+  },
+  {
+   "word": "Ngayon",
+   "start": 8.47,
+   "end": 8.92
+  },
+  {
+   "word": "ito",
+   "start": 8.98,
+   "end": 9.265
+  },
+  {
+   "word": "na",
+   "start": 9.325,
+   "end": 9.555
+  },
+  {
+   "word": "ako",
+   "start": 9.615,
+   "end": 9.9
+  },
+  {
+   "word": "Sa",
+   "start": 10.02,
+   "end": 10.224
+  },
+  {
+   "word": "search",
+   "start": 10.284,
+   "end": 10.684
+  },
+  {
+   "word": "bar",
+   "start": 10.744,
+   "end": 10.997
+  },
+  {
+   "word": "hinanap",
+   "start": 11.057,
+   "end": 11.506
+  },
+  {
+   "word": "ko",
+   "start": 11.566,
+   "end": 11.77
+  },
+  {
+   "word": "paano",
+   "start": 11.83,
+   "end": 12.181
+  },
+  {
+   "word": "kumita",
+   "start": 12.241,
+   "end": 12.64
+  },
+  {
+   "word": "online",
+   "start": 12.7,
+   "end": 13.1
+  },
+  {
+   "word": "Ito",
+   "start": 13.32,
+   "end": 13.535
+  },
+  {
+   "word": "ang",
+   "start": 13.595,
+   "end": 13.809
+  },
+  {
+   "word": "screenshot",
+   "start": 13.869,
+   "end": 14.374
+  },
+  {
+   "word": "ng",
+   "start": 14.434,
+   "end": 14.607
+  },
+  {
+   "word": "resulta",
+   "start": 14.667,
+   "end": 15.047
+  },
+  {
+   "word": "ko",
+   "start": 15.107,
+   "end": 15.28
+  },
+  {
+   "word": "Ito",
+   "start": 15.5,
+   "end": 15.584
+  },
+  {
+   "word": "ang",
+   "start": 15.644,
+   "end": 15.728
+  },
+  {
+   "word": "checklist",
+   "start": 15.788,
+   "end": 15.969
+  },
+  {
+   "word": "ko",
+   "start": 16.029,
+   "end": 16.096
+  },
+  {
+   "word": "sa",
+   "start": 16.156,
+   "end": 16.224
+  },
+  {
+   "word": "phone",
+   "start": 16.284,
+   "end": 16.4
+  },
+  {
+   "word": "Mag-post",
+   "start": 16.55,
+   "end": 17.123
+  },
+  {
+   "word": "sagutin",
+   "start": 17.183,
+   "end": 17.699
+  },
+  {
+   "word": "ang",
+   "start": 17.759,
+   "end": 18.051
+  },
+  {
+   "word": "comments",
+   "start": 18.111,
+   "end": 18.683
+  },
+  {
+   "word": "i-check",
+   "start": 18.743,
+   "end": 19.26
+  },
+  {
+   "word": "ang",
+   "start": 19.32,
+   "end": 19.611
+  },
+  {
+   "word": "analytics",
+   "start": 19.671,
+   "end": 20.3
+  },
+  {
+   "word": "Mula",
+   "start": 20.42,
+   "end": 20.672
+  },
+  {
+   "word": "zero",
+   "start": 20.732,
+   "end": 20.984
+  },
+  {
+   "word": "hanggang",
+   "start": 21.044,
+   "end": 21.458
+  },
+  {
+   "word": "isang",
+   "start": 21.518,
+   "end": 21.811
+  },
+  {
+   "word": "libong",
+   "start": 21.871,
+   "end": 22.204
+  },
+  {
+   "word": "followers",
+   "start": 22.264,
+   "end": 22.72
+  },
+  {
+   "word": "sa",
+   "start": 22.78,
+   "end": 22.95
+  },
+  {
+   "word": "tatlumpong",
+   "start": 23.17,
+   "end": 24.278
+  },
+  {
+   "word": "araw",
+   "start": 24.338,
+   "end": 24.9
+  },
+  {
+   "word": "I-follow",
+   "start": 25.0,
+   "end": 25.354
+  },
+  {
+   "word": "mo",
+   "start": 25.414,
+   "end": 25.56
+  },
+  {
+   "word": "ako",
+   "start": 25.62,
+   "end": 25.8
+  }
+ ]
+}

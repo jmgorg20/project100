@@ -59,6 +59,18 @@ describe("fix the words before the edit", () => {
   });
 });
 
+describe("caption style setting", () => {
+  it("is the preset's by default and is passed to the engine when you pick one", () => {
+    const d = defaultSettings("win32", "C:/engine");
+    expect(d.captionStyle).toBe("preset");
+    expect(cleanSettings({ captionStyle: "x; rm -rf" }, d).captionStyle).toBe("preset");
+    const job = newJob("j2", { video: "C:/v.mp4", photos: [], instruction: "", provider: "groq", auto: true, mode: "new" });
+    expect(jobArgs(job as Job, d, { instructionFile: "i.txt", output: "o.mp4" })).not.toContain("--caption-style");
+    const args = jobArgs(job as Job, { ...d, captionStyle: "editorial_card" }, { instructionFile: "i.txt", output: "o.mp4" });
+    expect(args.join(" ")).toContain("--caption-style editorial_card");
+  });
+});
+
 describe("settings and job arguments", () => {
   it("defaults to remove, and passes the setting and a fixed transcript to the engine", () => {
     const d = defaultSettings("win32", "C:/engine");

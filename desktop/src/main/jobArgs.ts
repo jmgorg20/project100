@@ -15,6 +15,7 @@ export function jobArgs(job: Job, settings: Settings, files: { instructionFile: 
     "--model", modelFor(settings, job.provider),
     "--transcribe-with", settings.transcribeWith,
     "--caption-punctuation", settings.captionPunctuation ?? "remove",
+    ...(settings.captionStyle && settings.captionStyle !== "preset" ? ["--caption-style", settings.captionStyle] : []),
     "--instruction-file", files.instructionFile,
   ];
   if (!job.auto && job.mode !== "apply") args.push("--no-render");

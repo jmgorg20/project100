@@ -51,7 +51,7 @@ editorial:
 | | |
 |---|---|
 | Cuts | `fast` pacing (pauses and fillers cut) with the jump-cut punch-in zoom |
-| Captions | style 14 `editorial_card`: serif (Playfair Display) ink words on a cream rounded card with a soft shadow; the words not said yet are faint and turn ink as they are said; no end punctuation (setting) |
+| Captions | style 14 `editorial_card`: big serif (Playfair Display, size 68) ink words on a cream rounded card in the lower third, with a soft shadow; the words not said yet are faint and turn ink as they are said; no end punctuation (setting). One sentence per caption (also for real Whisper words, which have no punctuation: sentences are found from pauses and capitals), as few and as evenly filled captions as fit, and no line ends on "ang", "sa", "ng", "isang"... ("Mag-post sagutin / ang comments", then "i-check ang analytics": never "analytics" alone). Another style: Settings → *Caption style* (or `--caption-style NAME`), which wins over the preset |
 | Colour | `natural_clean` |
 | Graphics | the `premium_editorial` style, planned scene by scene (below) |
 | B-roll | **no stock search, no AI-made clips**: only your own files |

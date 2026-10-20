@@ -512,6 +512,8 @@ def ai_edit_video(video, cfg, instruction="", photos=(), provider=None, model=No
         def build(candidate, generated=None):
             if look:
                 candidate = pre.pin_plan(look, candidate)
+            if (cfg.get("captions") or {}).get("force_style"):
+                candidate = {**candidate, "style": cfg["captions"]["force_style"]}   # your choice wins
             new_cfg, pipeline_plan = apply_plan(cfg, candidate, photos, {**(generated or {}), **extra})
             return build_edit_project(video, new_cfg, plan=pipeline_plan, job_dir=job_dir,
                                       words=words)

@@ -314,31 +314,112 @@ export function maxCharsPerLine(style: CaptionStyle): number {
   return Math.max(6, Math.floor(SAFE_WIDTH / (style.size * perChar)));
 }
 
-/** Words grouped into caption groups of lines (port of captions.chunk_words). */
+const GLUE = new Set(["sa", "ng", "ang", "na", "at", "and", "mga", "the", "of", "to", "kung", "para", "si", "ni", "a", "an",
+  "in", "on", "for", "with", "nang", "ay", "yung"]);
+const LINKED = new Set(["isang", "dalawang", "tatlong", "limang", "pitong", "walong", "sampung", "libong", "daang",
+  "milyong", "isa't", "ilang"]);
+const normWord = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}_'-]/gu, "");
+const isGlue = (w: Word) => GLUE.has(normWord(w.text)) || LINKED.has(normWord(w.text));
+
+/** Where a new caption sentence starts (port of captions.sentence_breaks). */
+export function sentenceBreaks(words: Word[]): Set<number> {
+  const ends = words.filter((w) => /[.?!…]$/.test(w.text.replace(/["']+$/, ""))).length;
+  const plain = ends * 25 < words.length;
+  const out = new Set<number>();
+  for (let i = 1; i < words.length; i++) {
+    const prev = words[i - 1];
+    const w = words[i];
+    const gap = w.start - prev.end;
+    if (gap > NEW_GROUP_PAUSE || /[.?!]$/.test(prev.text.trimEnd())) out.add(i);
+    else if (plain && !GLUE.has(normWord(prev.text))) {
+      const first = w.text.replace(/^["'(]+/, "");
+      const capital = first.charAt(0) !== first.charAt(0).toLowerCase() && first !== first.toUpperCase();
+      if ((capital && gap >= 0.1) || gap >= 0.35) out.add(i);
+    }
+  }
+  return out;
+}
+
+function* cuts(n: number, parts: number): Generator<number[]> {
+  if (parts === 1) {
+    yield [n];
+    return;
+  }
+  for (let first = 1; first <= n - parts + 1; first++) for (const rest of cuts(n - first, parts - 1)) yield [first, ...rest];
+}
+
+const lineFits = (l: Word[], style: CaptionStyle, limit: number) =>
+  l.length <= style.words_per_line && [...l.map((w) => displayText(w, style)).join(" ")].length <= limit;
+
+function linesOf(group: Word[], style: CaptionStyle, limit: number): { lines: Word[][]; cost: number } | null {
+  for (let n = 1; n <= style.max_lines; n++) {
+    let best: { cost: number; lines: Word[][] } | null = null;
+    for (const sizes of cuts(group.length, n)) {
+      const lines: Word[][] = [];
+      let k = 0;
+      for (const size of sizes) {
+        lines.push(group.slice(k, k + size));
+        k += size;
+      }
+      if (!lines.every((l) => lineFits(l, style, limit))) continue;
+      const cost = lines.slice(0, -1).filter((l) => isGlue(l[l.length - 1])).length * 20 + (Math.max(...sizes) - Math.min(...sizes));
+      if (!best || cost < best.cost) best = { cost, lines };
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
+function splitSentence(sent: Word[], style: CaptionStyle, limit: number): Word[][][] {
+  const n = sent.length;
+  const span = style.words_per_line * style.max_lines;
+  let found: { k: number; total: number; acc: Word[][][] } | null = null;
+  for (let k = 1; k <= n; k++) {
+    if (found && k > found.k + 1) break; // one caption more than needed, at most
+    const target = n / k;
+    let best = new Map<number, { cost: number; acc: Word[][][] }>([[0, { cost: 0, acc: [] }]]);
+    for (let step = 0; step < k; step++) {
+      const next = new Map<number, { cost: number; acc: Word[][][] }>();
+      for (const [j, { cost, acc }] of best) {
+        for (let i = j + 1; i <= n && i - j <= span; i++) {
+          const got = linesOf(sent.slice(j, i), style, limit);
+          if (!got) continue;
+          const laid = got.lines;
+          let c = cost + (i - j - target) ** 2 + got.cost;
+          if (i < n && isGlue(sent[i - 1])) c += 20;
+          if (i - j === 1 && n > 1) c += 8;
+          const have = next.get(i);
+          if (!have || c < have.cost) next.set(i, { cost: c, acc: [...acc, laid] });
+        }
+      }
+      best = next;
+    }
+    const done = best.get(n);
+    if (done) {
+      const total = done.cost + 15 * k;
+      if (!found || total < found.total) found = { k: found ? found.k : k, total, acc: done.acc };
+    }
+  }
+  return found ? found.acc : sent.map((w) => [[w]]);
+}
+
+/** Words grouped into caption groups of lines (port of captions.chunk_words): a caption never mixes
+ * two sentences, a sentence is split into as few, evenly filled captions as fit, lines never end
+ * on "ang", "sa", "ng"... */
 export function chunkWords(words: Word[], style: CaptionStyle): Word[][][] {
   const limit = maxCharsPerLine(style);
-  const groups: Word[][][] = [];
-  let lines: Word[][] = [[]];
-  let prev: Word | null = null;
-  for (const word of words) {
-    const line = lines[lines.length - 1];
-    const text = [...line, word].map((w) => displayText(w, style)).join(" ");
-    const newGroup = prev !== null && (word.start - prev.end > NEW_GROUP_PAUSE || /[.?!]$/.test(prev.text.trimEnd()));
-    if (newGroup && lines[0].length) {
-      groups.push(lines);
-      lines = [[]];
-    } else if (line.length && (line.length >= style.words_per_line || [...text].length > limit)) {
-      if (lines.length < style.max_lines) lines.push([]);
-      else {
-        groups.push(lines);
-        lines = [[]];
-      }
+  const breaks = sentenceBreaks(words);
+  const sentences: Word[][] = [];
+  let cur: Word[] = [];
+  words.forEach((w, i) => {
+    if (breaks.has(i) && cur.length) {
+      sentences.push(cur);
+      cur = [];
     }
-    lines[lines.length - 1].push(word);
-    prev = word;
-  }
-  if (lines[0].length) groups.push(lines);
-  return groups;
+    cur.push(w);
+  });
+  if (cur.length) sentences.push(cur);
+  return sentences.flatMap((s) => splitSentence(s, style, limit));
 }
 
 export interface CaptionFrame {

@@ -109,6 +109,8 @@ def build_parser():
     ai.add_argument("--photos", nargs="*", default=[], help="photos the AI may pop in")
     ai.add_argument("--caption-punctuation", choices=["remove", "keep"],
                     help="captions without , . ! ? ; : and quotes (remove, the default) or as said (keep)")
+    ai.add_argument("--caption-style", help="caption style (a name from `python editor.py styles`, e.g. "
+                    "editorial_card); wins over the preset's and the AI's choice")
     ai.add_argument("--provider", choices=["groq", "anthropic"], help="AI provider")
     ai.add_argument("--model", help="AI model (default from config.yaml, ai:)")
     ai.add_argument("--transcribe-with", choices=["groq", "local"],
@@ -802,6 +804,9 @@ def print_qc(report):
 def caption_punctuation(cfg, args):
     if getattr(args, "caption_punctuation", None):
         cfg["captions"]["punctuation"] = args.caption_punctuation
+    if getattr(args, "caption_style", None):
+        from autoedit.styles import get_style
+        cfg["captions"]["force_style"] = get_style(args.caption_style).name     # checked here
 
 
 def cmd_polish(args, reporter, cancel):
