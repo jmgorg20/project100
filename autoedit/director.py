@@ -572,16 +572,20 @@ def place_items(ctx, items):
                       if c["start"] < t1 and c["start"] + c["duration"] > t0]
         # a template made to cover the picture for a moment (a screenshot, like B-roll) may go
         # over the face; nothing goes over the captions
-        obs = obstacles_for(ctx, t0, t1, None if (meta.get("covers") or it.get("covers_face")) else face)
+        # (an editorial card with the speaker moved lower always keeps off the face)
+        covers = (meta.get("covers") or it.get("covers_face")) and not it.get("respect_face")
+        obs = obstacles_for(ctx, t0, t1, None if covers else face)
         extra = [("graphic", zones.inflate(b, 16)) for b, _p in busy] + [("graphic", b) for b in fixed_busy]
         angle = 0
         found = None
         if meta["category"] == "pointer":
             found = place_pointer(ctx, it, meta, obs + extra, face, base_size)
         else:
-            for factor in (1.0, 0.85, 0.72, 0.6):
-                size = clamp(base_size * factor, MIN_SIZE, 2.0)
-                if size < MIN_SIZE - 1e-9:
+            # (a card kept off the face may shrink further to fit above it)
+            low = 0.4 if it.get("respect_face") else MIN_SIZE
+            for factor in (1.0, 0.85, 0.72, 0.6) + ((0.5, 0.42) if it.get("respect_face") else ()):
+                size = clamp(base_size * factor, low, 2.0)
+                if size < low - 1e-9:
                     break
                 for x, y in candidate_points(preferred):
                     box = est_box(meta, text, size, x, y)
@@ -1136,6 +1140,33 @@ def fixed_graphics(project):
     return [c for c in graphic_clips_of(project) if c.get("locked") or "director" not in c]
 
 
+def face_without_mediapipe(project, media_id, video, cfg, cache=None, reporter=None, cancel=None):
+    """The face found by the built-in OpenCV detector (no setup; installed once if missing).
+    False when it cannot run or does not find the face (graphics then use safe zones)."""
+    from . import face_detect
+    key = None
+    data = None
+    if cache is not None:
+        from .cache import key_for
+        from .tracking import track_cache_key
+        key = key_for({"k": track_cache_key(cache, video, cfg), "names": ["face"], "detector": "opencv-haar1"})
+        data = cache.get("tracks", key)
+    if data is None:
+        try:
+            if reporter:
+                reporter.stage("tracking", "Finding your face so graphics keep off it")
+            data = face_detect.detect_face_track(video, cfg, reporter, cancel).to_json(["face"])
+        except Cancelled:
+            raise
+        except EditorError as exc:
+            project.setdefault("meta", {})["face_problem"] = str(exc)
+            return False
+        if cache is not None:
+            cache.put("tracks", key, data)
+    project.setdefault("tracking", {})[media_id] = data
+    return True
+
+
 def face_for(project, video, cfg, cache=None, reporter=None, cancel=None):
     """Find the face (if tracking is set up and the project has no face track yet), so graphics
     keep off it. Returns True when a face track is now in the project."""
@@ -1153,7 +1184,7 @@ def face_for(project, video, cfg, cache=None, reporter=None, cancel=None):
     from . import tracking as trk
     st = trk.status(cfg)
     if not st["face"]:
-        return False
+        return face_without_mediapipe(project, media_id, video, cfg, cache, reporter, cancel)
     key = None
     track = None
     if cache is not None:

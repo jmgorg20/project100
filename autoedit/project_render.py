@@ -545,6 +545,57 @@ def add_dims(graph, current, project, fps):
     return current
 
 
+LAYOUT_SCALE = 0.62
+
+
+def layout_clips(project):
+    return sorted((c for t in visible_tracks(project, "effect") for c in t["clips"] if c["type"] == "layout"),
+                  key=lambda c: c["start"])
+
+
+def layout_scale_at(project, t):
+    """The speaker's scale at timeline time t (1 = full frame), with its eased move (Python twin
+    of the render expression; used to keep graphics off the moved face)."""
+    for c in layout_clips(project):
+        t0, d = c["start"], c["duration"]
+        if t0 <= t < t0 + d or (c.get("stay") and t >= t0):
+            fade = float(c.get("fade", 0.35))
+            f = min(fade, d / 2) if fade > 0 else 0
+            back = (t0 + d - t) / f if f > 0 and not c.get("stay") else 1.0
+            x = 1.0 if f <= 0 else min(1.0, max(0.0, min((t - t0) / f, back)))
+            env = x * x * (3 - 2 * x)
+            return 1 - (1 - float(c.get("scale", LAYOUT_SCALE))) * env
+    return 1.0
+
+
+def add_layouts(graph, current, project, fps):
+    """"speaker_low": the speaker eases down into the lower part of the frame (scaled, anchored at
+    the bottom) over a blurred, darker copy of the shot, so a card can take the top without
+    covering the face (the reference look)."""
+    for k, clip in enumerate(layout_clips(project)):
+        f0, f1 = clip_frames(clip, fps)
+        if f1 <= f0:
+            continue
+        t0, d = f0 / fps, (f1 - f0) / fps
+        scale = float(clip.get("scale", LAYOUT_SCALE))
+        fade = float(clip.get("fade", 0.35))
+        if clip.get("stay") and fade > 0:
+            f = min(fade, d / 2)
+            x = f"min(1,max(0,(t-{t0:.4f})/{f:.4f}))"
+            env = f"(({x})*({x})*(3-2*({x})))"            # down, and it stays down (the video ends)
+        else:
+            env = envelope_expression(t0, d, fade)
+        z = f"(1-{1 - scale:.4f}*{env})"
+        on = f"enable='{frames_expression([(f0, f1)], fps)}'"
+        graph.add(f"[{current}]split=3[lyb{k}][lyg{k}][lyf{k}]",
+                  f"[lyg{k}]boxblur=22:2:{on},eq=brightness=-0.10:saturation=0.85:{on}[lyblur{k}]",
+                  f"[lyf{k}]scale=w='trunc({W}*{z}/2)*2':h='trunc({H}*{z}/2)*2':eval=frame,setsar=1[lysc{k}]",
+                  f"[lyblur{k}][lysc{k}]overlay=x='(W-w)/2':y='H-h':eval=frame[lymix{k}]",
+                  f"[lyb{k}][lymix{k}]overlay=0:0:{on}[layout{k}]")
+        current = f"layout{k}"
+    return current
+
+
 def add_vignettes(graph, current, project, fps):
     """A dark vignette (FFmpeg's vignette filter): the edges darken; `strength` sets the angle
     of the lens fall-off, `fade` eases it in and out."""
@@ -982,6 +1033,7 @@ def build_command(project, base_dir, output, ass_name=None, export=None, frame=N
     current, dialog = add_main_track(graph, project, media, base_dir, fps, total_frames,
                                      with_audio)
     current = add_zooms(graph, current, project, fps)
+    current = add_layouts(graph, current, project, fps)
     current = add_grades(graph, current, project, fps, total_frames)
     current = add_wipes(graph, current, project, fps)
     current = add_fx(graph, current, project, fps)

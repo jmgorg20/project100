@@ -16,3 +16,7 @@ pytest>=7.0
 
 # Optional: tracked effects (follow your hands / face). Free; see docs/tracking.md.
 # mediapipe>=0.10
+
+# Finds your face so graphics keep off it (built-in detector, no setup; installed by itself
+# the first time if missing). 4.x: 5.x no longer ships the face detector.
+opencv-python-headless>=4.8,<5

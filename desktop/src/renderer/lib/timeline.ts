@@ -136,6 +136,21 @@ export function zoomAt(project: Project, t: number): { amount: number; anchorY: 
   return zoom;
 }
 
+/** The speaker's scale under a "speaker_low" layout at t (1 = full frame), eased like the render. */
+export function layoutScaleAt(project: Project, t: number): number {
+  const layouts = project.tracks.filter((tr) => tr.kind === "effect" && !tr.hidden).flatMap((tr) => tr.clips)
+    .filter((c) => c.type === "layout" && (covers(c, t, project.settings.fps) || ((c as Clip & { stay?: boolean }).stay && t >= c.start)));
+  for (const clip of layouts) {
+    const c = clip as Clip & { scale?: number; fade?: number; stay?: boolean };
+    const fade = c.fade ?? 0.35;
+    const f = fade > 0 ? Math.min(fade, c.duration / 2) : 0;
+    const back = f > 0 && !c.stay ? (c.start + c.duration - t) / f : 1;
+    const x = f <= 0 ? 1 : Math.min(1, Math.max(0, Math.min((t - c.start) / f, back)));
+    return 1 - (1 - (c.scale ?? 0.62)) * x * x * (3 - 2 * x);
+  }
+  return 1;
+}
+
 export function gradeAt(project: Project, t: number): string {
   return gradeLookAt(project, t).grade;
 }

@@ -30,11 +30,12 @@ Everything it adds is ordinary, editable clips: graphics on the Graphics tracks 
 
 import copy
 import json
+import math
 import re
 from collections import Counter
 
 from . import cues as cues_mod
-from . import director, graphics
+from . import director, graphics, zones
 from .director import Ctx, important, locate, norm, shown, snap, strip_marks
 from .errors import Cancelled
 from .llm import LLMError, ask_json
@@ -865,9 +866,8 @@ def cue_item(ctx, cue, template, beat, start_i, end_t, scene, **kw):
             "spoken": " ".join(strip_marks(sw[i]["text"]) for i in range(cue.i0, cue.i1 + 1)),
             "mood": None, "importance": 0.95, "zone": "upper", "reason": f"said: {cue.kind}", "beat": beat,
             "scene": scene.index, "cue": cue.kind, "timed": True,
-            # a card you asked for by what you said may cover the face for a moment, over a dimmed,
-            # softly blurred background (never the captions)
-            "covers_face": template in BIG_CARDS, **kw}
+            # never on the face: the speaker moves lower while the card is up (add_layouts)
+            "covers_face": False, **kw}
 
 
 def rel(ctx, idx, start):
@@ -1289,6 +1289,58 @@ def choose_beats(ctx, scenes, assets, captions_on, choices, kept=None, exclude=N
     return chosen
 
 
+LAYOUT_LEAD = 0.35          # the speaker is already down when the card arrives
+NO_LAYOUT = {"label-pill"}
+
+
+def add_layouts(project, ctx, items):
+    """"speaker_low" layout clips under the cards: the speaker eases into the lower part of the
+    frame a moment before a card arrives and back up after it, so the card takes the top and never
+    covers the face (the reference look). Cards close together share one move."""
+    if not (ctx.cfg.get("graphics") or {}).get("speaker_low", True):
+        for it in items:
+            it["respect_face"] = True
+        return
+    for it in items:
+        it["respect_face"] = True
+    spans = sorted((it["start"], min(ctx.duration, it["end"] + LAYOUT_LEAD))
+                   for it in items if it["template"] not in NO_LAYOUT)
+    merged = []
+    for first, b in spans:
+        a = max(0.0, math.floor((first - LAYOUT_LEAD) * ctx.fps) / ctx.fps)    # down before the card
+        if merged and a <= merged[-1][1] + 1.0:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b, first])
+    track = own_track(project, "pe-layout", "effect", "Editorial layout (speaker lower)")
+    ids = director.next_ids(project, "pel")
+    for a, b, first in merged:
+        b = snap(b, ctx.fps)
+        fade = max(0.0, min(LAYOUT_LEAD, first - a - 0.5 / ctx.fps))   # a card at the very start: a quicker move
+        if b - a < 0.8:
+            continue
+        # a move already there (another scene's card, a regenerated scene) grows to cover this one
+        near = [c for c in track["clips"] if not c.get("locked") and c["start"] <= b + 1.0 and
+                c["start"] + c["duration"] >= a - 1.0]
+        if near:
+            c = near[0]
+            end = max(c["start"] + c["duration"], b)
+            c["start"] = min(c["start"], a)
+            c["duration"] = round(end - c["start"], 4)
+            clip = c
+        elif free_on(track, a, b):
+            clip = {"id": next(ids), "type": "layout", "mode": "speaker_low", "start": round(a, 4),
+                    "duration": round(b - a, 4), "scale": 0.62, "fade": round(fade, 4),
+                    "label": "Speaker lower (card on top)"}
+            track["clips"].append(clip)
+        else:
+            continue
+        if clip["start"] + clip["duration"] >= ctx.duration - 0.05:
+            clip["stay"] = True              # the video ends with the card: no move back up
+    track["clips"].sort(key=lambda c: c["start"])
+    project["tracks"] = [t for t in project["tracks"] if t["id"] != "pe-layout" or t["clips"]]
+
+
 def build(ctx, project, scenes, chosen, assets, captions_on, extra=(), used_images=None):
     """The clips for the scenes that are not kept: graphics (timed and placed by the Director's
     rules: off the face unless made to cover it, never on the captions, inside the safe area),
@@ -1321,6 +1373,7 @@ def build(ctx, project, scenes, chosen, assets, captions_on, extra=(), used_imag
         else:
             chosen_for(scenes, chosen, it["scene"])["beat"] = "camera"
             effects += element(ctx, by_index[it["scene"]], "camera", assets, {}, used_images, captions_on)[1]
+    add_layouts(project, ctx, timed)
     placed = director.place_items(ctx, timed)
     kept_ids = {id(x) for x in placed}
     for it in timed:
@@ -1388,7 +1441,8 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
     if reporter:
         reporter.stage("graphics", "Planning the editorial scenes")
     director.face_for(project, video, cfg, cache, reporter, cancel)
-    ctx = Ctx(project, cfg, STYLE, instruction, fixed=director.fixed_graphics(project))
+    ctx = Ctx(project, cfg, STYLE, instruction, fixed=director.fixed_graphics(project),
+              face=zones.FaceMap(project, zones.TALKING_HEAD_FACE))
     empty = {"project": project, "count": 0, "style": STYLE, "fallback": False, "reason": "", "cost": None,
              "usage": {}, "plan": [], "wipe": None, "removed": removed, "scenes": []}
     if not ctx.words:
@@ -1442,8 +1496,14 @@ def generate(project, cfg, instruction="", provider=None, model=None, cache=None
         notes.append("No screenshots, photos or clips of yours were given, so the picture beats "
                      "(collage, montage, phone, PiP...) were left out. Add your own files to use them.")
     if not ctx.face.known:
-        notes.append("The face was not tracked, so cards keep off the upper-middle of the frame, where a "
-                     "speaker usually is. (Set up tracking, docs/tracking.md, to place them around the real face.)")
+        why = (project.get("meta") or {}).get("face_problem")
+        notes.append("The face was not found" + (f" ({why})" if why else "") + ", so cards keep to safe zones: "
+                     "the speaker moves lower while a card is up and cards stay off where a face usually is.")
+    else:
+        src = {d.get("source") for d in (project.get("tracking") or {}).values()}
+        if "opencv-haar" in src:
+            notes.append("Your face was found by the built-in face finder; cards keep off it (the speaker "
+                         "moves lower while a card is up).")
     return {"project": project, "count": len(clips), "style": STYLE, "notes": notes, "fallback": fallback,
             "reason": reason, "cost": cost, "usage": usage, "model": used_model, "plan": placed, "wipe": None,
             "removed": removed, "summary": f"{len(scenes)} scenes", "attempts": attempts, "cached": cached,
@@ -1544,7 +1604,8 @@ def regenerate_scene(project, scene_index, cfg, instruction="", cache=None, canc
         raise director.DirectorError("This scene has a locked graphic or effect. Unlock it first.")
     before = beats.get(scene_index)
     remove_scene_elements(project, scene)
-    ctx = Ctx(project, cfg, STYLE, instruction, words=words, fixed=director.graphic_clips_of(project))
+    ctx = Ctx(project, cfg, STYLE, instruction, words=words, fixed=director.graphic_clips_of(project),
+              face=zones.FaceMap(project, zones.TALKING_HEAD_FACE))
     assets = Assets(project, cfg, base_dir)
     captions_on = captions_present(project)
     kept = {i: b for i, b in beats.items() if i != scene_index}

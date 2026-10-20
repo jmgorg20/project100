@@ -79,6 +79,7 @@ DEFAULTS = {
         "hand_model": "",
         "face_model": "",
         "pose_model": "",
+        "auto_install": True,
         "fps": 30,
         "min_confidence": 0.5,
         "swap_hands": False,

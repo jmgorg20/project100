@@ -135,9 +135,19 @@ The AI picks *which* graphic goes with *which* words. Plain code then checks eve
   never two big graphics at once.
 - **Variety:** never the same template twice in a row; no template used over and over.
 - **The right mood:** money talk gets money styles, warnings get warning styles, and so on.
-- **Never on your face:** with tracking set up (docs/tracking.md) the real face position is used;
-  without it, the upper middle of the frame (where a speaker usually is) is kept clear, and the
-  summary says so.
+- **Never on your face:** the face is found with no setup. With MediaPipe tracking
+  (docs/tracking.md) that is used; otherwise a built-in face finder (OpenCV's frontal-face
+  detector, `opencv-python-headless` 4.x, in requirements.txt and installed by itself the first
+  time if missing; `tracking: auto_install: false` turns that off) looks 4 times a second, drops
+  boxes that are not the speaker's face (a logo on a shirt), fills short gaps. If it cannot run or
+  finds no face, the summary says why and a talking head's usual face area is kept clear.
+- **Speaker lower, card on top** (PREMIUM EDITORIAL VIRAL, the reference layout): while a card is
+  up the speaker eases down into the lower part of the frame (62%, over a blurred, darker copy of
+  the shot; a `layout` effect clip, `speaker_low`, on the "Editorial layout" track) and the card
+  takes the top; cards close together share one move. Every editorial card, cover cards too, is
+  placed off the moved face (shrunk to fit if needed, or left out and said so).
+  `graphics: speaker_low: false` keeps the speaker full size. The desktop preview shows the move
+  (without the blurred background).
 - **Never on the captions**, and inside the part of the screen TikTok/Reels do not cover.
 - **Readable:** short text, not too small, enough contrast.
 
